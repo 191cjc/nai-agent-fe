@@ -5,3 +5,6 @@
 {"file": ".trellis/tasks/09-23-novelai-api/research/codex-tool-isolation.md", "reason": "Verify advice does not use unproven no-tools runtime."}
 {"file": ".trellis/spec/backend/api-contract.md", "reason": "Check schema snapshot, protected-path errors and secret-free boundary."}
 {"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Check POSIX DB/WAL/SHM modes, existing-dir caveat and backup protection."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify source and tests with Ruff, offline pytest and frozen dependency checks."}
+{"file": ".trellis/spec/backend/codex-advice-contract.md", "reason": "Check accepted runtime restrictions, observed tool-event rejection and cleanup without an absolute no-tools claim."}
+{"file": ".trellis/spec/backend/http-response-contract.md", "reason": "Check raw stream deadlines, decoded allocation caps, compression validation and provider-specific failures."}

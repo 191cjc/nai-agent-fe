@@ -3,6 +3,9 @@
 {"file":".trellis/tasks/09-22-novelai-image-workspace/research/storage-design.md","reason":"Build local SQLite persistence from scratch; store parameters but never image bytes."}
 {"file":".trellis/tasks/09-22-novelai-image-workspace/research/danboorusearch-nsfw-defaults.md","reason":"Send explicit NSFW-inclusive search request as approved."}
 {"file": ".trellis/spec/backend/provider-adapter-contract.md", "reason": "Normalize documented upstream tag wire fields before returning typed API results."}
-{"file": ".trellis/tasks/09-23-novelai-api/research/codex-tool-isolation.md", "reason": "Keep advice runtime disabled until pre-execution tool isolation is proven."}
+{"file": ".trellis/tasks/09-23-novelai-api/research/codex-tool-isolation.md", "reason": "Preserve the accepted AiQQ-equivalent isolation and observed-tool rejection without claiming pre-execution denial."}
 {"file": ".trellis/spec/backend/api-contract.md", "reason": "Keep browser OpenAPI snapshot and typed error response contract aligned."}
 {"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Use private SQLite creation, migrations and safe online backups."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Run offline pytest, Ruff and frozen dependency checks without paid provider calls."}
+{"file": ".trellis/spec/backend/codex-advice-contract.md", "reason": "Apply the accepted restricted advice runtime, typed failures and child cleanup contract."}
+{"file": ".trellis/spec/backend/http-response-contract.md", "reason": "Bound decoded allocations and cooperative deadlines in the shared MCP/tag response reader."}

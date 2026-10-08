@@ -24,11 +24,12 @@
 - [x] Add DanbooruSearch normalized `/search` adapter, explicit NSFW include,
   attribution, concurrency guard and timeout/rate-limit cases. Offline tests
   now cover the documented upstream `nsfw` string and `final_score` fields;
-  response decoding is limited to 1 MiB with a 30-second overall deadline;
+  response decoding is limited to 1 MiB with a 30-second cooperative deadline;
   valid upstream 429 `Retry-After` values are forwarded without reading its
   body or retrying, while malformed values and local busy errors omit the header;
-  public REST health/search were checked during planning, but this adapter's
-  normalized response has not been rechecked against the live service.
+  a manual, non-billable normalized adapter probe on 2026-10-08 returned
+  `long_hair` and `blue_hair` for `蓝色长发`, with Chinese names, NSFW flags
+  and scores. Automated tests remain provider-free.
 - [x] Publish deterministic `apps/api/contracts/openapi.json` and offline
   regression checks for authenticated routes, typed error statuses and
   credential-free schema generation. Model/sampler choices remain provisional;
@@ -41,14 +42,38 @@
   The pinned CLI reports `unified_exec=true` despite a `false` setting, so the
   API must not claim complete no-tools enforcement. No custom Codex URL is
   required. Automated tests use fakes and make no paid calls.
-- [ ] Run `python -m pytest -q` within the API environment and its configured
+- [x] Run `python -m pytest -q` within the API environment and its configured
   lint/typecheck, then inspect OpenAPI for browser-visible secret leaks.
-  The 119 offline tests, `uv lock --check --offline`, Python syntax and
-  `npm ci --offline` pass; snapshot tests cover OpenAPI secrets and error
-  shapes. Ruff could not run because its wheel is not cached; no type checker
-  is configured. Actual paid advice/generation was not called by tests.
+  The 2026-10-08 follow-up passed 155 offline tests, Ruff 0.16.8, frozen
+  offline dependency sync and `uv lock --check --offline`. Snapshot tests
+  cover OpenAPI secrets and error shapes; no Python type checker is configured.
+  Actual paid advice/generation was not called by tests. See `verification.md`.
 
 Review gates: backend contract and fake tests pass before web implementation;
 no real paid provider calls during automated validation. Verify the chosen
 AiQQ-equivalent restrictions and observed-tool rejection, not an impossible
 claim of complete pre-execution tool denial.
+
+## Quality Follow-up (2026-10-08)
+
+- [x] Restore the existing API task on `chore/novelai-api-quality` and rerun
+  the baseline offline suite (119 passed) and dependency lock check.
+- [x] Add authenticated parameter-history regressions for default/max page
+  sizes, offsets beyond 10,000, owner isolation and JavaScript-safe query bounds.
+- [x] Populate the backend quality guideline and fix outdated Git, Compose,
+  MCP-path and superseded advice-isolation instructions in task context.
+- [x] Manually verify the public tag adapter with one non-billable query;
+  keep the probe separate from automated tests and paid provider checks.
+- [x] Fix MCP response deadline checks and bounded decompression through a
+  shared reader with the tag adapter, preserving adapter-specific errors.
+- [x] Add deterministic slow-stream, compressed-response and expansion-limit
+  regressions without network or paid provider calls.
+- [x] Run full-scope pytest, Ruff and lock/context validation after fixes;
+  record acceptance evidence separately from unresolved real-provider gates.
+
+All six child acceptance criteria have offline evidence in `verification.md`.
+Source is committed as `342c4cf`; integration and the parent's real-provider
+release gates remain. Read-only follow-up verified public health, MCP schema
+compatibility and the local/production CLI pins; production provider keys are
+still unset. The proposed one-image/one-advice billable probes in
+`verification.md` await explicit operator approval.

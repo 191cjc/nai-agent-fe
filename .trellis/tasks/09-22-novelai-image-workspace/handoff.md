@@ -20,7 +20,7 @@ Updated: 2026-10-08 (Asia/Shanghai)
   short-lived owner-scoped PNG downloads, authenticated public tag search,
   and a real NovelAI Streamable HTTP MCP adapter. A Codex SDK/CLI advice runner
   is now wired when `NAI_CODEX_API_KEY` is configured. The most recent run passed
-  **119 offline tests** against disposable SQLite files, fake providers and
+  **155 offline tests** against disposable SQLite files, fake providers and
   HTTP mock transports; regression checks cover automatic MCP wiring,
   OpenAPI credential isolation and DanbooruSearch's documented upstream
   `nsfw`/`final_score` response shape. A consistent SQLite online
@@ -33,18 +33,35 @@ Updated: 2026-10-08 (Asia/Shanghai)
   production build passed. A focused backend rerun passed 29 offline
   authentication/SQLite/history tests with paid credentials unset. The
   offline Python/npm lockfile checks and both
-  Trellis context validations pass; offline Ruff is unavailable because its
-  wheel is missing from the local cache (lint has not passed).
+  Trellis context validations pass. The 2026-10-08 follow-up installed the
+  exact locked Ruff wheel with HTTPS/hash verification and passed Ruff 0.16.8,
+  frozen offline dependency sync and the full suite. It fixed MCP tiny-chunk
+  deadline checks and bounded compressed decoding, added 27 MCP and 9 generation
+  regressions, and verified all six API-child offline criteria. See
+  `../09-23-novelai-api/verification.md`. Source is committed as `342c4cf`;
+  branch integration remains pending.
 - The API now publishes `apps/api/contracts/openapi.json` for the dependent
   web child. Offline tests compare the snapshot to generated OpenAPI and
   verify normalized auth/CSRF/ownership/provider/validation errors without
   exposing credentials. This documents the current API, not proof that the
   configured Codex CLI or provisional generation model/sampler choices are
   production-ready.
+- Read-only follow-up on 2026-10-08 verified HTTP 200 for the public UI,
+  API readiness and `/aiqq/health`, and confirmed both local and production
+  project-local Codex CLI pins. The current private local NovelAI credential
+  now succeeds at non-billable MCP initialization/tools listing; all 11
+  adapter fields are present without additional required fields. Model and
+  sampler are nullable strings without enumerated choices. Production's
+  root-owned env file still has both provider credentials unset; it was not
+  modified. No paid generation/advice was performed. One-image/one-advice
+  verification is concretely proposed in the API verification record and
+  still requires explicit operator approval.
 - The history endpoint now accepts 1-100 records per page (20 by default)
   and permits offsets beyond 10,000 through the JavaScript-safe integer
   range. The web UI keeps its 20-record page size. The OpenAPI snapshot was
-  updated statically; no tests or build ran after the operator's request.
+  updated statically at first; the 2026-10-08 follow-up now covers default/max
+  page sizes, offsets beyond 10,000 and JavaScript-safe query bounds through
+  authenticated API tests. The web UI and snapshot remain unchanged.
 - Codex advice now uses the AiQQ-pinned Python SDK and project-local CLI,
   private per-turn `CODEX_HOME` and work directories, isolated API-key login,
   structured output and post-event tool rejection. Offline tests cover
@@ -67,8 +84,9 @@ Updated: 2026-10-08 (Asia/Shanghai)
   races still require a trusted private deployment volume; Windows ACLs need
   separate review. This cannot reverse historical exposure.
 - Trellis PRD, design, implementation plans, research and context manifests
-  remain. The workspace is not a Git repository; do not `git init` as part of
-  planning.
+  remain. The workspace is now a Git repository with `main` as the base;
+  the quality follow-up continues the existing API task on
+  `chore/novelai-api-quality`.
 - The web frontend has a typed same-origin client, MobX workspace, transient
   generation gallery, parameter history, independent advice and tag search.
   The operator requested removal of frontend automated/browser tests and no
@@ -171,8 +189,11 @@ Updated: 2026-10-08 (Asia/Shanghai)
 1. The backend child was activated after approval. Its image lifecycle is
    exercised with fakes and the real MCP adapter with mock transport;
    DanbooruSearch's source response schema is covered by offline fixtures,
-   and its public REST health/search were probed during planning. The new
-   adapter's normalized response has not been rechecked live. The agreed
+   and its public REST health/search were probed during planning. A manual,
+   non-billable adapter probe on 2026-10-08 returned normalized `long_hair`
+   and `blue_hair` for `蓝色长发`, including Chinese names, NSFW flags and
+   scores. This is a one-query integration check, not an availability guarantee.
+   The agreed
    AiQQ-style Codex isolation is implemented and covered by historical offline
    tests; the web and host deployment consume the published API contract.
 2. A non-billable authorized MCP `initialize` / `tools/list` probe succeeded

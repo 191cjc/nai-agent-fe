@@ -25,9 +25,11 @@ wire fields from names chosen for the public API.
 - Return only typed `TagCandidate` fields and source attribution, never raw
   upstream errors or API keys.
 - Stream upstream response bodies with a 1 MiB **decoded** limit and a
-  30-second monotonic total deadline (five-second connect timeout). Accept
+  30-second cooperative monotonic deadline (five-second connect timeout). Accept
   bounded identity, gzip and deflate results; never buffer an unlimited body.
-  Inspect error statuses before consuming their bodies.
+  Inspect error statuses before consuming their bodies. Use the shared reader
+  in [Bounded HTTP Response Contract](./http-response-contract.md); individual
+  blocked reads remain subject to HTTPX's read timeout.
 - On upstream 429, retain the typed `ApiError(code="search_rate_limited",
   retryable=true)` and forward only a valid `Retry-After` response header.
   Accept ASCII nonnegative delta-seconds or a valid HTTP date; normalize

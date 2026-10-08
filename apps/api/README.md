@@ -5,8 +5,9 @@ browser-cookie authentication, generation job/history APIs, temporary image
 downloads, an authenticated DanbooruSearch tag-search adapter and a real
 NovelAI Streamable HTTP MCP adapter and an isolated Codex advice runner. The web
 app uses Vite HTTPS locally and host Nginx/systemd in production. The host
-deployment procedure is in `../../deploy/README.md` but has not been exercised
-on the production host. With no MCP token configured,
+deployment procedure is in `../../deploy/README.md`; the remaining production
+checks are tracked in
+`../../.trellis/tasks/09-23-novelai-compose/implement.md`. With no MCP token configured,
 generation returns `503 provider_unavailable`. With a valid MCP URL and token,
 an authenticated generation request can make a **paid** upstream call. Tests
 use mock transports and fakes; they never call paid services. Advice likewise
@@ -61,6 +62,10 @@ while the old `/mcp` URL returned HTML. The operator has corrected the private
 `.env.local` URL; the app reads process environment variables, **not that file
 automatically**. At generation time, the adapter checks the tool schema before
 making at most one `tools/call`; it does not retry uncertain paid outcomes.
+Each RPC response has a 48 MiB decoded cap and bounded gzip/deflate decoding.
+Its monotonic deadline starts before opening the response and is checked between
+raw chunks, after EOF and after parsing. A blocked synchronous read still relies
+on HTTPX's connect/read timeouts; this is not a hard wall-clock interruption.
 The probed schema declares `model` and `sampler` as strings, not enumerated
 choices. Confirm actual supported values and image metadata before presenting
 production UI options; no paid generation has been run to verify them.
@@ -69,10 +74,14 @@ Tag search uses the configured public REST provider only when an authenticated
 user submits a request. It explicitly includes NSFW candidates, returns
 normalized tags without modifying prompts and includes a provider attribution
 URL. The adapter permits one in-flight search, bounds decoded upstream
-responses to 1 MiB (including gzip/deflate), and applies a 30-second overall
-deadline. Tests use an injected `httpx.MockTransport` and never call the real
-service. Public REST health/search were probed during planning, but the new
-adapter's normalized response has not been rechecked against the live service.
+responses to 1 MiB (including gzip/deflate), and checks a 30-second monotonic
+deadline between network operations and after parsing. Individual blocked reads
+remain governed by HTTPX's read timeout. Tests use an injected
+`httpx.MockTransport` and never call the real
+service. A manual, non-billable adapter probe on 2026-10-08 searched for
+`蓝色长发` and returned normalized `long_hair` and `blue_hair` candidates with
+Chinese names, NSFW flags and scores. This one-query check is separate from
+the automated suite and does not establish continuous provider availability.
 When the provider returns 429, the API forwards a valid `Retry-After` value
 (nonnegative seconds or HTTP date) in its own 429 response. Invalid or unsafe
 values are omitted; the API never retries the search automatically. A locally

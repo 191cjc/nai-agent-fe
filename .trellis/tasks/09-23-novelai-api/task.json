@@ -12,7 +12,7 @@
   "assignee": "chenjiachun",
   "createdAt": "2026-09-23",
   "completedAt": null,
-  "branch": null,
+  "branch": "chore/novelai-api-quality",
   "base_branch": "main",
   "worktree_path": null,
   "commit": null,
@@ -21,6 +21,6 @@
   "children": [],
   "parent": "09-22-novelai-image-workspace",
   "relatedFiles": [],
-  "notes": "",
+  "notes": "2026-10-08: offline API acceptance verified (155 tests, Ruff, frozen sync, lock and OpenAPI checks); code committed as 342c4cf. Non-billable MCP schema and public health checks pass; production provider keys remain unset. See verification.md. Integration and billable provider verification remain pending.",
   "meta": {}
 }

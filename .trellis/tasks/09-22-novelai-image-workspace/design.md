@@ -132,12 +132,14 @@ derivation if the upstream doesn't supply it.
 
 ## External adapters and error handling
 
-- **NovelAI:** use a configured `/mcp` Streamable HTTP endpoint with server
+- **NovelAI:** use the configured Streamable HTTP MCP endpoint with server
   Bearer token, strict tool name, bounded connect/overall timeouts, and an
   adapter that converts known validation/authentication/insufficient-balance/
   timeout/service faults into safe API codes. Do not retry generation after
   an uncertain timeout. Use dependency injection and fake content blocks in
-  automated tests. Verify the deployed tool schema before enabling generation.
+  automated tests. The deployed endpoint is the base path
+  `https://www.fsstudy.com.cn/novel-ai-v5`; appending `/mcp` returned HTML in
+  the recorded probe. Verify the deployed tool schema before enabling generation.
 - **DanbooruSearch:** backend-only `POST /api/search`; send client attribution,
   configurable site URL and future API key, explicitly `show_nsfw: true`.
   A single in-flight provider search for the single API process prevents

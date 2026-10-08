@@ -31,22 +31,26 @@ parent workspace. Parent requirements and AC0–AC8 remain authoritative:
 
 ## Acceptance Criteria
 
-- [ ] Without a valid session protected operations fail consistently; admin
+- [x] Without a valid session protected operations fail consistently; admin
   revocation immediately invalidates existing sessions and cannot disclose
   token plaintext from persistent records.
-- [ ] Two different users cannot see or delete each other's prompts, jobs or
+- [x] Two different users cannot see or delete each other's prompts, jobs or
   history, or view one another's transient image results. Restart preserves
   parameter history but not image bytes; users can delete one record without
   touching another.
-- [ ] Fake MCP responses and failures exercise validation, explicit seed,
+- [x] Fake MCP responses and failures exercise validation, explicit seed,
   multi-image transient results, content limits, partial-failure cleanup, and stable errors
   without billable calls or leaked upstream secrets.
-- [ ] Tag search returns normalized results including eligible NSFW candidates,
+- [x] Tag search returns normalized results including eligible NSFW candidates,
   honors provider concurrency/rate limits and handles unavailable/429/422.
-- [ ] Advice accepts only explicit input, returns schema-valid display-only
+- [x] Advice accepts only explicit input, returns schema-valid display-only
   output, rejects any tool-call event, and cleans up after timeout/cancellation.
-- [ ] Tests and generated OpenAPI document all protected paths and expected
+- [x] Tests and generated OpenAPI document all protected paths and expected
   error/status contracts; no external service required for CI.
+
+Verified at the offline/fake boundary on 2026-10-08; see
+[verification evidence](./verification.md). Real-provider compatibility and
+production release checks remain separate parent/deployment gates.
 
 ## Dependencies
 

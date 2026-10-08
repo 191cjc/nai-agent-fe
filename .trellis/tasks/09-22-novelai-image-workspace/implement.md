@@ -43,6 +43,12 @@ deployment children are in progress; runtime release checks remain open. `.env.l
 operator-owned and is **not**
 automatically regenerated from `.env.example`.
 
+The 2026-10-08 API follow-up satisfies its six offline acceptance criteria
+with 155 passing tests, Ruff and dependency/schema checks. Evidence is in
+`../09-23-novelai-api/verification.md`. Source is committed as `342c4cf`;
+integration is pending, and
+MCP/Codex production compatibility remains a distinct release gate.
+
 ## Verification and risk gates
 
 - Backend (after scaffolding): from a configured `apps/api` virtual environment run
@@ -63,10 +69,10 @@ automatically regenerated from `.env.example`.
   results produce stable errors and leave no persistently stored image bytes;
   a late
   Codex tool-call event fails closed. Never auto-repeat a billable generation.
-- Source-control gate: the current workspace is not a Git repository; arrange
-  repository initialization or correct working repository before the usual
-  Trellis commit/archive flow. Do not run `git init` or commit merely as part
-  of planning.
+- Source-control gate: the workspace is now a Git repository with `main` as
+  its base branch. Continue on a task branch, record verification evidence,
+  and follow the workflow's commit review and archive gates. The earlier
+  repository-initialization blocker is resolved.
 
 ## Release / rollback
 

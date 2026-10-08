@@ -1,5 +1,15 @@
 # MVP deployment: Compose versus K3s
 
+## Superseded Deployment Recommendation
+
+The operator subsequently chose no Docker: local Vite/FastAPI and production
+host Nginx plus systemd. The historical comparison below does not authorize
+restoring Compose or container manifests. Use `../design.md`,
+`../../09-23-novelai-compose/implement.md` and
+`.trellis/spec/backend/deployment-contract.md` for the current contract.
+
+## Original Research (2026-09-23)
+
 Checked 2026-09-23 against primary documentation:
 
 - Docker documents running Compose in production on a single server, including

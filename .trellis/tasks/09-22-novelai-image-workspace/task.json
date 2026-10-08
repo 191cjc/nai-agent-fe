@@ -2,7 +2,7 @@
   "id": "novelai-image-workspace",
   "name": "novelai-image-workspace",
   "title": "NovelAI image workspace",
-  "description": "Plan a React/MobX and FastAPI NovelAI workspace with local SQLite parameter history, Codex advice, and optional single-server Compose deployment.",
+  "description": "Plan a React/MobX and FastAPI NovelAI workspace with local SQLite parameter history, Codex advice, and single-server Nginx/systemd deployment.",
   "status": "planning",
   "dev_type": null,
   "scope": null,

@@ -325,6 +325,5 @@ the backend's unchanged `/api/*` routes. The origin contains no path.
   offline validation. They do not prove an absolute no-tools guarantee.
   See `research/integration-interfaces.md`.
 - Deferred translation findings are in `research/deferred-translation.md`.
-- The current repository root is not initialized as a Git repository, so final
-  source-control and release steps require a repository to be initialized or
-  configured.
+- The repository is now initialized with `main` as its base branch. Work on
+  task branches and follow the usual quality, commit-review and archive gates.
