@@ -1,0 +1,2 @@
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Verify frontend error/auth/history state against API response contracts."}
+{"file":".trellis/tasks/09-22-novelai-image-workspace/research/danboorusearch-nsfw-defaults.md","reason":"Verify NSFW candidates and no filter UI while retaining explicit insertion."}

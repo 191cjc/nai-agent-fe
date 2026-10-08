@@ -1,0 +1,30 @@
+{
+  "id": "novelai-image-workspace",
+  "name": "novelai-image-workspace",
+  "title": "NovelAI image workspace",
+  "description": "Plan a React/MobX and FastAPI NovelAI workspace with local SQLite parameter history, Codex advice, and optional single-server Compose deployment.",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "chenjiachun",
+  "assignee": "chenjiachun",
+  "createdAt": "2026-09-22",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "09-23-novelai-api",
+    "09-23-novelai-web",
+    "09-23-novelai-compose"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

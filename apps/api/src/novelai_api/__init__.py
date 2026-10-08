@@ -1,0 +1,1 @@
+"""NovelAI workspace API."""

@@ -1,0 +1,4 @@
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Review API, persistence and web data contracts across independently delivered children."}
+{"file":".trellis/tasks/09-22-novelai-image-workspace/research/integration-interfaces.md","reason":"Provider contracts, Codex no-tools gate and integration limitations."}
+{"file":".trellis/tasks/09-22-novelai-image-workspace/research/storage-design.md","reason":"Local SQLite parameter-only history and consistent database backups without stored images."}
+{"file":".trellis/tasks/09-22-novelai-image-workspace/research/compose-versus-k3s.md","reason":"Approved single-server Compose deployment decision and limitations."}

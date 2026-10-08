@@ -1,0 +1,8 @@
+{
+  "name": "novelai-workspace-codex-runtime",
+  "private": true,
+  "description": "Pinned Codex CLI for the API advice runner",
+  "dependencies": {
+    "@openai/codex": "0.152.1"
+  }
+}

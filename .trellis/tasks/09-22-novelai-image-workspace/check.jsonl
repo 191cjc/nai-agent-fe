@@ -1,0 +1,3 @@
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Cross-layer validation of auth, error, provider and image-history contracts."}
+{"file":".trellis/tasks/09-22-novelai-image-workspace/research/integration-interfaces.md","reason":"Check MCP/REST error mapping and that Codex advice cannot invoke tools."}
+{"file":".trellis/tasks/09-22-novelai-image-workspace/research/storage-design.md","reason":"Verify owner-scoped parameter history, deletion and SQLite backup/restore."}

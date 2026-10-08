@@ -1,0 +1,8 @@
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Design typed boundaries between API, providers, persistence and web consumers."}
+{"file":".trellis/tasks/09-22-novelai-image-workspace/research/integration-interfaces.md","reason":"Inspect authoritative upstream MCP/REST/Codex interfaces and no-tools risk gate."}
+{"file":".trellis/tasks/09-22-novelai-image-workspace/research/storage-design.md","reason":"Build local SQLite persistence from scratch; store parameters but never image bytes."}
+{"file":".trellis/tasks/09-22-novelai-image-workspace/research/danboorusearch-nsfw-defaults.md","reason":"Send explicit NSFW-inclusive search request as approved."}
+{"file": ".trellis/spec/backend/provider-adapter-contract.md", "reason": "Normalize documented upstream tag wire fields before returning typed API results."}
+{"file": ".trellis/tasks/09-23-novelai-api/research/codex-tool-isolation.md", "reason": "Keep advice runtime disabled until pre-execution tool isolation is proven."}
+{"file": ".trellis/spec/backend/api-contract.md", "reason": "Keep browser OpenAPI snapshot and typed error response contract aligned."}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Use private SQLite creation, migrations and safe online backups."}

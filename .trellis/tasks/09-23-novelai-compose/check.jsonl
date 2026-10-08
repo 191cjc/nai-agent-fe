@@ -1,0 +1,5 @@
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Check same-origin routes and trust boundaries."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Check migration, ownership and online backup/restore."}
+{"file":".trellis/spec/backend/codex-advice-contract.md","reason":"Check locked CLI release layout and credential isolation."}
+{"file":".trellis/spec/frontend/workspace-contract.md","reason":"Check local HTTPS and secret-free production Vite base path."}
+{"file":".trellis/tasks/09-23-novelai-compose/design.md","reason":"Check host-only architecture after the operator superseded Compose."}

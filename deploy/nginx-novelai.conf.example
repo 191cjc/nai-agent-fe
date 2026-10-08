@@ -1,0 +1,41 @@
+# Add these locations inside the existing www.firesoul.cn HTTPS server block.
+# Keep /aiqq and existing TLS configuration unchanged. Only public dist files
+# belong under /srv/www/novelai; never put API code, env files or SQLite here.
+location = /novelai {
+    return 308 /novelai/;
+}
+
+location = /novelai/api {
+    return 404;
+}
+
+location ^~ /novelai/api/ {
+    proxy_pass http://127.0.0.1:18080/api/;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-Port 443;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header Forwarded "";
+    proxy_buffering off;
+    proxy_cache off;
+    proxy_store off;
+    proxy_read_timeout 90s;
+}
+
+location ^~ /novelai/assets/ {
+    alias /srv/www/novelai/assets/;
+    try_files $uri =404;
+    add_header Cache-Control "public, max-age=31536000, immutable";
+    add_header X-Content-Type-Options "nosniff" always;
+}
+
+location ^~ /novelai/ {
+    alias /srv/www/novelai/current/;
+    index index.html;
+    try_files $uri $uri/ /novelai/index.html;
+    add_header Cache-Control "no-cache" always;
+    add_header X-Content-Type-Options "nosniff" always;
+}

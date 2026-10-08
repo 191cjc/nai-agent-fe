@@ -1,0 +1,30 @@
+[Unit]
+Description=NovelAI workspace API
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Service]
+Type=exec
+User=novelai
+Group=novelai
+WorkingDirectory=/srv/novelai/current/apps/api
+EnvironmentFile=/etc/novelai/api.env
+Environment=PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+StateDirectory=novelai
+StateDirectoryMode=0700
+UMask=0077
+ExecStartPre=/srv/novelai/current/apps/api/.venv/bin/novelai-admin migrate
+ExecStart=/srv/novelai/current/apps/api/.venv/bin/uvicorn novelai_api.app:app --host 127.0.0.1 --port 18080 --workers 1 --proxy-headers --forwarded-allow-ips 127.0.0.1 --timeout-graceful-shutdown 60
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=65
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/novelai
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

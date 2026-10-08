@@ -1,0 +1,7 @@
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Check API-provider-data transformations and errors."}
+{"file":".trellis/tasks/09-22-novelai-image-workspace/research/integration-interfaces.md","reason":"Check Codex tool denial, MCP conversion and tag-provider behavior."}
+{"file":".trellis/tasks/09-22-novelai-image-workspace/research/storage-design.md","reason":"Check ownership, deletion, backup and interrupted-write recovery."}
+{"file": ".trellis/spec/backend/provider-adapter-contract.md", "reason": "Check upstream tag normalization and mock coverage."}
+{"file": ".trellis/tasks/09-23-novelai-api/research/codex-tool-isolation.md", "reason": "Verify advice does not use unproven no-tools runtime."}
+{"file": ".trellis/spec/backend/api-contract.md", "reason": "Check schema snapshot, protected-path errors and secret-free boundary."}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Check POSIX DB/WAL/SHM modes, existing-dir caveat and backup protection."}

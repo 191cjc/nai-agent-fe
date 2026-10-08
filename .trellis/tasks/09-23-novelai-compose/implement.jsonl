@@ -1,0 +1,5 @@
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Validate HTTPS proxy, API, SQLite and transient result boundaries."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Preserve SQLite migration, private file mode and online backup contract."}
+{"file":".trellis/spec/backend/codex-advice-contract.md","reason":"Keep native CLI installed alongside API source in each host release."}
+{"file":".trellis/spec/frontend/workspace-contract.md","reason":"Preserve Vite HTTPS and /novelai/ same-origin browser paths."}
+{"file":".trellis/tasks/09-22-novelai-image-workspace/research/storage-design.md","reason":"Keep parameter-only persistence and no archived images; its Compose recommendation is superseded."}
