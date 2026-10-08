@@ -3,7 +3,6 @@
 import hashlib
 import secrets
 
-
 SESSION_COOKIE = "__Host-nai_session"
 SESSION_LIFETIME_SECONDS = 30 * 24 * 60 * 60
 

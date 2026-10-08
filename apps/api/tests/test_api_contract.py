@@ -10,11 +10,12 @@ from novelai_api.auth import create_token
 from novelai_api.config import Settings
 from novelai_api.db import Database
 
-
 SNAPSHOT = Path(__file__).resolve().parents[1] / "contracts" / "openapi.json"
 
 
-def test_openapi_contract_matches_snapshot_without_database_or_provider_calls(tmp_path: Path) -> None:
+def test_openapi_contract_matches_snapshot_without_database_or_provider_calls(
+    tmp_path: Path,
+) -> None:
     sqlite_path = tmp_path / "absent.sqlite3"
     settings = Settings(
         sqlite_path=sqlite_path,

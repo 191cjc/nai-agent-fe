@@ -7,6 +7,7 @@ import time
 from collections import deque
 from collections.abc import Callable
 from contextlib import asynccontextmanager
+from typing import Annotated
 
 from fastapi import Cookie, Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
@@ -226,7 +227,7 @@ def create_app(
         response_model=UserInfo,
         responses={401: {"model": ApiError}, 422: {"model": ApiError}, 503: {"model": ApiError}},
     )
-    def session(user: UserInfo = Depends(require_user)) -> UserInfo:
+    def session(user: Annotated[UserInfo, Depends(require_user)]) -> UserInfo:
         return user
 
     @app.delete(
@@ -241,7 +242,7 @@ def create_app(
     )
     def logout(
         response: Response,
-        _user: UserInfo = Depends(require_user),
+        _user: Annotated[UserInfo, Depends(require_user)],
         session: str | None = Cookie(default=None, alias=SESSION_COOKIE),
     ) -> None:
         if session:
@@ -270,7 +271,7 @@ def create_app(
         },
     )
     def submit_generation(
-        payload: GenerationRequest, user: UserInfo = Depends(require_user)
+        payload: GenerationRequest, user: Annotated[UserInfo, Depends(require_user)]
     ) -> GenerationAccepted | JSONResponse:
         try:
             job_id = manager.submit(user.id, payload)
@@ -290,9 +291,9 @@ def create_app(
         },
     )
     def list_generations(
+        user: Annotated[UserInfo, Depends(require_user)],
         limit: int = Query(default=20, ge=1, le=100),
         offset: int = Query(default=0, ge=0, le=9_007_199_254_740_991),
-        user: UserInfo = Depends(require_user),
     ) -> HistoryPage:
         return manager.store.list(user.id, limit=limit, offset=offset)
 
@@ -306,7 +307,9 @@ def create_app(
             503: {"model": ApiError},
         },
     )
-    def get_generation(job_id: str, user: UserInfo = Depends(require_user)) -> GenerationView:
+    def get_generation(
+        job_id: str, user: Annotated[UserInfo, Depends(require_user)]
+    ) -> GenerationView:
         job = own_job(user, job_id)
         result = manager.cache.get(job_id, user.id) if job.status == "succeeded" else None
         return GenerationView(
@@ -331,7 +334,7 @@ def create_app(
         },
     )
     def get_image(
-        job_id: str, image_id: int, user: UserInfo = Depends(require_user)
+        job_id: str, image_id: int, user: Annotated[UserInfo, Depends(require_user)]
     ) -> Response:
         job = own_job(user, job_id)
         result = manager.cache.get(job_id, user.id) if job.status == "succeeded" else None
@@ -364,7 +367,7 @@ def create_app(
             503: {"model": ApiError},
         },
     )
-    def delete_generation(job_id: str, user: UserInfo = Depends(require_user)) -> None:
+    def delete_generation(job_id: str, user: Annotated[UserInfo, Depends(require_user)]) -> None:
         outcome = manager.store.delete(user.id, job_id)
         if outcome is None:
             raise HTTPException(
@@ -404,7 +407,7 @@ def create_app(
         },
     )
     def search_tags(
-        payload: SearchRequest, _user: UserInfo = Depends(require_user)
+        payload: SearchRequest, _user: Annotated[UserInfo, Depends(require_user)]
     ) -> SearchResults | JSONResponse:
         try:
             return tag_search.search(payload)
@@ -433,7 +436,7 @@ def create_app(
         },
     )
     async def advise(
-        payload: AdviceRequest, _user: UserInfo = Depends(require_user)
+        payload: AdviceRequest, _user: Annotated[UserInfo, Depends(require_user)]
     ) -> AdviceResult | JSONResponse:
         try:
             return await advice_service.advise(payload.input)

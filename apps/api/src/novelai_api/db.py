@@ -9,7 +9,6 @@ from importlib.resources import files
 from pathlib import Path
 from urllib.parse import quote
 
-
 SCHEMA_VERSION = 2
 
 

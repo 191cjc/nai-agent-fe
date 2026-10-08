@@ -254,9 +254,10 @@ def test_v1_migration_restricts_existing_files_and_preserves_auth(tmp_path: Path
             assert migrated.execute("SELECT token_digest FROM access_tokens").fetchone()[0] == (
                 "private-digest"
             )
-            assert migrated.execute("SELECT session_digest FROM browser_sessions").fetchone()[0] == (
-                "session-digest"
-            )
+            session_digest = migrated.execute(
+                "SELECT session_digest FROM browser_sessions"
+            ).fetchone()[0]
+            assert session_digest == "session-digest"
             assert migrated.execute("SELECT label FROM users").fetchone()[0] == "alice"
 
 

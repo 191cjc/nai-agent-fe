@@ -10,13 +10,18 @@ from typing import Any
 
 import httpx
 
+from ._http_response import (
+    InvalidResponseBody,
+    ResponseDeadlineExceeded,
+    check_deadline,
+    read_bounded_body,
+)
 from .generations import (
     MAX_IMAGE_BYTES,
     GeneratedImage,
     GenerationRequest,
     ProviderFailure,
 )
-
 
 MAX_RESPONSE_BYTES = 48 * 1024 * 1024
 PROTOCOL_VERSION = "2025-06-18"
@@ -72,6 +77,7 @@ class NovelAiMcpProvider:
         headers = {
             "Authorization": f"Bearer {self.token}",
             "Accept": "application/json, text/event-stream",
+            "Accept-Encoding": "gzip, deflate",
             "Content-Type": "application/json",
         }
         session_id: str | None = None
@@ -96,8 +102,10 @@ class NovelAiMcpProvider:
             if session_id:
                 headers["Mcp-Session-Id"] = session_id
                 headers["MCP-Protocol-Version"] = PROTOCOL_VERSION
+            deadline = time.monotonic() + self.timeout
             try:
                 with client.stream("POST", self.url, json=payload, headers=headers) as response:
+                    check_deadline(deadline, time.monotonic)
                     if response.status_code != 200 and not (
                         notification and response.status_code in (202, 204)
                     ):
@@ -105,16 +113,12 @@ class NovelAiMcpProvider:
                     session_id = response.headers.get("Mcp-Session-Id", session_id)
                     if notification:
                         return {}
-                    chunks: list[bytes] = []
-                    size = 0
-                    deadline = time.monotonic() + self.timeout
-                    for chunk in response.iter_bytes(chunk_size=65536):
-                        size += len(chunk)
-                        if size > MAX_RESPONSE_BYTES or time.monotonic() >= deadline:
-                            failure = "outcome_unknown" if paid else "invalid_mcp_response"
-                            raise ProviderFailure(failure)
-                        chunks.append(chunk)
-                    body = b"".join(chunks)
+                    body = read_bounded_body(
+                        response,
+                        max_bytes=MAX_RESPONSE_BYTES,
+                        deadline=deadline,
+                        clock=time.monotonic,
+                    )
                     if "text/event-stream" in response.headers.get("Content-Type", ""):
                         message = _parse_sse(body, request_id)
                     else:
@@ -122,6 +126,10 @@ class NovelAiMcpProvider:
                             message = json.loads(body)
                         except (UnicodeError, ValueError) as exception:
                             raise ProviderFailure("invalid_mcp_response") from exception
+                    check_deadline(deadline, time.monotonic)
+            except (ResponseDeadlineExceeded, InvalidResponseBody) as exception:
+                failure = "outcome_unknown" if paid else "invalid_mcp_response"
+                raise ProviderFailure(failure) from exception
             except (httpx.TimeoutException, httpx.RequestError) as exception:
                 failure = "outcome_unknown" if paid else "provider_unavailable"
                 raise ProviderFailure(failure) from exception

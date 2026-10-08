@@ -2,19 +2,22 @@
 
 import base64
 import json
+import zlib
+from gzip import compress as gzip_compress
 from pathlib import Path
 
 import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+import novelai_api._http_response as http_response
+import novelai_api.mcp_images as mcp_images
 from novelai_api.app import create_app
 from novelai_api.auth import create_token
 from novelai_api.config import Settings
 from novelai_api.db import Database
 from novelai_api.generations import GenerationRequest, ProviderFailure
 from novelai_api.mcp_images import NovelAiMcpProvider
-
 
 PNG = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j"
@@ -110,6 +113,262 @@ def provider_for(transport: httpx.MockTransport) -> NovelAiMcpProvider:
     return NovelAiMcpProvider(
         "https://mcp.example/novel-ai-v5", "fake-mcp-token", transport=transport
     )
+
+
+class TrackingStream(httpx.SyncByteStream):
+    def __init__(self, chunks: list[bytes], *, on_chunk=None, on_eof=None):
+        self.chunks = chunks
+        self.on_chunk = on_chunk
+        self.on_eof = on_eof
+        self.read_count = 0
+        self.closed = False
+
+    def __iter__(self):
+        for chunk in self.chunks:
+            self.read_count += 1
+            if self.on_chunk is not None:
+                self.on_chunk()
+            yield chunk
+        if self.on_eof is not None:
+            self.on_eof()
+
+    def close(self):
+        self.closed = True
+
+
+def streamed_mcp(method: str | None, respond):
+    base, calls = mock_mcp()
+
+    def handler(request: httpx.Request):
+        response = base.handle_request(request)
+        actual_method = json.loads(request.content)["method"]
+        if actual_method == method or (
+            method is None and actual_method != "notifications/initialized"
+        ):
+            return respond(response)
+        return response
+
+    return httpx.MockTransport(handler), calls
+
+
+@pytest.mark.parametrize("method", ["initialize", "tools/call"])
+def test_tiny_slow_chunks_stop_at_rpc_deadline_without_retry(
+    monkeypatch: pytest.MonkeyPatch, method: str,
+) -> None:
+    clock = [0.0]
+    monkeypatch.setattr(mcp_images.time, "monotonic", lambda: clock[0])
+
+    def advance_clock() -> None:
+        clock[0] += 1.0
+
+    slow = TrackingStream([b" "] * 20, on_chunk=advance_clock)
+    transport, calls = streamed_mcp(method, lambda _: httpx.Response(200, stream=slow))
+    provider = provider_for(transport)
+    provider.timeout = 3.0
+    failure = "outcome_unknown" if method == "tools/call" else "invalid_mcp_response"
+    with pytest.raises(ProviderFailure, match=failure):
+        provider.generate(PARAMETERS)
+    assert slow.read_count == 3
+    assert slow.closed
+    assert [call["method"] for call in calls].count("tools/call") == (method == "tools/call")
+
+
+@pytest.mark.parametrize("method", ["initialize", "notifications/initialized", "tools/call"])
+def test_rpc_deadline_includes_opening_response(
+    monkeypatch: pytest.MonkeyPatch, method: str,
+) -> None:
+    clock = [0.0]
+    monkeypatch.setattr(mcp_images.time, "monotonic", lambda: clock[0])
+    stream = TrackingStream([b"private upstream response"])
+
+    def delayed_response(_response: httpx.Response) -> httpx.Response:
+        clock[0] += 4.0
+        return httpx.Response(200, stream=stream)
+
+    transport, calls = streamed_mcp(method, delayed_response)
+    provider = provider_for(transport)
+    provider.timeout = 3.0
+    failure = "outcome_unknown" if method == "tools/call" else "invalid_mcp_response"
+    with pytest.raises(ProviderFailure, match=failure):
+        provider.generate(PARAMETERS)
+    assert stream.read_count == 0
+    assert stream.closed
+    assert [call["method"] for call in calls].count("tools/call") == (method == "tools/call")
+
+
+@pytest.mark.parametrize("phase", ["eof", "parse"])
+def test_paid_rpc_checks_deadline_after_eof_and_parsing(
+    monkeypatch: pytest.MonkeyPatch, phase: str,
+) -> None:
+    clock = [0.0]
+    monkeypatch.setattr(mcp_images.time, "monotonic", lambda: clock[0])
+
+    def advance_clock() -> None:
+        clock[0] += 4.0
+
+    original_loads = json.loads
+
+    def slow_loads(body, *args, **kwargs):
+        message = original_loads(body, *args, **kwargs)
+        if isinstance(message, dict) and message.get("id") == 3 and "result" in message:
+            advance_clock()
+        return message
+
+    if phase == "parse":
+        monkeypatch.setattr(mcp_images.json, "loads", slow_loads)
+    streams = []
+
+    def respond(response: httpx.Response) -> httpx.Response:
+        stream = TrackingStream(
+            [response.content], on_eof=advance_clock if phase == "eof" else None,
+        )
+        streams.append(stream)
+        return httpx.Response(200, stream=stream)
+
+    transport, calls = streamed_mcp("tools/call", respond)
+    provider = provider_for(transport)
+    provider.timeout = 3.0
+    with pytest.raises(ProviderFailure, match="outcome_unknown"):
+        provider.generate(PARAMETERS)
+    assert streams[0].closed
+    assert [call["method"] for call in calls].count("tools/call") == 1
+
+
+@pytest.mark.parametrize("method", ["initialize", "tools/call"])
+def test_raw_stream_read_timeout_keeps_transport_error_mapping(method: str) -> None:
+    def timeout() -> None:
+        raise httpx.ReadTimeout("private upstream timeout")
+
+    stream = TrackingStream([b" "], on_chunk=timeout)
+    transport, calls = streamed_mcp(method, lambda _: httpx.Response(200, stream=stream))
+    failure = "outcome_unknown" if method == "tools/call" else "provider_unavailable"
+    with pytest.raises(ProviderFailure, match=failure) as exception:
+        provider_for(transport).generate(PARAMETERS)
+    assert "private" not in str(exception.value)
+    assert stream.closed
+    assert [call["method"] for call in calls].count("tools/call") == (method == "tools/call")
+
+
+@pytest.mark.parametrize("method", ["initialize", "tools/call"])
+def test_compressed_expansion_is_capped_before_allocating_the_full_body(
+    monkeypatch: pytest.MonkeyPatch, method: str,
+) -> None:
+    cap = 1024
+    bomb = TrackingStream([gzip_compress(b" " * 100000), b"private upstream tail"])
+    original_decompressobj = zlib.decompressobj
+    allocations = []
+
+    class TrackingDecoder:
+        def __init__(self, *args, **kwargs):
+            self.decoder = original_decompressobj(*args, **kwargs)
+
+        def decompress(self, data, max_length=0):
+            decoded = self.decoder.decompress(data, max_length)
+            allocations.append(len(decoded))
+            return decoded
+
+        def __getattr__(self, name):
+            return getattr(self.decoder, name)
+
+    monkeypatch.setattr(http_response.zlib, "decompressobj", TrackingDecoder)
+    monkeypatch.setattr(mcp_images, "MAX_RESPONSE_BYTES", cap)
+    transport, calls = streamed_mcp(
+        method,
+        lambda _: httpx.Response(200, stream=bomb, headers={"Content-Encoding": "gzip"}),
+    )
+    failure = "outcome_unknown" if method == "tools/call" else "invalid_mcp_response"
+    with pytest.raises(ProviderFailure, match=failure) as exception:
+        provider_for(transport).generate(PARAMETERS)
+    assert allocations and max(allocations) <= cap + 1
+    assert bomb.read_count == 1
+    assert bomb.closed
+    assert "private" not in str(exception.value)
+    assert "fake-mcp-token" not in str(exception.value)
+    assert [call["method"] for call in calls].count("tools/call") == (method == "tools/call")
+
+
+@pytest.mark.parametrize("method", ["initialize", "tools/call"])
+def test_identity_response_stops_before_reading_beyond_cap(
+    monkeypatch: pytest.MonkeyPatch, method: str,
+) -> None:
+    monkeypatch.setattr(mcp_images, "MAX_RESPONSE_BYTES", 1024)
+    oversized = TrackingStream([b" " * 512, b" " * 512, b"x", b"private upstream tail"])
+    transport, calls = streamed_mcp(method, lambda _: httpx.Response(200, stream=oversized))
+    failure = "outcome_unknown" if method == "tools/call" else "invalid_mcp_response"
+    with pytest.raises(ProviderFailure, match=failure):
+        provider_for(transport).generate(PARAMETERS)
+    assert oversized.read_count == 3
+    assert oversized.closed
+    assert [call["method"] for call in calls].count("tools/call") == (method == "tools/call")
+
+
+@pytest.mark.parametrize(
+    ("encoding", "compress"),
+    [
+        ("identity", lambda body: body),
+        ("gzip", gzip_compress),
+        ("deflate", zlib.compress),
+        ("deflate", lambda body: zlib.compress(body)[2:-4]),
+    ],
+)
+@pytest.mark.parametrize("content_type", ["application/json", "text/event-stream"])
+def test_streamed_json_and_sse_decode_at_the_exact_cap(
+    monkeypatch: pytest.MonkeyPatch, encoding: str, compress, content_type: str,
+) -> None:
+    monkeypatch.setattr(mcp_images, "MAX_RESPONSE_BYTES", 1024)
+    streams = []
+
+    def respond(response: httpx.Response) -> httpx.Response:
+        body = response.content
+        if response.headers.get("Content-Type") == "text/event-stream":
+            body = body.split(b"data: ", 1)[1].strip()
+        if content_type == "text/event-stream":
+            body = b"event: message\ndata: " + body + b"\n\n"
+        assert len(body) < 1024
+        encoded = compress(body.ljust(1024))
+        # Split the compression header into single-byte transport chunks.
+        stream = TrackingStream([encoded[:1], encoded[1:2], encoded[2:]])
+        streams.append(stream)
+        return httpx.Response(
+            200,
+            stream=stream,
+            headers={
+                "Content-Type": content_type,
+                "Content-Encoding": encoding,
+                "Mcp-Session-Id": "test-session",
+            },
+        )
+
+    transport, calls = streamed_mcp(None, respond)
+    images = provider_for(transport).generate(PARAMETERS)
+    assert [image.data for image in images] == [PNG, PNG]
+    assert len(streams) == 3
+    assert all(stream.closed and stream.read_count == 3 for stream in streams)
+    assert [call["method"] for call in calls].count("tools/call") == 1
+
+
+@pytest.mark.parametrize("method", ["initialize", "tools/call"])
+@pytest.mark.parametrize(
+    "body",
+    [
+        b"private upstream invalid gzip",
+        gzip_compress(b"private upstream truncated body")[:-4],
+        gzip_compress(b"private upstream body") + b"private trailing data",
+    ],
+)
+def test_invalid_compression_is_safe_and_never_retries(method: str, body: bytes) -> None:
+    stream = TrackingStream([body])
+    transport, calls = streamed_mcp(
+        method,
+        lambda _: httpx.Response(200, stream=stream, headers={"Content-Encoding": "gzip"}),
+    )
+    failure = "outcome_unknown" if method == "tools/call" else "invalid_mcp_response"
+    with pytest.raises(ProviderFailure, match=failure) as exception:
+        provider_for(transport).generate(PARAMETERS)
+    assert "private" not in str(exception.value)
+    assert "fake-mcp-token" not in str(exception.value)
+    assert stream.closed
+    assert [call["method"] for call in calls].count("tools/call") == (method == "tools/call")
 
 
 def test_mcp_provider_is_only_configured_with_server_token(

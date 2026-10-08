@@ -4,20 +4,23 @@ import json
 import math
 import re
 import threading
-import zlib
-from collections.abc import Iterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from email.utils import format_datetime, parsedate_to_datetime
 from time import monotonic
 
 import httpx
 from pydantic import BaseModel, Field, field_validator
 
+from ._http_response import (
+    InvalidResponseBody,
+    ResponseDeadlineExceeded,
+    check_deadline,
+    read_bounded_body,
+)
 
 SOURCE_URL = "https://huggingface.co/spaces/SAkizuki/DanbooruSearch"
 MAX_RESPONSE_BYTES = 1024 * 1024
 SEARCH_DEADLINE_SECONDS = 30.0
-RESPONSE_CHUNK_BYTES = 8192
 MAX_RETRY_AFTER_BYTES = 128
 _DELTA_SECONDS = re.compile(r"[0-9]+")
 _IMF_DATE = re.compile(
@@ -88,7 +91,7 @@ def _safe_retry_after(value: str | None) -> str | None:
     rfc850 = _RFC850_DATE.fullmatch(value)
     asctime = _ASCTIME_DATE.fullmatch(value)
     if rfc850:
-        year = datetime.now(timezone.utc).year
+        year = datetime.now(UTC).year
         century_year = year // 100 * 100 + int(rfc850["year"])
         if century_year > year + 50:
             century_year -= 100
@@ -111,12 +114,6 @@ def _safe_retry_after(value: str | None) -> str | None:
     except (ValueError, TypeError):
         return None
     return canonical if canonical == imf_date else None
-
-
-def _bounded_raw_chunks(response: httpx.Response) -> Iterator[bytes]:
-    for raw_chunk in response.iter_raw():
-        for start in range(0, len(raw_chunk), RESPONSE_CHUNK_BYTES):
-            yield raw_chunk[start : start + RESPONSE_CHUNK_BYTES]
 
 
 def _optional_text(value) -> str | None:
@@ -214,10 +211,7 @@ class TagSearch:
                     },
                     headers=headers,
                 ) as response:
-                    if monotonic() >= deadline:
-                        raise SearchFailure(
-                            504, "search_timeout", "Tag search timed out", retryable=True
-                        )
+                    check_deadline(deadline, monotonic)
                     if response.status_code == 429:
                         raise SearchFailure(
                             429, "search_rate_limited", "Tag search rate limited", retryable=True,
@@ -235,89 +229,25 @@ class TagSearch:
                         )
                     if response.status_code != 200:
                         raise SearchFailure(502, "search_error", "Tag search failed")
-                    encoding = response.headers.get("Content-Encoding", "identity").strip().lower()
-                    if encoding not in ("identity", "gzip", "deflate"):
-                        raise SearchFailure(
-                            502, "search_bad_response", "Invalid tag search response"
-                        )
-                    chunks: list[bytes] = []
-                    size = 0
-                    decoder = None
-                    if response.is_stream_consumed:
-                        body_chunks = response.iter_bytes(chunk_size=RESPONSE_CHUNK_BYTES)
-                    elif encoding == "identity":
-                        body_chunks = response.iter_raw()
-                    else:
-                        decoder = zlib.decompressobj(
-                            zlib.MAX_WBITS | 16 if encoding == "gzip" else zlib.MAX_WBITS
-                        )
-                        body_chunks = _bounded_raw_chunks(response)
-                    first_compressed_chunk = True
-                    for chunk in body_chunks:
-                        if monotonic() >= deadline:
-                            raise SearchFailure(
-                                504, "search_timeout", "Tag search timed out", retryable=True
-                            )
-                        if decoder is not None:
-                            try:
-                                decoded = decoder.decompress(chunk, MAX_RESPONSE_BYTES - size + 1)
-                            except zlib.error as exception:
-                                if encoding != "deflate" or not first_compressed_chunk:
-                                    raise SearchFailure(
-                                        502, "search_bad_response", "Invalid tag search response"
-                                    ) from exception
-                                decoder = zlib.decompressobj(-zlib.MAX_WBITS)
-                                try:
-                                    decoded = decoder.decompress(
-                                        chunk, MAX_RESPONSE_BYTES - size + 1
-                                    )
-                                except zlib.error as raw_exception:
-                                    raise SearchFailure(
-                                        502, "search_bad_response", "Invalid tag search response"
-                                    ) from raw_exception
-                            first_compressed_chunk = False
-                            if decoder.unused_data:
-                                raise SearchFailure(
-                                    502, "search_bad_response", "Invalid tag search response"
-                                )
-                            chunk = decoded
-                        size += len(chunk)
-                        if size > MAX_RESPONSE_BYTES:
-                            raise SearchFailure(
-                                502, "search_bad_response", "Invalid tag search response"
-                            )
-                        chunks.append(chunk)
-                    if decoder is not None:
-                        if monotonic() >= deadline:
-                            raise SearchFailure(
-                                504, "search_timeout", "Tag search timed out", retryable=True
-                            )
-                        try:
-                            tail = decoder.flush(MAX_RESPONSE_BYTES - size + 1)
-                        except zlib.error as exception:
-                            raise SearchFailure(
-                                502, "search_bad_response", "Invalid tag search response"
-                            ) from exception
-                        size += len(tail)
-                        if size > MAX_RESPONSE_BYTES or not decoder.eof or decoder.unused_data:
-                            raise SearchFailure(
-                                502, "search_bad_response", "Invalid tag search response"
-                            )
-                        chunks.append(tail)
-                    if monotonic() >= deadline:
-                        raise SearchFailure(
-                            504, "search_timeout", "Tag search timed out", retryable=True
-                        )
+                    body = read_bounded_body(
+                        response, max_bytes=MAX_RESPONSE_BYTES,
+                        deadline=deadline, clock=monotonic,
+                    )
                     try:
-                        payload = json.loads(b"".join(chunks))
+                        payload = json.loads(body)
                     except (UnicodeError, ValueError) as exception:
                         raise SearchFailure(
                             502, "search_bad_response", "Invalid tag search response"
                         ) from exception
-                    if monotonic() >= deadline:
-                        raise SearchFailure(
-                            504, "search_timeout", "Tag search timed out", retryable=True
-                        )
+                    check_deadline(deadline, monotonic)
+        except ResponseDeadlineExceeded as exception:
+            raise SearchFailure(
+                504, "search_timeout", "Tag search timed out", retryable=True
+            ) from exception
+        except InvalidResponseBody as exception:
+            raise SearchFailure(
+                502, "search_bad_response", "Invalid tag search response"
+            ) from exception
         except httpx.TimeoutException as exception:
             raise SearchFailure(
                 504, "search_timeout", "Tag search timed out", retryable=True

@@ -18,7 +18,6 @@ from openai_codex_sdk.exec import CodexExec, CodexExecArgs
 
 from .advice import AdviceResult, ToolUseAttempt
 
-
 CLI_VERSION = "0.152.1"
 OUTPUT_SCHEMA = {
     "type": "object",

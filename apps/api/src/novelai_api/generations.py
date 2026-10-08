@@ -15,7 +15,6 @@ from pydantic import BaseModel, Field, field_validator
 
 from .db import Database
 
-
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 PNG_TRAILER = b"\x00\x00\x00\x00IEND\xaeB`\x82"
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
