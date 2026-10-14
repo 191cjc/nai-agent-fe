@@ -66,6 +66,10 @@ The operator requested exhaustive, seed-locked selected style-tag weight
 experiments after the tag editor release. Continue with
 `style-experiment-design.md` and `style-experiment-implement.md`; implementation
 is split between state/helper and UI owners, followed by a full-scope check.
+Work commit `5e3795f` is published as web-only release `20261014T101427`;
+ESLint/TypeScript, fresh env-free build, committed-input comparison and public
+page/asset/health checks passed. See the follow-up verification and deployment
+notes. Operator interaction and actual-provider acceptance remain pending.
 
 ## Deployment Considerations (Original Native Characters)
 

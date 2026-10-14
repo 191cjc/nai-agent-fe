@@ -26,5 +26,8 @@
 - [x] Clean env-free production build and reviewed working-source comparison;
   see `style-experiment-build-verification.md`. Publication also verifies the
   staged input map against the final work commit.
-- [ ] Web-only deployment and public HTTP/hash checks.
+- [x] Work commit `5e3795f`; staged inputs matched committed source before
+  publication. Web-only release `20261014T101427` passed page/asset SHA-256,
+  readiness, neighboring-service and retained-asset checks. API pointer/PID
+  unchanged. See `deployment-style-experiment-2026-10-14.md`.
 - [ ] Operator desktop/mobile/keyboard and actual-provider acceptance.
