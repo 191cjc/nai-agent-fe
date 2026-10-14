@@ -197,3 +197,42 @@ Implemented blur-to-tag prompt editing with manual-only text mode and precise 0.
 ### Next Steps
 
 - Operator refreshes https://www.firesoul.cn/novelai/ and accepts desktop/mobile/keyboard tag, arrow and manual-edit interactions; no paid provider output was exercised.
+
+
+## Session 6: Style weight experiment and web-only release
+<!-- trellis-session: v=2 fp=1e1e497ef2847708 -->
+
+**Date**: 2026-10-14
+**Task**: Style weight experiment and web-only release
+**Branch**: `feat/native-character-prompts`
+
+### Summary
+
+Implemented occurrence-based exact Cartesian style-weight experiments with frozen parameters, shared seeds, sequential image archival and paged comparisons; deployed web-only release 20261014T101427.
+
+### Main Changes
+
+- Added BigInt lazy range enumeration, per-tag min/max/step controls, preflight group/image totals and source-preserving absolute weight replacement.
+- GenerationStore owns frozen runs, first-effective-seed reuse, Stop/error/no-retry behavior, accepted-task manual rechecks and archived URL cleanup.
+- Published https://www.firesoul.cn/novelai/ from committed explicit env-free inputs; retained old releases/assets and kept API release/PID unchanged.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5e3795f` | feat(web): add exhaustive style weight experiments |
+| `dff61be` | docs: record style experiment production release |
+
+### Testing
+
+- [OK] Independent full-scope source review, ESLint, TypeScript, Trellis context validation and git diff --check passed.
+- [OK] Fresh locked offline install and sanitized production build passed; all 14 inputs matched reviewed and committed sources.
+- [OK] Public page/referenced assets passed exact SHA-256; API readiness, neighboring service and prior asset checks returned HTTP 200. No frontend tests, browser automation or paid calls.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Operator desktop/mobile/keyboard and real-provider experiment acceptance; retain active task in_progress pending that acceptance.
