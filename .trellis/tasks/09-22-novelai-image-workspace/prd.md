@@ -143,6 +143,10 @@ the backend's unchanged `/api/*` routes. The origin contains no path.
 - Support the documented `generate_image` tool with this MVP input subset:
   positive prompt, negative prompt, model, width, height, steps, CFG scale,
   sampler, seed, sample count, and quality preset.
+- On 2026-10-14 the operator extended prompt authoring to separate style,
+  shared text and multiple native independent characters. The scoped contract
+  and acceptance criteria live in `../10-14-native-character-prompts/prd.md`;
+  character descriptions must remain independent rather than be flattened.
 - Do not expose img2img, inpainting, multi-character positioning, Vibe transfer,
   reference-image workflows, or other image-upload controls in the MVP.
 - Return generated image content and normalized metadata through the FastAPI

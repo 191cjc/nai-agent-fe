@@ -1,6 +1,7 @@
 """In-process fake provider exercises generation without paid service calls."""
 
 import base64
+import json
 import sqlite3
 import threading
 import time
@@ -37,6 +38,14 @@ INPUT = {
     "sampler": "fixture-sampler",
     "sample_count": 2,
     "quality": True,
+}
+NATIVE_INPUT = {
+    **INPUT,
+    "model": "nai-diffusion-5-full",
+    "style_prompt": " watercolor ",
+    "positive_prompt": " garden, 2girls ",
+    "character_prompts": [{"prompt": " blue hair "}, {"prompt": "red hair, glasses"}],
+    "seed": 77,
 }
 
 
@@ -94,6 +103,139 @@ def wait_finished(client: TestClient, job_id: str) -> dict:
             return response.json()
         time.sleep(0.01)
     pytest.fail("Fake generation did not complete")
+
+
+@pytest.mark.parametrize(
+    ("style", "shared", "expected"),
+    [
+        ("", "  blue hair, garden  ", "  blue hair, garden  "),
+        (" \t", "  blue hair, garden  ", "  blue hair, garden  "),
+        (" watercolor ", " garden ", "watercolor, garden"),
+        (" watercolor ", "", "watercolor"),
+        (" watercolor ", " \t ", "watercolor"),
+        ("x" * 1499, "y" * 1499, "x" * 1499 + ", " + "y" * 1499),
+        ("x" * 3000, "", "x" * 3000),
+        ("", "y" * 3000, "y" * 3000),
+    ],
+)
+def test_base_prompt_preserves_legacy_text_and_composes_only_style_and_shared(
+    style: str, shared: str, expected: str,
+) -> None:
+    parameters = GenerationRequest.model_validate(
+        {**NATIVE_INPUT, "style_prompt": style, "positive_prompt": shared}
+    )
+    assert parameters.base_prompt == expected
+    assert parameters.style_prompt == style
+    assert parameters.positive_prompt == shared
+    assert [character.prompt for character in parameters.character_prompts] == [
+        " blue hair ", "red hair, glasses"
+    ]
+
+
+@pytest.mark.parametrize(
+    "model",
+    [
+        "nai-diffusion-4-full", "nai-diffusion-4-curated-preview",
+        "nai-diffusion-4-5-full", "nai-diffusion-4-5-curated",
+        "nai-diffusion-5-full", "nai-diffusion-5-curated",
+    ],
+)
+def test_native_models_accept_workspace_character_limits(model: str) -> None:
+    characters = [{"prompt": "x" * 3000} for _ in range(6)]
+    parameters = GenerationRequest.model_validate(
+        {**NATIVE_INPUT, "model": model, "character_prompts": characters}
+    )
+    assert parameters.model_dump()["character_prompts"] == characters
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        {"positive_prompt": "", "style_prompt": ""},
+        {"positive_prompt": " \t", "style_prompt": " \t"},
+        {"positive_prompt": "x" * 3001},
+        {"style_prompt": "x" * 3001},
+        {"style_prompt": "x" * 1500, "positive_prompt": "y" * 1499},
+        {"character_prompts": [{"prompt": "person"}] * 7},
+        {"character_prompts": [{"prompt": ""}]},
+        {"character_prompts": [{"prompt": " \t "}]},
+        {"character_prompts": [{"prompt": "x" * 3001}]},
+        {"character_prompts": [{}]},
+        {"character_prompts": ["person"]},
+        {"character_prompts": None},
+        {"model": "nai-diffusion-3"},
+        {"model": "nai-diffusion-4-full-inpainting"},
+        {"model": "nai-diffusion-5-full-inpainting"},
+        {"model": "unknown-future-model"},
+    ],
+)
+def test_invalid_native_prompts_rejected_before_submission(
+    database: Database, override: dict,
+) -> None:
+    provider = FakeProvider()
+    with client_for(database, provider) as client:
+        login(client, database, "alice")
+        response = client.post(
+            "/api/generations", json={**NATIVE_INPUT, **override}, headers=ORIGIN,
+        )
+        assert response.status_code == 422
+        assert response.json() == {
+            "code": "validation_error", "message": "Invalid request", "retryable": False,
+        }
+        assert client.get("/api/generations").json()["items"] == []
+        assert provider.calls == []
+
+
+def test_structured_and_legacy_history_survive_restart_backup_and_reuse(
+    database: Database,
+) -> None:
+    provider = FakeProvider()
+    legacy = {**INPUT, "positive_prompt": "  original flat prompt  ", "seed": 77}
+    with client_for(database, provider) as client:
+        _token, alice_id, session = login(client, database, "alice")
+        native_id = client.post(
+            "/api/generations", json=NATIVE_INPUT, headers=ORIGIN,
+        ).json()["id"]
+        assert wait_finished(client, native_id)["parameters"] == NATIVE_INPUT
+        assert provider.calls[0].model_dump() == NATIVE_INPUT
+        legacy_id = JobStore(database).create(alice_id, GenerationRequest(**legacy))
+        # Simulate an actual pre-upgrade row with no structured fields in its saved JSON.
+        with database.connect(write=True) as connection:
+            connection.execute(
+                "UPDATE generation_jobs SET settings_json = ?, status = 'succeeded' WHERE id = ?",
+                (json.dumps(legacy), legacy_id),
+            )
+        login(client, database, "bob")
+        assert client.get("/api/generations").json()["items"] == []
+        assert client.get(f"/api/generations/{native_id}").status_code == 404
+        assert client.get(f"/api/generations/{legacy_id}").status_code == 404
+        client.cookies.set(SESSION_COOKIE, session)
+        target = database.path.parent / "structured-snapshot.sqlite3"
+        database.backup(target)
+
+    expected = {
+        native_id: NATIVE_INPUT,
+        legacy_id: {**legacy, "style_prompt": "", "character_prompts": []},
+    }
+    for stored_database in (database, Database(target)):
+        reusable_provider = FakeProvider()
+        with client_for(stored_database, reusable_provider) as restored:
+            restored.cookies.set(SESSION_COOKIE, session)
+            history = restored.get("/api/generations").json()["items"]
+            assert {item["id"]: item["parameters"] for item in history} == expected
+            for job_id, parameters in expected.items():
+                saved = restored.get(f"/api/generations/{job_id}").json()
+                assert saved["parameters"] == parameters
+                assert saved["image_urls"] == []
+                response = restored.post("/api/generations", json=parameters, headers=ORIGIN)
+                assert response.status_code == 202
+                reused = wait_finished(restored, response.json()["id"])
+                assert reused["parameters"] == parameters
+            assert [parameters.model_dump() for parameters in reusable_provider.calls] == [
+                NATIVE_INPUT, expected[legacy_id]
+            ]
+    assert target.stat().st_mode & 0o777 == 0o600
+    assert PNG not in target.read_bytes()
 
 
 def test_images_temporary_history_and_download(database: Database) -> None:

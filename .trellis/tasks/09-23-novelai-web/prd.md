@@ -52,3 +52,38 @@ Deliver the React/TypeScript/MobX client for the parent workspace; refer to
 
 Consume the backend child's typed OpenAPI/fixture contract; do not parse raw
 NovelAI MCP or DanbooruSearch responses in the browser.
+
+## Prompt Editor Revision (2026-10-14)
+
+### Requested behavior
+
+- Split positive prompt editing into sections labeled `画风`, `公共` and
+  `人物`.
+- Allow multiple character entries, with add/remove controls matching the
+  original product's multi-character editing workflow.
+- Put the negative prompt behind a distinct tab at the side of the editor;
+  its editor must not reserve horizontal space while inactive.
+- Keep unfinished prompt input when switching sections or tools. Preserve
+  explicit tag insertion and reuse of existing parameter history.
+
+### Resolved compatibility decision
+
+The current browser request, API model and provider adapter represent the
+positive prompt as one string (`positive_prompt`, mapped to MCP `prompt`).
+They do not currently transport independent character prompts. The operator
+chose native independent characters, including the necessary generation
+integration. The scoped cross-layer work is tracked in
+`../10-14-native-character-prompts/prd.md`; combining character text does not
+satisfy its acceptance criteria.
+
+### Acceptance criteria for this revision
+
+- [ ] The editor exposes `画风`, `公共` and `人物`, and supports adding,
+  editing and removing multiple character entries without changing siblings.
+- [ ] Switching the compact side tab reveals the negative prompt; its
+  inactive editor occupies no horizontal content area.
+- [ ] Prompt submission and history reuse follow the resolved compatibility
+  decision, without silently dropping prompt content or character boundaries.
+- [ ] Keyboard-accessible controls and narrow-screen layouts remain usable.
+  Verify using source review, lint/type-check and an environment-free build;
+  retain the restriction on frontend automated tests and browser automation.

@@ -307,7 +307,17 @@ readiness. Verify owner-scoped history and sessions before reopening traffic.
 Keep the old state directory, API release, web release and pre-upgrade backup
 for a bounded rollback window. Rollback by switching the API and web
 symlinks to a compatible pair while the service is stopped, then restart and
-verify. An API-only rollback is valid only if intervening DB migrations are
-backward compatible; otherwise restore its matching pre-upgrade snapshot
+verify. An API-only rollback is valid only if intervening DB migrations and
+saved parameter formats are backward compatible; otherwise restore its matching pre-upgrade snapshot
 into a fresh state directory and accept loss of newer parameter writes. Do
 not merge SQLite directories. No generated image can be recovered by design.
+
+For native-character prompt releases, deploy the new API before the new web
+assets. A style-only generation can save an empty `positive_prompt` with
+nonempty `style_prompt`; the pre-feature API rejects that saved input while
+reading history even though SQLite remains version 2. Prefer a forward fix
+or retain the new API if reverting only the frontend. Keep generation
+unavailable while the older frontend cannot preserve style/character fields.
+Before downgrading the API, verify all saved requests against its old model,
+or deliberately restore a compatible snapshot with the recovery-point tradeoff
+above. See `../.trellis/spec/backend/native-character-contract.md`.

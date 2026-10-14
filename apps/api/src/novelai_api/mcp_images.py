@@ -40,6 +40,40 @@ REQUIRED_FIELDS = frozenset(
         "quality",
     }
 )
+SCHEMA_ANNOTATIONS = frozenset(
+    {
+        "title", "description", "default", "$comment", "examples", "deprecated",
+        "readOnly", "writeOnly",
+    }
+)
+
+
+def _accepts_character_objects(schema: Any, count: int) -> bool:
+    """Recognize the deployed untyped object contract; reject unverified constraints."""
+    if not isinstance(schema, dict):
+        return False
+    validation_keys = set(schema) - SCHEMA_ANNOTATIONS
+    if "anyOf" in schema:
+        alternatives = schema["anyOf"]
+        return (
+            validation_keys == {"anyOf"}
+            and isinstance(alternatives, list)
+            and any(_accepts_character_objects(option, count) for option in alternatives)
+        )
+    if not validation_keys.issubset({"type", "items", "minItems", "maxItems"}):
+        return False
+    minimum = schema.get("minItems", 0)
+    maximum = schema.get("maxItems", count)
+    if type(minimum) is not int or type(maximum) is not int or not 0 <= minimum <= count <= maximum:
+        return False
+    items = schema.get("items")
+    return (
+        schema.get("type") == "array"
+        and isinstance(items, dict)
+        and items.get("type") == "object"
+        and (set(items) - SCHEMA_ANNOTATIONS).issubset({"type", "additionalProperties"})
+        and items.get("additionalProperties", True) is True
+    )
 
 
 def _parse_sse(body: bytes, request_id: int) -> dict:
@@ -180,7 +214,7 @@ class NovelAiMcpProvider:
             if not REQUIRED_FIELDS.issubset(properties):
                 raise ProviderFailure("incompatible_mcp_server")
             arguments = {
-                "prompt": parameters.positive_prompt,
+                "prompt": parameters.base_prompt,
                 "negative_prompt": parameters.negative_prompt,
                 "model": parameters.model,
                 "width": parameters.width,
@@ -192,6 +226,21 @@ class NovelAiMcpProvider:
                 "n_samples": parameters.sample_count,
                 "quality": parameters.quality,
             }
+            if parameters.character_prompts:
+                if not _accepts_character_objects(
+                    properties.get("character_prompts"), len(parameters.character_prompts)
+                ):
+                    raise ProviderFailure("unsupported_character_prompts")
+                arguments["character_prompts"] = [
+                    {
+                        "prompt": character.prompt,
+                        "negative_prompt": "",
+                        "x": 0.5,
+                        "y": 0.5,
+                        "enabled": True,
+                    }
+                    for character in parameters.character_prompts
+                ]
             for field in ("model", "sampler"):
                 field_schema = properties[field]
                 choices = field_schema.get("enum") if isinstance(field_schema, dict) else None

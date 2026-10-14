@@ -8,10 +8,10 @@ import time
 from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Literal, Protocol
+from typing import Literal, Protocol, Self
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .db import Database
 
@@ -21,10 +21,33 @@ MAX_IMAGE_BYTES = 8 * 1024 * 1024
 MAX_RESULT_BYTES = 32 * 1024 * 1024
 MAX_CACHED_BYTES = 64 * 1024 * 1024
 RESULT_TTL_SECONDS = 10 * 60
+NATIVE_CHARACTER_MODELS = frozenset(
+    {
+        "nai-diffusion-4-full",
+        "nai-diffusion-4-curated-preview",
+        "nai-diffusion-4-5-full",
+        "nai-diffusion-4-5-curated",
+        "nai-diffusion-5-full",
+        "nai-diffusion-5-curated",
+    }
+)
+
+
+class CharacterPrompt(BaseModel):
+    prompt: str = Field(min_length=1, max_length=3000)
+
+    @field_validator("prompt")
+    @classmethod
+    def nonblank_prompt(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Character prompt cannot be blank")
+        return value
 
 
 class GenerationRequest(BaseModel):
-    positive_prompt: str = Field(min_length=1, max_length=3000)
+    positive_prompt: str = Field(max_length=3000)
+    style_prompt: str = Field(default="", max_length=3000)
+    character_prompts: list[CharacterPrompt] = Field(default_factory=list, max_length=6)
     negative_prompt: str = Field(default="", max_length=3000)
     model: str = Field(min_length=1, max_length=80)
     width: int = Field(ge=64, le=2048, multiple_of=64)
@@ -36,12 +59,29 @@ class GenerationRequest(BaseModel):
     sample_count: int = Field(ge=1, le=8)
     quality: bool
 
-    @field_validator("positive_prompt", "model", "sampler")
+    @field_validator("model", "sampler")
     @classmethod
     def nonempty_required_text(cls, value: str) -> str:
         if not value.strip():
             raise ValueError("Required generation text cannot be blank")
         return value
+
+    @property
+    def base_prompt(self) -> str:
+        if not self.style_prompt.strip():
+            return self.positive_prompt
+        return ", ".join(
+            part.strip() for part in (self.style_prompt, self.positive_prompt) if part.strip()
+        )
+
+    @model_validator(mode="after")
+    def valid_prompt_structure(self) -> Self:
+        base = self.base_prompt
+        if not base.strip() or len(base) > 3000:
+            raise ValueError("Combined style and shared prompt must contain 1 to 3000 characters")
+        if self.character_prompts and self.model not in NATIVE_CHARACTER_MODELS:
+            raise ValueError("Model does not support native character prompts")
+        return self
 
 
 @dataclass(frozen=True)

@@ -10,6 +10,15 @@ the browser URL exactly, including the port. Vite holds port 5173 by default
 so it cannot silently select an origin that does not match the API setting.
 
 Generated images are temporary; history stores parameters only.
+The positive editor separates style, shared scene text and up to six native
+character descriptions. The negative editor opens in the same content area
+from its compact side tab. Tag insertion has an explicit positive destination;
+history reuse restores the separate sections and characters, while older flat
+prompts populate shared text. Native characters require a compatible API and
+V4/V4.5/V5 model; deploy the API before this frontend. See
+`../../.trellis/spec/backend/native-character-contract.md` for the exact
+supported-model subset and default centered-positioning limitation.
+
 Production builds can set `NAI_WEB_BASE_PATH=/novelai/`. The browser then calls
 `/novelai/api/*`; the reverse proxy strips `/novelai` before forwarding to the
 backend's `/api/*` routes. `NAI_PUBLIC_ORIGIN` remains the HTTPS origin only.

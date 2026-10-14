@@ -30,7 +30,10 @@ and review how the web app consumes the change.
   generic user-visible messages, never upstream credentials or responses.
 - `apps/api/contracts/openapi.json` is a deterministic, credential-free
   snapshot, not evidence that unconfigured providers work. Model and sampler
-  are provisional strings, not an invented choice enum.
+  are provisional strings, not an invented choice enum. Character-bearing
+  requests additionally validate the verified native model subset; see
+  [Native Character Prompt Contract](./native-character-contract.md) for
+  additive style/character fields, history defaults and API-first rollout.
 
 ## Validation & Error Matrix
 

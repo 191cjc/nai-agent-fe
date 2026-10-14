@@ -59,7 +59,10 @@ API process in production. Generated image bytes are transient.
   before the backup: the DB stores only token hashes, and newly issued tokens
   cannot own old records. Stop the API before replacing the production state
   directory; never reuse old WAL/SHM files. Roll back API code only against a
-  compatible schema, otherwise restore its matching pre-upgrade snapshot.
+  compatible schema and saved parameter format, otherwise restore its matching
+  pre-upgrade snapshot after accepting newer-write loss. Native style-only
+  records can fail an older API's positive-prompt validator despite the same
+  SQLite version; see [Native Character Prompt Contract](./native-character-contract.md).
 
 ## Validation & Error Matrix
 

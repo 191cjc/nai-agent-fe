@@ -90,6 +90,14 @@ def test_openapi_contract_matches_snapshot_without_database_or_provider_calls(
     generation_fields = schema["components"]["schemas"]["GenerationRequest"]["properties"]
     assert "enum" not in generation_fields["model"]
     assert "enum" not in generation_fields["sampler"]
+    assert generation_fields["style_prompt"]["default"] == ""
+    assert generation_fields["character_prompts"]["maxItems"] == 6
+    assert generation_fields["character_prompts"]["items"] == {
+        "$ref": "#/components/schemas/CharacterPrompt"
+    }
+    required = schema["components"]["schemas"]["GenerationRequest"]["required"]
+    assert "style_prompt" not in required
+    assert "character_prompts" not in required
 
 
 def test_documented_errors_match_offline_validation_origin_and_ownership(tmp_path: Path) -> None:

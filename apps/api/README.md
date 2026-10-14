@@ -105,8 +105,24 @@ command to a new private path, never copy only the active database file while
 WAL is in use. Backup retention and restore drills belong to the deployment
 task; backups contain prompts and token hashes but no image bytes.
 
-The model and sampler values remain provisional strings: the deployed tool
-schema supplies no enumerated choices.
+The optional `style_prompt` and `character_prompts: [{"prompt": "..."}]`
+fields preserve style and native independent characters in parameter history.
+`positive_prompt` is shared scene content. Only style and shared content are
+combined into the provider's base prompt; character descriptions remain
+separate. Legacy records default to empty style and no characters. The base
+must be nonblank and at most 3000 characters; each character is nonblank and
+at most 3000 characters, with a workspace limit of six characters.
+
+Character-bearing requests require a supported ordinary V4/V4.5/V5 model ID
+and the provider's object-array `character_prompts` capability. Unsupported
+requests fail before a paid call rather than combining or dropping characters.
+Characters use the service's default centered coordinates; automatic placement
+and manual position controls are not provided by this editor. Exact fields,
+model IDs and compatibility rules are in
+`../../.trellis/spec/backend/native-character-contract.md`. The deployed
+schema confirms the argument exists; real image output has not been verified.
+Flat requests retain free-form model/sampler IDs. Deploy the new API before
+the new frontend so an old API cannot ignore the additive structured fields.
 
 ## Codex advice runtime
 

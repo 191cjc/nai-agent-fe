@@ -21,7 +21,8 @@
   "children": [
     "09-23-novelai-api",
     "09-23-novelai-web",
-    "09-23-novelai-compose"
+    "09-23-novelai-compose",
+    "10-14-native-character-prompts"
   ],
   "parent": null,
   "relatedFiles": [],

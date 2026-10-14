@@ -35,6 +35,18 @@ provider credentials, durable image storage, or backend authorization.
   retry. On logout success or `401`, clear protected state and object URLs.
 - Advice sends only the explicit advice input and never reads or mutates the
   generation draft. Tag selection inserts only the chosen canonical tag.
+- Style, shared text, global negative text and native character descriptions
+  remain separate in the draft and saved request. Use the
+  [Native Character Prompt Contract](../backend/native-character-contract.md)
+  for fields, composition, limits, model validation and provider behavior.
+  Character cards have stable draft-only identities; explicit positive tag
+  targets must not move to another character when a sibling is removed.
+  Removal of the targeted character, reuse and protected-state reset restore
+  the shared target. Legacy history restores its flat positive text in shared.
+- The prompt editor's compact side tabs replace positive/negative panels in
+  the same content area. Hidden negative content reserves no horizontal
+  column; tab switching does not reset draft state. Keep visibility local to
+  the component and draft content in GenerationStore.
 - `Workspace` keeps `settingsOpen`, `drawerOpen` and the active tool tab as
   component-local UI state. `SettingsPanel` edits the existing generation
   draft; the bottom drawer renders history, tags or advice without a right

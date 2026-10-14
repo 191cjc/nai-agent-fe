@@ -2,12 +2,12 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 
 import { observer } from 'mobx-react-lite'
 import {
   ArrowDownToLine, ArrowLeft, ArrowRight, Check, ChevronDown, ChevronUp, Clock3,
-  History, Image as ImageIcon, LogOut, RefreshCw, Search, Send, Settings2,
+  History, Image as ImageIcon, LogOut, Plus, RefreshCw, Search, Send, Settings2,
   Sparkles, Tags, Trash2, WandSparkles, X,
 } from 'lucide-react'
-import { ApiFailure, errorText } from './api'
+import { ApiFailure, errorText, type GenerationRequest } from './api'
 import type { GenerationDraft } from './store'
-import { AppStore } from './store'
+import { AppStore, MAX_CHARACTERS, NATIVE_CHARACTER_MODELS, supportsNativeCharacters } from './store'
 
 const SOURCE_URL = 'https://huggingface.co/spaces/SAkizuki/DanbooruSearch'
 const RESOLUTION_PRESETS = [
@@ -22,6 +22,8 @@ const RESOLUTION_PRESETS = [
   { id: 'large-landscape', tier: '大图', label: '横图', width: '1536', height: '1024' },
 ] as const
 const RESOLUTION_TIERS = ['小图', '标准', '大图'] as const
+const PROMPT_TABS = [['positive', '正向'], ['negative', '负面']] as const
+type PromptPanel = (typeof PROMPT_TABS)[number][0]
 
 function Alert({ text }: { text: string }) {
   return text ? <p role="alert" className="alert">{text}</p> : null
@@ -70,9 +72,21 @@ function NumericField({ label, name, value, onChange, min, max, step = 1, placeh
 }
 
 const Editor = observer(({ store, onOpenSettings }: { store: AppStore; onOpenSettings: () => void }) => {
+  const [panel, setPanel] = useState<PromptPanel>('positive')
   const generation = store.generation
   const draft = generation.draft
   const active = generation.busy || generation.activeId !== null || generation.submitUncertain
+
+  function onPromptTabKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    const current = PROMPT_TABS.findIndex(([name]) => name === panel)
+    const next = event.key === 'ArrowDown' ? (current + 1) % PROMPT_TABS.length
+      : event.key === 'ArrowUp' ? (current + PROMPT_TABS.length - 1) % PROMPT_TABS.length
+        : event.key === 'Home' ? 0 : event.key === 'End' ? PROMPT_TABS.length - 1 : null
+    if (next === null) return
+    event.preventDefault()
+    setPanel(PROMPT_TABS[next][0])
+    event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus()
+  }
 
   return <section className="editor" aria-labelledby="editor-title">
     <div className="section-heading">
@@ -80,13 +94,51 @@ const Editor = observer(({ store, onOpenSettings }: { store: AppStore; onOpenSet
       <span className="section-meta">文生图</span>
     </div>
     <form onSubmit={event => { event.preventDefault(); void generation.submit() }}>
-      <div className="prompt-stack">
-        <label className="field prompt-field"><span>正向提示词 <span className="required">*</span></span>
-          <textarea value={draft.positive_prompt} maxLength={3000} rows={5} placeholder="描述画面"
-            onChange={event => generation.setField('positive_prompt', event.target.value)} /></label>
-        <label className="field prompt-field"><span>负向提示词</span>
-          <textarea value={draft.negative_prompt} maxLength={3000} rows={3} placeholder="排除的内容"
-            onChange={event => generation.setField('negative_prompt', event.target.value)} /></label>
+      <div className="prompt-composer">
+        <div className="prompt-tabs" role="tablist" aria-label="提示词类型" aria-orientation="vertical" onKeyDown={onPromptTabKeyDown}>
+          {PROMPT_TABS.map(([name, label]) => <button key={name} id={`prompt-tab-${name}`} type="button" role="tab"
+            aria-selected={panel === name} aria-controls={`prompt-panel-${name}`} tabIndex={panel === name ? 0 : -1}
+            className={panel === name ? 'prompt-tab active' : 'prompt-tab'} onClick={() => setPanel(name)}>{label}</button>)}
+        </div>
+        <div className="prompt-panel prompt-stack" id="prompt-panel-positive" role="tabpanel" aria-labelledby="prompt-tab-positive" hidden={panel !== 'positive'}>
+          <label className="field prompt-field"><span>画风</span>
+            <textarea value={draft.style_prompt} maxLength={3000} rows={2} placeholder="画风、媒介与画质标签"
+              onFocus={() => generation.setPositiveTagTarget('style_prompt')}
+              onChange={event => generation.setField('style_prompt', event.target.value)} /></label>
+          <label className="field prompt-field"><span>公共</span>
+            <textarea value={draft.positive_prompt} maxLength={3000} rows={3} placeholder="描述场景、构图与人物共有内容"
+              onFocus={() => generation.setPositiveTagTarget('positive_prompt')}
+              onChange={event => generation.setField('positive_prompt', event.target.value)} /></label>
+          <p className="prompt-hint">画风和公共至少填写一项，合计最多 3000 字符。</p>
+          <section className="character-section" aria-labelledby="characters-title">
+            <div className="character-heading"><h3 id="characters-title">人物 <span>{draft.character_prompts.length} / {MAX_CHARACTERS}</span></h3>
+              <button className="text-action" id="add-character" type="button" disabled={draft.character_prompts.length >= MAX_CHARACTERS}
+                onClick={() => {
+                  const id = generation.addCharacter()
+                  if (id) requestAnimationFrame(() => document.getElementById(`character-prompt-${id}`)?.focus())
+                }}><Plus size={15} aria-hidden="true" /> 添加人物</button>
+            </div>
+            <p className="prompt-hint">分别填写每个人物的特征，人物位置默认居中。留空的人物不会提交。</p>
+            <div className="character-list">{draft.character_prompts.map((character, index) => <div className="character-card" key={character.id}>
+              <div className="character-card-heading"><label htmlFor={`character-prompt-${character.id}`}>人物 {index + 1}</label>
+                <button className="icon-button danger" type="button" title={`移除人物 ${index + 1}`} aria-label={`移除人物 ${index + 1}`}
+                  onClick={() => {
+                    generation.removeCharacter(character.id)
+                    requestAnimationFrame(() => document.getElementById('add-character')?.focus())
+                  }}><X size={15} aria-hidden="true" /></button>
+              </div>
+              <div className="field"><textarea id={`character-prompt-${character.id}`} value={character.prompt} maxLength={3000} rows={2}
+                placeholder="这个人物的外貌、服装、动作等"
+                onFocus={() => generation.setPositiveTagTarget(`character:${character.id}`)}
+                onChange={event => generation.setCharacterPrompt(character.id, event.target.value)} /></div>
+            </div>)}</div>
+          </section>
+        </div>
+        <div className="prompt-panel" id="prompt-panel-negative" role="tabpanel" aria-labelledby="prompt-tab-negative" hidden={panel !== 'negative'}>
+          <label className="field prompt-field"><span>负面提示词</span>
+            <textarea value={draft.negative_prompt} maxLength={3000} rows={8} placeholder="排除的内容，应用于整张图像"
+              onChange={event => generation.setField('negative_prompt', event.target.value)} /></label>
+        </div>
       </div>
       <div className="submit-row">
         <button className="settings-link" type="button" onClick={onOpenSettings} title="打开生成设置">
@@ -116,8 +168,12 @@ const SettingsPanel = observer(({ store, hidden, onClose }: { store: AppStore; h
       <section className="settings-section" aria-labelledby="model-settings-title">
         <h3 id="model-settings-title">模型与采样</h3>
         <label className="field"><span>模型 ID <span className="required">*</span></span>
-          <input value={draft.model} maxLength={80} autoComplete="off" placeholder="输入模型 ID"
+          <input value={draft.model} maxLength={80} autoComplete="off" placeholder="输入模型 ID" list="native-character-models"
             onChange={event => generation.setField('model', event.target.value)} /></label>
+        <datalist id="native-character-models">{NATIVE_CHARACTER_MODELS.map(model => <option key={model} value={model} />)}</datalist>
+        <p className="prompt-hint">独立人物支持列表中的 V4 / V4.5 / V5 模型。</p>
+        {draft.character_prompts.some(character => character.prompt.trim()) && draft.model.trim() && !supportsNativeCharacters(draft.model)
+          && <p className="model-hint" role="status">当前模型不支持独立人物，请选择列表中的模型。</p>}
         <label className="field"><span>采样器 ID <span className="required">*</span></span>
           <input value={draft.sampler} maxLength={80} autoComplete="off" placeholder="输入采样器 ID"
             onChange={event => generation.setField('sampler', event.target.value)} /></label>
@@ -156,6 +212,15 @@ function statusText(status: string): string {
   return { queued: '排队中', running: '生成中', succeeded: '已完成', failed: '失败' }[status] ?? status
 }
 
+function PromptSummary({ parameters }: { parameters: Pick<GenerationRequest, 'style_prompt' | 'positive_prompt' | 'character_prompts'> }) {
+  return <dl className="prompt-summary">
+    {parameters.style_prompt && <div><dt>画风</dt><dd>{parameters.style_prompt}</dd></div>}
+    {parameters.positive_prompt && <div><dt>公共</dt><dd>{parameters.positive_prompt}</dd></div>}
+    {(parameters.character_prompts ?? []).map((character, index) =>
+      <div key={index}><dt>人物 {index + 1}</dt><dd>{character.prompt}</dd></div>)}
+  </dl>
+}
+
 const Result = observer(({ store }: { store: AppStore }) => {
   const generation = store.generation
   const job = generation.job
@@ -177,7 +242,7 @@ const Result = observer(({ store }: { store: AppStore }) => {
         {job.status === 'succeeded' && <span>{job.image_count} 张图像</span>}
       </div>
       <details className="result-parameters"><summary>本次生成参数</summary>
-        <p>正向：{job.parameters.positive_prompt}</p>
+        <PromptSummary parameters={job.parameters} />
         {job.parameters.negative_prompt && <p>负向：{job.parameters.negative_prompt}</p>}
         <p>{job.parameters.model} · {job.parameters.width}×{job.parameters.height} · {job.parameters.sampler}</p>
         <p>{job.parameters.steps} 步 · CFG {job.parameters.cfg_scale} · 实际种子 {job.effective_seed} · {job.parameters.sample_count} 张 · {job.parameters.quality ? '高质量' : '标准质量'}</p>
@@ -199,6 +264,8 @@ const Result = observer(({ store }: { store: AppStore }) => {
 
 const TagSearch = observer(({ store }: { store: AppStore }) => {
   const tags = store.tags
+  const generation = store.generation
+  const positiveTargetLabel = generation.positiveTagTargets.find(target => target.value === generation.positiveTagTarget)?.label ?? '公共'
   return <div className="tool-content">
     <form className="search-form" onSubmit={event => { event.preventDefault(); void tags.search() }}>
       <label className="sr-only" htmlFor="tag-query">搜索中文或英文标签</label>
@@ -207,6 +274,11 @@ const TagSearch = observer(({ store }: { store: AppStore }) => {
       <button className="primary icon-button" type="submit" title="搜索标签" aria-label="搜索标签"
         disabled={tags.loading || tags.retrySeconds > 0}><Search size={18} /></button>
     </form>
+    <label className="field tag-target"><span>正向标签加入</span>
+      <select value={generation.positiveTagTarget} onChange={event => generation.setPositiveTagTarget(event.target.value)}>
+        {generation.positiveTagTargets.map(target => <option key={target.value} value={target.value}>{target.label}</option>)}
+      </select>
+    </label>
     <div className="source-line">来源：<a href={SOURCE_URL} target="_blank" rel="noopener noreferrer">DanbooruSearch</a></div>
     <Alert text={tags.error} />
     {tags.retrySeconds > 0 && <p className="subtle" role="status">{tags.retrySeconds} 秒后可重试</p>}
@@ -222,10 +294,10 @@ const TagSearch = observer(({ store }: { store: AppStore }) => {
       </div>}
       {candidate.summary && <p className="tag-summary">{candidate.summary}</p>}
       <div className="tag-actions">
-        <button type="button" className="text-action" title={`将 ${candidate.tag} 加入正向提示词`} aria-label={`将 ${candidate.tag} 加入正向提示词`}
-          onClick={() => store.generation.insertTag(candidate.tag, 'positive_prompt')}>+ 正向</button>
-        <button type="button" className="text-action" title={`将 ${candidate.tag} 加入负向提示词`} aria-label={`将 ${candidate.tag} 加入负向提示词`}
-          onClick={() => store.generation.insertTag(candidate.tag, 'negative_prompt')}>+ 负向</button>
+        <button type="button" className="text-action" title={`将 ${candidate.tag} 加入${positiveTargetLabel}`} aria-label={`将 ${candidate.tag} 加入${positiveTargetLabel}`}
+          onClick={() => generation.insertTag(candidate.tag, 'positive')}>+ {positiveTargetLabel}</button>
+        <button type="button" className="text-action" title={`将 ${candidate.tag} 加入负面提示词`} aria-label={`将 ${candidate.tag} 加入负面提示词`}
+          onClick={() => generation.insertTag(candidate.tag, 'negative')}>+ 负面</button>
       </div>
     </article>)}</div>
   </div>
@@ -256,7 +328,7 @@ const HistoryPanel = observer(({ store }: { store: AppStore }) => {
     {!history.loading && !history.error && history.items.length === 0 && <p className="subtle">暂无历史记录</p>}
     <div className="history-list">{history.items.map(item => <article className="history-item" key={item.id}>
       <div className="history-top"><time dateTime={new Date(item.created_at * 1000).toISOString()}>{new Date(item.created_at * 1000).toLocaleString()}</time><span className={`status status-${item.status}`}>{statusText(item.status)}</span></div>
-      <p className="history-prompt">{item.parameters.positive_prompt}</p>
+      <PromptSummary parameters={item.parameters} />
       {item.parameters.negative_prompt && <p className="history-negative">排除：{item.parameters.negative_prompt}</p>}
       <div className="history-meta">{item.parameters.model} · {item.parameters.width}×{item.parameters.height} · 种子 {item.effective_seed}</div>
       <div className="history-meta">{item.parameters.sampler} · {item.parameters.steps} 步 · CFG {item.parameters.cfg_scale} · {item.parameters.sample_count} 张 · {item.parameters.quality ? '高质量' : '标准质量'}</div>

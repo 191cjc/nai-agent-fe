@@ -10,18 +10,47 @@ import {
   WorkspaceApi,
 } from './api'
 
-export type GenerationDraft = Omit<GenerationRequest, 'width' | 'height' | 'steps' | 'cfg_scale' | 'seed' | 'sample_count'> & {
+export const MAX_CHARACTERS = 6
+export const NATIVE_CHARACTER_MODELS = [
+  'nai-diffusion-4-full',
+  'nai-diffusion-4-curated-preview',
+  'nai-diffusion-4-5-full',
+  'nai-diffusion-4-5-curated',
+  'nai-diffusion-5-full',
+  'nai-diffusion-5-curated',
+] as const
+
+export interface CharacterDraft {
+  id: string
+  prompt: string
+}
+
+export type PositiveTagTarget = 'style_prompt' | 'positive_prompt' | `character:${string}`
+
+export type GenerationDraft = Omit<GenerationRequest, 'width' | 'height' | 'steps' | 'cfg_scale' | 'seed' | 'sample_count' | 'character_prompts'> & {
   width: string
   height: string
   steps: string
   cfg_scale: string
   seed: string
   sample_count: string
+  character_prompts: CharacterDraft[]
+}
+
+let characterSequence = 0
+
+function newCharacter(prompt = ''): CharacterDraft {
+  return { id: `character-${++characterSequence}`, prompt }
+}
+
+export function supportsNativeCharacters(model: string): boolean {
+  return NATIVE_CHARACTER_MODELS.some(candidate => candidate === model.trim())
 }
 
 export function emptyDraft(): GenerationDraft {
   return {
-    positive_prompt: '', negative_prompt: '', model: '', width: '1024', height: '1024',
+    positive_prompt: '', style_prompt: '', character_prompts: [newCharacter()],
+    negative_prompt: '', model: '', width: '1024', height: '1024',
     steps: '28', cfg_scale: '5', sampler: '', seed: '', sample_count: '1', quality: true,
   }
 }
@@ -35,14 +64,28 @@ function integer(value: string, label: string, min: number, max: number, multipl
 }
 
 export function requestFromDraft(draft: GenerationDraft): GenerationRequest {
-  if (!draft.positive_prompt.trim()) throw new Error('请输入正向提示词。')
-  if (draft.positive_prompt.length > 3000 || draft.negative_prompt.length > 3000) throw new Error('提示词不能超过 3000 字符。')
+  const basePrompt = draft.style_prompt.trim()
+    ? [draft.style_prompt.trim(), draft.positive_prompt.trim()].filter(Boolean).join(', ')
+    : draft.positive_prompt
+  if (!basePrompt.trim()) throw new Error('请填写画风或公共提示词。')
+  if (draft.style_prompt.length > 3000 || draft.positive_prompt.length > 3000 || basePrompt.length > 3000) {
+    throw new Error('画风和公共提示词合计不能超过 3000 字符（含分隔符）。')
+  }
+  if (draft.negative_prompt.length > 3000) throw new Error('负面提示词不能超过 3000 字符。')
+  if (draft.character_prompts.length > MAX_CHARACTERS) throw new Error(`最多添加 ${MAX_CHARACTERS} 个人物。`)
+  const characters = draft.character_prompts.filter(character => character.prompt.trim())
+  if (characters.some(character => character.prompt.length > 3000)) throw new Error('每个人物的提示词不能超过 3000 字符。')
   if (!draft.model.trim() || draft.model.length > 80) throw new Error('请输入模型 ID（最多 80 字符）。')
+  if (characters.length && !supportsNativeCharacters(draft.model)) {
+    throw new Error('当前模型不支持独立人物，请在生成设置中选择列表中的 V4 / V4.5 / V5 模型。')
+  }
   if (!draft.sampler.trim() || draft.sampler.length > 80) throw new Error('请输入采样器 ID（最多 80 字符）。')
   const cfgScale = Number(draft.cfg_scale)
   if (!draft.cfg_scale.trim() || !Number.isFinite(cfgScale) || cfgScale < 0 || cfgScale > 20) throw new Error('CFG 系数须为 0-20。')
   return {
     positive_prompt: draft.positive_prompt,
+    style_prompt: draft.style_prompt,
+    character_prompts: characters.map(character => ({ prompt: character.prompt })),
     negative_prompt: draft.negative_prompt,
     model: draft.model.trim(),
     width: integer(draft.width, '宽度', 64, 2048, 64),
@@ -141,6 +184,7 @@ export interface ResultImage {
 
 export class GenerationStore {
   draft = emptyDraft()
+  positiveTagTarget: PositiveTagTarget = 'positive_prompt'
   job: GenerationView | null = null
   activeId: string | null = null
   images: ResultImage[] = []
@@ -170,18 +214,67 @@ export class GenerationStore {
     this.draft.height = height
   }
 
-  insertTag(tag: string, target: 'positive_prompt' | 'negative_prompt'): void {
-    const current = this.draft[target].trim()
-    this.draft[target] = current ? `${current.replace(/,\s*$/, '')}, ${tag}` : tag
+  get positiveTagTargets(): { value: PositiveTagTarget; label: string }[] {
+    return [
+      { value: 'style_prompt', label: '画风' },
+      { value: 'positive_prompt', label: '公共' },
+      ...this.draft.character_prompts.map((character, index) => ({
+        value: `character:${character.id}` as const, label: `人物 ${index + 1}`,
+      })),
+    ]
+  }
+
+  setPositiveTagTarget(target: string): void {
+    this.positiveTagTarget = this.positiveTagTargets.find(option => option.value === target)?.value ?? 'positive_prompt'
+  }
+
+  addCharacter(): string | null {
+    if (this.draft.character_prompts.length >= MAX_CHARACTERS) return null
+    const character = newCharacter()
+    this.draft.character_prompts.push(character)
+    return character.id
+  }
+
+  setCharacterPrompt(id: string, prompt: string): void {
+    const character = this.draft.character_prompts.find(character => character.id === id)
+    if (character) character.prompt = prompt
+  }
+
+  removeCharacter(id: string): void {
+    this.draft.character_prompts = this.draft.character_prompts.filter(character => character.id !== id)
+    if (this.positiveTagTarget === `character:${id}`) this.positiveTagTarget = 'positive_prompt'
+  }
+
+  insertTag(tag: string, target: 'positive' | 'negative'): void {
+    const append = (value: string) => {
+      const current = value.trim()
+      return current ? `${current.replace(/,\s*$/, '')}, ${tag}` : tag
+    }
+    if (target === 'negative') {
+      this.draft.negative_prompt = append(this.draft.negative_prompt)
+    } else if (this.positiveTagTarget === 'style_prompt' || this.positiveTagTarget === 'positive_prompt') {
+      this.draft[this.positiveTagTarget] = append(this.draft[this.positiveTagTarget])
+    } else {
+      const character = this.draft.character_prompts.find(character => `character:${character.id}` === this.positiveTagTarget)
+      if (character) character.prompt = append(character.prompt)
+      else {
+        this.positiveTagTarget = 'positive_prompt'
+        this.draft.positive_prompt = append(this.draft.positive_prompt)
+      }
+    }
   }
 
   reuse(item: HistoryItem): void {
     this.draft = {
       ...item.parameters,
+      style_prompt: item.parameters.style_prompt ?? '',
+      character_prompts: item.parameters.character_prompts?.length
+        ? item.parameters.character_prompts.map(character => newCharacter(character.prompt)) : [newCharacter()],
       width: String(item.parameters.width), height: String(item.parameters.height),
       steps: String(item.parameters.steps), cfg_scale: String(item.parameters.cfg_scale),
       seed: String(item.effective_seed), sample_count: String(item.parameters.sample_count),
     }
+    this.positiveTagTarget = 'positive_prompt'
     this.error = ''
   }
 
@@ -294,6 +387,7 @@ export class GenerationStore {
   reset(): void {
     this.clearResult()
     this.draft = emptyDraft()
+    this.positiveTagTarget = 'positive_prompt'
     this.busy = false
     this.submitUncertain = false
     this.error = ''

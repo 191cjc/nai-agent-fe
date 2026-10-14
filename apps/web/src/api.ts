@@ -3,8 +3,14 @@ export interface UserInfo {
   label: string
 }
 
+export interface CharacterPrompt {
+  prompt: string
+}
+
 export interface GenerationRequest {
   positive_prompt: string
+  style_prompt: string
+  character_prompts: CharacterPrompt[]
   negative_prompt: string
   model: string
   width: number
@@ -110,6 +116,7 @@ export function errorText(error: unknown): string {
       provider_error: '图像服务处理失败，请检查参数后重试。',
       invalid_request: '图像服务拒绝了参数，请检查模型和采样器。',
       unsupported_setting: '模型或采样器不受支持，请修改后重试。',
+      unsupported_character_prompts: '当前图像服务不支持独立人物提示词，请联系管理员。',
       insufficient_balance: '图像服务余额不足，请联系管理员。',
       outcome_unknown: '任务结果未知，请先检查历史记录。',
       generation_failed: '生成失败，请检查服务状态。',

@@ -53,6 +53,23 @@ SCHEMA = {
     },
     "required": ["prompt"],
 }
+CHARACTER_SCHEMA = {
+    "anyOf": [
+        {"type": "array", "items": {"type": "object", "additionalProperties": True}},
+        {"type": "null"},
+    ],
+    "default": None,
+}
+
+
+def native_parameters() -> GenerationRequest:
+    return GenerationRequest.model_validate({
+        **PARAMETERS.model_dump(),
+        "model": "nai-diffusion-5-full",
+        "style_prompt": " watercolor ",
+        "positive_prompt": " garden, 2girls ",
+        "character_prompts": [{"prompt": " blue hair "}, {"prompt": "red hair, glasses"}],
+    })
 
 
 def mock_mcp(*, schema=SCHEMA, result=None, tool_status=200, tool_content_type="application/json"):
@@ -424,6 +441,133 @@ def test_verified_schema_calls_exactly_one_paid_tool_and_ignores_remote_paths() 
     }
 
 
+@pytest.mark.parametrize(
+    "character_schema",
+    [
+        CHARACTER_SCHEMA,
+        {"type": "array", "items": {"type": "object"}},
+        {
+            "type": "array", "minItems": 1, "maxItems": 6,
+            "title": "Characters", "description": "Independent captions", "default": [],
+            "items": {"type": "object", "title": "Character", "default": {}},
+        },
+    ],
+)
+def test_native_characters_keep_boundaries_order_and_centered_provider_defaults(
+    character_schema: dict,
+) -> None:
+    schema = {
+        **SCHEMA,
+        "properties": {**SCHEMA["properties"], "character_prompts": character_schema},
+    }
+    transport, calls = mock_mcp(schema=schema)
+    images = provider_for(transport).generate(native_parameters())
+    assert [image.data for image in images] == [PNG, PNG]
+    assert [call["method"] for call in calls] == [
+        "initialize", "notifications/initialized", "tools/list", "tools/call"
+    ]
+    assert calls[-1]["params"] == {
+        "name": "generate_image",
+        "arguments": {
+            "prompt": "watercolor, garden, 2girls",
+            "negative_prompt": "blurry",
+            "model": "nai-diffusion-5-full",
+            "width": 512,
+            "height": 512,
+            "steps": 28,
+            "scale": 5.0,
+            "sampler": "fixture-sampler",
+            "seed": 77,
+            "n_samples": 2,
+            "quality": True,
+            "character_prompts": [
+                {
+                    "prompt": " blue hair ", "negative_prompt": "",
+                    "x": 0.5, "y": 0.5, "enabled": True,
+                },
+                {
+                    "prompt": "red hair, glasses", "negative_prompt": "",
+                    "x": 0.5, "y": 0.5, "enabled": True,
+                },
+            ],
+        },
+    }
+
+
+@pytest.mark.parametrize(
+    ("style", "shared", "expected"),
+    [
+        ("", "  original text  ", "  original text  "),
+        (" \t", "  original text  ", "  original text  "),
+        (" watercolor ", " garden ", "watercolor, garden"),
+        (" watercolor ", "", "watercolor"),
+    ],
+)
+def test_flat_style_composition_retains_legacy_payload_and_editable_model(
+    style: str, shared: str, expected: str,
+) -> None:
+    parameters = GenerationRequest.model_validate({
+        **PARAMETERS.model_dump(), "style_prompt": style, "positive_prompt": shared,
+    })
+    transport, calls = mock_mcp()
+    provider_for(transport).generate(parameters)
+    arguments = calls[-1]["params"]["arguments"]
+    assert arguments["prompt"] == expected
+    assert arguments["model"] == "fixture-model"
+    assert len(arguments) == 11
+    assert "style_prompt" not in arguments
+    assert "character_prompts" not in arguments
+
+
+@pytest.mark.parametrize(
+    "character_schema",
+    [
+        None,
+        {},
+        {"type": "string"},
+        {"type": "object"},
+        {"type": "array"},
+        {"type": "array", "items": {}},
+        {"type": "array", "items": {"type": "string"}},
+        {"anyOf": [{"type": "array", "items": {"type": "string"}}, {"type": "null"}]},
+        {"type": "array", "maxItems": 1, "items": {"type": "object"}},
+        {"type": "array", "minItems": 3, "items": {"type": "object"}},
+        {"type": "array", "maxItems": "6", "items": {"type": "object"}},
+        {"type": "array", "uniqueItems": True, "items": {"type": "object"}},
+        {"type": "array", "items": {"type": "object", "required": ["unknown_field"]}},
+        {"type": "array", "items": {"type": "object", "additionalProperties": False}},
+        {
+            "type": "array",
+            "items": {"type": "object", "properties": {"prompt": {"type": "integer"}}},
+        },
+        {"type": "string", "anyOf": [{"type": "array", "items": {"type": "object"}}]},
+    ],
+)
+def test_unsupported_character_schema_fails_before_paid_tool(character_schema) -> None:
+    properties = dict(SCHEMA["properties"])
+    if character_schema is not None:
+        properties["character_prompts"] = character_schema
+    transport, calls = mock_mcp(schema={**SCHEMA, "properties": properties})
+    with pytest.raises(ProviderFailure, match="^unsupported_character_prompts$"):
+        provider_for(transport).generate(native_parameters())
+    assert [call["method"] for call in calls] == [
+        "initialize", "notifications/initialized", "tools/list"
+    ]
+
+
+def test_uncertain_native_paid_response_never_retries_or_falls_back_to_flat() -> None:
+    schema = {
+        **SCHEMA,
+        "properties": {**SCHEMA["properties"], "character_prompts": CHARACTER_SCHEMA},
+    }
+    transport, calls = mock_mcp(schema=schema, tool_status=503)
+    with pytest.raises(ProviderFailure, match="^outcome_unknown$"):
+        provider_for(transport).generate(native_parameters())
+    paid_calls = [call for call in calls if call["method"] == "tools/call"]
+    assert len(paid_calls) == 1
+    assert len(paid_calls[0]["params"]["arguments"]["character_prompts"]) == 2
+
+
 def test_incompatible_schema_or_unsupported_enum_never_calls_paid_tool() -> None:
     schema = {**SCHEMA, "properties": {"prompt": {}}}
     transport, calls = mock_mcp(schema=schema)
@@ -498,10 +642,26 @@ def test_wrong_endpoint_html_fails_before_paid_call() -> None:
         provider_for(httpx.MockTransport(handler)).generate(PARAMETERS)
 
 
-def test_mocked_mcp_adapter_runs_through_api_without_live_service(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("parameters", "schema"),
+    [
+        (PARAMETERS, SCHEMA),
+        (
+            native_parameters(),
+            {
+                **SCHEMA,
+                "properties": {**SCHEMA["properties"], "character_prompts": CHARACTER_SCHEMA},
+            },
+        ),
+    ],
+    ids=["legacy", "native"],
+)
+def test_mocked_mcp_adapter_runs_through_api_without_live_service(
+    tmp_path: Path, parameters: GenerationRequest, schema: dict,
+) -> None:
     database = Database(tmp_path / "test.sqlite3")
     database.migrate()
-    transport, calls = mock_mcp()
+    transport, calls = mock_mcp(schema=schema)
     settings = Settings(database.path, "https://testserver")
     with TestClient(
         create_app(settings, database, image_provider=provider_for(transport)),
@@ -512,7 +672,7 @@ def test_mocked_mcp_adapter_runs_through_api_without_live_service(tmp_path: Path
             "/api/auth/session", json={"token": token}, headers={"Origin": "https://testserver"}
         ).status_code == 200
         response = client.post(
-            "/api/generations", json=PARAMETERS.model_dump(),
+            "/api/generations", json=parameters.model_dump(),
             headers={"Origin": "https://testserver"},
         )
         assert response.status_code == 202
@@ -525,5 +685,9 @@ def test_mocked_mcp_adapter_runs_through_api_without_live_service(tmp_path: Path
                 break
             time.sleep(0.01)
         assert job["status"] == "succeeded"
+        assert job["parameters"] == parameters.model_dump()
+        assert client.get("/api/generations").json()["items"][0]["parameters"] == (
+            parameters.model_dump()
+        )
         assert len(job["image_urls"]) == 2
         assert len(calls) == 4
