@@ -47,6 +47,26 @@ provider credentials, durable image storage, or backend authorization.
   the same content area. Hidden negative content reserves no horizontal
   column; tab switching does not reset draft state. Keep visibility local to
   the component and draft content in GenerationStore.
+- `PromptEditor` renders all generation prompt sections (never advice) from
+  the controlled draft string. Textarea blur switches to tag view without
+  changing that string; only the bottom-right `手动编辑` button reopens and
+  focuses the textarea. Tag/container clicks and weight controls never enter
+  text mode. Blank new fields may start as text inputs. Capture the textarea's
+  actual height on blur and retain footer space; scroll tags inside that
+  height so replacing the textarea cannot move a pending pointer-click target.
+- Prompt weight buttons change the selected source span by exactly 0.1 using
+  decimal arithmetic and NovelAI numeric emphasis (`1.1::tag::`, V4+), never
+  A1111 `(tag:1.1)`. Default plain tags display 1.0. Preserve unrelated source
+  text and separators; show unknown, incomplete or legacy emphasis as original
+  text for manual editing rather than guess a numeric effective weight. Check
+  the 3000-character field limit before writing a longer weighted string.
+  Treat a plain unescaped trailing colon as original text: adding `::` would
+  produce an ambiguous `:::` boundary. Escaped trailing/internal colons remain
+  literal text.
+- Derive prompt tags from current props so tag search, history reuse and
+  character edits cannot diverge from the submitted prompt. Keep buttons
+  outside enclosing labels, use `type="button"`, retain stable character IDs
+  and use explicit per-field labels for keyboard/screen-reader access.
 - `Workspace` keeps `settingsOpen`, `drawerOpen` and the active tool tab as
   component-local UI state. `SettingsPanel` edits the existing generation
   draft; the bottom drawer renders history, tags or advice without a right

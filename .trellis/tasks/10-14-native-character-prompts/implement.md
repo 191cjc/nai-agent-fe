@@ -39,7 +39,27 @@ compatibility distinction was explained. Implement the recorded behavior.
   interactive acceptance or proof of real provider output.
 - Run task context validation and git diff --check before the final commit.
 
-## Deployment Considerations
+## Follow-up Execution: Prompt Tags and Weights
+
+1. Record numeric-weight syntax evidence and conservative parsing behavior.
+2. Implement agent owns PromptEditor.tsx, prompt-weights.ts, App.tsx integration
+   and styles.css; keep source strings live in GenerationStore. Run lint and
+   TypeScript. Do not add/run frontend automated tests or browser automation.
+3. Independent check agent reviews parser boundaries, exact 0.1 arithmetic,
+   manual-only edit transitions, label/button focus, new/removed characters,
+   tag insertion, history and hidden panels. Fix real local issues.
+4. Main session records contracts, builds clean explicit web inputs, commits,
+   publishes a web-only release and checks public page/assets/health.
+
+- [x] Shared tag editor and conservative source-span numeric weight editing.
+- [x] Independent full-scope source review and local fixes; ESLint/TypeScript.
+- [x] Fresh explicit-input, sanitized-environment offline install/build for
+  `/novelai/`; source map SHA-256
+  `b9fd55969666fe254073733bcd1e51b026b97b32afcd715b1085cef48a65156c`.
+- [ ] Web-only production release and public page/asset/health checks.
+- [ ] Operator desktop/mobile/keyboard acceptance remains pending.
+
+## Deployment Considerations (Native Characters)
 
 Publishing both layers requires API-first order and a verified private backup
 before restarting the API, per deploy/README.md. Check for active jobs first;

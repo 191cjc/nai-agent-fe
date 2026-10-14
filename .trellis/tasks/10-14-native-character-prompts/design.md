@@ -98,3 +98,20 @@ when reverting the frontend. A full API downgrade requires verifying every
 saved request against the old model or restoring a compatible snapshot with
 explicit acceptance of newer-write loss. Never automatically restore the
 production DB merely to roll back this additive feature.
+
+## Follow-up Boundary: Prompt Tags and Weights
+
+The remaining behavior gap lives in the prompt textarea rendering. Add a
+reusable `PromptEditor.tsx` and `prompt-weights.ts` helper under web/src;
+integrate them in App.tsx and style them in styles.css. Draft strings remain
+the source of truth, so no new API fields, persistence schema, dependencies,
+advice behavior or generation lifecycle changes are necessary.
+
+The view transition on blur must not normalize or rewrite the prompt. Parse
+with source spans and replace only the selected tag span when its weight is
+adjusted. Respect escaped characters and balanced grouped expressions; retain
+unrecognized expressions without guessing their meaning. Use NovelAI numeric
+emphasis for exact decimal increments, with the compatibility limitation made
+clear for older models. Keep weight controls outside labels and use explicit
+button types. Only the manual-edit control enters text mode and focuses its
+textarea. Newly added blank character editors can begin in text mode.

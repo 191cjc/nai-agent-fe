@@ -8,6 +8,7 @@ import {
 import { ApiFailure, errorText, type GenerationRequest } from './api'
 import type { GenerationDraft } from './store'
 import { AppStore, MAX_CHARACTERS, NATIVE_CHARACTER_MODELS, supportsNativeCharacters } from './store'
+import { PromptEditor } from './PromptEditor'
 
 const SOURCE_URL = 'https://huggingface.co/spaces/SAkizuki/DanbooruSearch'
 const RESOLUTION_PRESETS = [
@@ -101,14 +102,14 @@ const Editor = observer(({ store, onOpenSettings }: { store: AppStore; onOpenSet
             className={panel === name ? 'prompt-tab active' : 'prompt-tab'} onClick={() => setPanel(name)}>{label}</button>)}
         </div>
         <div className="prompt-panel prompt-stack" id="prompt-panel-positive" role="tabpanel" aria-labelledby="prompt-tab-positive" hidden={panel !== 'positive'}>
-          <label className="field prompt-field"><span>画风</span>
-            <textarea value={draft.style_prompt} maxLength={3000} rows={2} placeholder="画风、媒介与画质标签"
+          <div className="field prompt-field"><label htmlFor="style-prompt">画风</label>
+            <PromptEditor id="style-prompt" label="画风" value={draft.style_prompt} rows={2} placeholder="画风、媒介与画质标签"
               onFocus={() => generation.setPositiveTagTarget('style_prompt')}
-              onChange={event => generation.setField('style_prompt', event.target.value)} /></label>
-          <label className="field prompt-field"><span>公共</span>
-            <textarea value={draft.positive_prompt} maxLength={3000} rows={3} placeholder="描述场景、构图与人物共有内容"
+              onChange={value => generation.setField('style_prompt', value)} /></div>
+          <div className="field prompt-field"><label htmlFor="shared-prompt">公共</label>
+            <PromptEditor id="shared-prompt" label="公共" value={draft.positive_prompt} rows={3} placeholder="描述场景、构图与人物共有内容"
               onFocus={() => generation.setPositiveTagTarget('positive_prompt')}
-              onChange={event => generation.setField('positive_prompt', event.target.value)} /></label>
+              onChange={value => generation.setField('positive_prompt', value)} /></div>
           <p className="prompt-hint">画风和公共至少填写一项，合计最多 3000 字符。</p>
           <section className="character-section" aria-labelledby="characters-title">
             <div className="character-heading"><h3 id="characters-title">人物 <span>{draft.character_prompts.length} / {MAX_CHARACTERS}</span></h3>
@@ -127,19 +128,20 @@ const Editor = observer(({ store, onOpenSettings }: { store: AppStore; onOpenSet
                     requestAnimationFrame(() => document.getElementById('add-character')?.focus())
                   }}><X size={15} aria-hidden="true" /></button>
               </div>
-              <div className="field"><textarea id={`character-prompt-${character.id}`} value={character.prompt} maxLength={3000} rows={2}
+              <div className="field"><PromptEditor id={`character-prompt-${character.id}`} label={`人物 ${index + 1}`} value={character.prompt} rows={2}
                 placeholder="这个人物的外貌、服装、动作等"
                 onFocus={() => generation.setPositiveTagTarget(`character:${character.id}`)}
-                onChange={event => generation.setCharacterPrompt(character.id, event.target.value)} /></div>
+                onChange={value => generation.setCharacterPrompt(character.id, value)} /></div>
             </div>)}</div>
           </section>
         </div>
         <div className="prompt-panel" id="prompt-panel-negative" role="tabpanel" aria-labelledby="prompt-tab-negative" hidden={panel !== 'negative'}>
-          <label className="field prompt-field"><span>负面提示词</span>
-            <textarea value={draft.negative_prompt} maxLength={3000} rows={8} placeholder="排除的内容，应用于整张图像"
-              onChange={event => generation.setField('negative_prompt', event.target.value)} /></label>
+          <div className="field prompt-field"><label htmlFor="negative-prompt">负面提示词</label>
+            <PromptEditor id="negative-prompt" label="负面提示词" value={draft.negative_prompt} rows={8} placeholder="排除的内容，应用于整张图像"
+              onChange={value => generation.setField('negative_prompt', value)} /></div>
         </div>
       </div>
+      <p className="prompt-hint prompt-weight-compatibility">数字权重适用于 V4 及更新模型。</p>
       <div className="submit-row">
         <button className="settings-link" type="button" onClick={onOpenSettings} title="打开生成设置">
           <Settings2 size={16} aria-hidden="true" />

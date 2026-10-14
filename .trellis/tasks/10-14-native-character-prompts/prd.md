@@ -61,7 +61,26 @@ tab rather than consuming the positive editor's horizontal space.
 - [ ] Frontend lint/type-check, env-free build and relevant offline backend
   checks pass; desktop/mobile runtime acceptance is recorded as pending.
 
-## Decisions and Provider Evidence
+## Follow-up: Prompt Tags and Weights
+
+The operator requested on 2026-10-14 that style, shared, character and global
+negative prompt inputs become tag views on textarea blur. Each tag shows its
+weight at the right with up/down buttons that change it by exactly 0.1.
+Clicking a tag or its container must never reopen text editing: only a
+bottom-right `手动编辑` button does that. Advice is outside this change.
+
+- Keep the original draft string unchanged on blur. Weight changes must use
+  NovelAI syntax and flow through the existing request/history strings.
+- Use one reusable editor and one parser/weight helper for all prompt fields.
+  Preserve grouped/escaped text, original separators and unrelated tags.
+  Unrecognized or incomplete syntax remains visible and manually editable.
+- Tag insertion, history reuse, independent character IDs, panel switching,
+  keyboard focus and protected-state cleanup retain their current behavior.
+- Keep frontend automated/browser tests disabled. Verify with source review,
+  lint/type-check, a fresh env-free production build and public HTTP checks.
+- Publish a fresh web-only release under the existing deployment authorization.
+
+## Decisions and Provider Evidence (Native Characters)
 
 - A non-billable MCP initialization and tool listing on 2026-10-14 confirms
   deployed `generate_image.character_prompts` accepts an optional array of
