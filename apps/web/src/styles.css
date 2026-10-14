@@ -132,6 +132,53 @@ h1, h2, h3 { letter-spacing: 0; }
 .prompt-manual-edit { display: inline-flex; flex-shrink: 0; align-items: center; gap: 4px; margin-left: auto; padding: 4px 0 4px 7px; border: 0; background: transparent; color: var(--teal); font-size: 11px; white-space: nowrap; }
 .prompt-manual-edit:hover { color: #addbd5; text-decoration: underline; }
 .prompt-weight-compatibility { margin-top: 9px; }
+.style-prompt-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 24px; }
+.style-prompt-heading .text-action { padding: 3px 0; }
+.style-experiment-config { display: grid; gap: 11px; min-width: 0; margin: 3px 0 5px; padding: 14px; border: 1px solid #5a5144; border-radius: 5px; background: #292831; font-weight: 400; }
+.style-experiment-config[hidden] { display: none !important; }
+.style-experiment-config h3 { display: flex; align-items: center; gap: 7px; margin: 0; color: var(--gold); font-size: 13px; font-weight: 650; }
+.style-experiment-config .alert { margin: 0; }
+.experiment-note { margin: 0; color: #e6c28b; font-size: 12px; font-weight: 400; line-height: 1.5; }
+.experiment-tag-options, .experiment-range { min-inline-size: 0; margin: 0; padding: 0; border: 0; }
+.experiment-tag-options legend, .experiment-range legend { max-width: 100%; margin-bottom: 7px; padding: 0; color: #d4c7df; font-size: 11px; font-weight: 650; line-height: 1.5; overflow-wrap: anywhere; }
+.experiment-tag-options { display: flex; flex-wrap: wrap; gap: 6px; }
+.experiment-tag-option { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; padding: 7px 8px; border: 1px solid #57525d; border-radius: 4px; background: #32313c; color: #e4dfe6; font-size: 12px; cursor: pointer; }
+.experiment-tag-option:has(input:checked) { border-color: var(--gold); background: #39342d; }
+.experiment-tag-option.original { border-style: dashed; color: #aaa7b0; cursor: default; }
+.experiment-tag-option input { flex: 0 0 15px; width: 15px; height: 15px; margin: 0; padding: 0; accent-color: var(--gold); }
+.experiment-occurrence { color: #b1a3bb; font-size: 10px; }
+.experiment-tag-label { min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; line-height: 1.4; }
+.experiment-current-weight { max-width: 110px; margin-left: auto; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font-size: 10px; white-space: nowrap; }
+.experiment-ranges { display: grid; gap: 11px; min-width: 0; }
+.experiment-ranges:empty { display: none; }
+.experiment-range { padding: 10px; border: 1px solid #44414c; border-radius: 4px; background: #25252e; }
+.experiment-range legend { margin: 0; padding: 0 5px; }
+.experiment-range-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.experiment-range-fields .field { gap: 5px; font-size: 11px; }
+.experiment-range-fields input { padding: 7px 8px; font-variant-numeric: tabular-nums; }
+.experiment-preview { min-width: 0; padding: 11px; border-radius: 4px; background: #1e2529; color: #c5d7d0; font-size: 12px; line-height: 1.5; }
+.experiment-preview ul { display: grid; gap: 5px; margin: 0 0 9px; padding: 0; list-style: none; }
+.experiment-preview li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 3px 12px; overflow-wrap: anywhere; }
+.experiment-preview li span:first-child { min-width: 0; }
+.experiment-preview p { margin: 0 0 5px; overflow-wrap: anywhere; }
+.experiment-preview p:last-child { margin-bottom: 0; }
+.experiment-preview strong { color: #d4e5d8; font-weight: 700; }
+.experiment-config-actions { display: flex; justify-content: flex-end; }
+.experiment-progress { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 11px; min-width: 0; margin-top: 18px; padding: 13px 14px; border: 1px solid #565342; border-radius: 5px; background: #2a2b29; }
+.experiment-progress-line { display: flex; flex: 1 1 200px; align-items: center; flex-wrap: wrap; gap: 6px 14px; min-width: 0; color: #c5c2b9; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.experiment-progress-line strong { color: var(--gold); font-weight: 650; }
+.experiment-progress .alert { flex-basis: 100%; margin: 0; }
+.experiment-results { padding: 24px clamp(18px, 3vw, 42px) 12px; border-bottom: 1px solid var(--line); }
+.experiment-results .section-heading { align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+.experiment-result-list { display: grid; gap: 16px; min-width: 0; }
+.experiment-result-card { min-width: 0; padding: 14px; border: 1px solid #41434c; border-radius: 5px; background: #1d2029; }
+.experiment-result-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 7px 12px; margin-bottom: 11px; color: var(--muted); font-size: 11px; }
+.experiment-result-heading h3 { margin: 0; color: #e8decd; font-size: 14px; }
+.experiment-result-weights { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.experiment-result-weights li { display: inline-flex; align-items: center; gap: 9px; min-width: 0; max-width: 100%; padding: 5px 8px; border: 1px solid #575046; border-radius: 4px; background: #302d2c; color: #d8cbbc; font-size: 11px; }
+.experiment-result-weights li span { min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.experiment-result-weights strong { min-width: 0; max-width: 160px; color: var(--gold); font-weight: 650; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.experiment-result-card .image-grid { margin-bottom: 0; }
 .required { color: #e9959f; }
 .submit-row { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 17px; padding-top: 17px; border-top: 1px solid var(--line); }
 .submit-row .alert { flex: 1 1 220px; margin: 0; }
@@ -217,6 +264,12 @@ h1, h2, h3 { letter-spacing: 0; }
   .rail-button { width: 42px; height: 42px; flex-basis: 42px; }
   .settings-panel { left: 48px; width: min(310px, calc(100vw - 48px)); }
   .editor, .result-section { padding: 18px 15px 24px; }
+  .experiment-results { padding: 18px 15px 12px; }
+  .style-experiment-config { padding: 10px; }
+  .experiment-range { padding: 8px; }
+  .experiment-range-fields { gap: 6px; }
+  .experiment-result-card { padding: 10px; }
+  .experiment-config-actions .primary { width: 100%; }
   .section-meta { display: none; }
   .prompt-composer { grid-template-columns: minmax(0, 1fr) 32px; gap: 7px; }
   .prompt-tab { width: 32px; padding-right: 6px; padding-left: 6px; }

@@ -1,0 +1,97 @@
+# Style Experiment Contract
+
+## Scope / Trigger
+
+Use when changing style experiment helpers, GenerationStore orchestration,
+comparison results or the style-heading experiment entry. Experiments are
+browser-local sequences of ordinary generation requests, not a new backend
+queue or persistent image archive.
+
+## Signatures
+
+- `createStyleExperimentPlan(source, ranges)` validates selected parsed style
+  occurrences and independent decimal min/max/step values; returns dimensions
+  and an exact `total: bigint` without allocating every combination.
+- `styleExperimentCombination(plan, index: bigint)` decodes a zero-based
+  mixed-radix ordinal into weighted style text plus labeled weights.
+- GenerationStore owns `experiment`, `experimentRunning`, `operationLocked`,
+  `startStyleExperiment(source, ranges)`, `stopStyleExperiment()` and
+  `clearStyleExperimentResults()`. Components never submit/poll directly.
+
+## Contracts
+
+- Count each axis as floor((max-min)/step)+1 using exact scaled integers.
+  Include max only when on the grid; source-order axes, last varies fastest.
+  Resolve duplicate tag texts by occurrence/span. Each combination starts
+  from the same captured source, replacing selected spans right to left.
+- Snapshot every validated generation setting, sample_count and native
+  character child at Start. Preserve current draft style/seed. Show total
+  groups and total images before starting; never silently truncate the product.
+  Expose the frozen per-group count as `experiment.sampleCount`; running
+  progress must not recalculate expected image counts from an edited draft.
+- Reuse a supplied seed; for null seed, submit null once and latch the first
+  generation GET's effective_seed. Every subsequent request uses that seed.
+  This is request-level metadata, not a claimed per-image seed contract.
+- GenerationStore remains the sole active-operation owner through POST,
+  polling, terminal observation and image settlement. Ordinary generation,
+  history resume and another experiment must not interleave. Existing
+  accepted/first-terminal history notifications retain their meanings.
+  `operationLocked` stays true for accepted work whose GET failed until a
+  manual recheck settles it; result clearing cannot discard its owner context.
+- Fetch and archive a completed group's images before submitting its
+  successor. Move URL ownership to its row; internal advancement must not
+  revoke archived URLs. Explicit clear, logout/reset and disposal release
+  protected rows and all owned URLs. Prevent stale responses/continuations.
+  An explicit valid new Start replaces the old archive after all preflight
+  validation; disclose replacement in the UI. Ordinary submit and invalid
+  Start leave existing comparisons intact.
+- Stop prevents future POSTs while allowing an accepted step to settle.
+  POST/GET/job/image errors halt progression; no automatic paid retry. A
+  manual status recheck may settle an accepted job once, but cannot restart
+  a halted experiment. Preserve global uncertain-submit acknowledgement.
+- Comparison rows show ordinal, changed weights, request seed, task status,
+  image availability and downloads. Paginate rendered rows while retaining
+  produced results in memory. Refresh/closing the page stops future work;
+  existing parameter history remains durable, experiment grouping does not.
+
+## Validation & Error Matrix
+
+| Condition | Behavior |
+| --- | --- |
+| No selected safe occurrence / stale source | Reject before POST; request current selection |
+| Duplicate selection / unknown or legacy syntax | Reject or disallow selection; preserve original text |
+| Empty/non-decimal input, step <= 0, min > max | Visible validation error; no POST |
+| max not on step grid | Use only grid points <= max; no extra endpoint |
+| Invalid generation/model/length | Reject before paid submission; no silent coercion |
+| Empty seed | First request null, later use first observed effective_seed |
+| First GET fails before seed known | Halt with accepted id; no second random POST |
+| Stop during POST/poll/images | Latch; accepted step may settle, successor blocked |
+| Job/image/transport failure | Preserve rows, halt remaining combinations |
+| Uncertain POST | Preserve existing global uncertainty lock; never auto resend |
+| Logout/disposal during a run | Invalidate owner token, stop futures, clear protected URLs/state |
+
+## Good / Base / Bad Cases
+
+- Good: two three-value ranges generate nine distinct groups with fixed base
+  request and seed. Base: min=max produces one group. Negative/zero weights
+  follow the same exact decimal arithmetic as ordinary numeric weight edits.
+- Good: 0.8..1.1 by 0.2 gives 0.8 and 1.0, with no floating-point noise.
+- Bad: Cartesian diagonal only, random seed on every request, float loops,
+  starting the next POST from onTerminal before images load, or revoking an
+  archived group's images while advancing.
+
+## Verification Required
+
+Respect the retained operator restriction: no frontend automated tests or
+browser automation. Run ESLint/TypeScript, source-review the full lifecycle
+and range boundaries, and build explicit inputs in a fresh env-free stage.
+Review Stop during all phases, repeated terminal/status checks, logout with
+pending POST, source edits, image ownership and ordinary-generation guards.
+No paid experiment may be executed as an implementation check.
+
+## Wrong vs Correct
+
+- Wrong: React effects start generation requests, selection is keyed by tag
+  text, or a failed request is automatically resent.
+- Correct: explicit Start invokes GenerationStore; immutable occurrence-based
+  plans drive one guarded submission at a time, stopping on ambiguity/failure.

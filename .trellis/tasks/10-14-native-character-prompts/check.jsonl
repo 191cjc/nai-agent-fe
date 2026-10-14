@@ -9,3 +9,6 @@
 {"file": ".trellis/spec/backend/native-character-contract.md", "reason": "Executable native prompt fields, mapping, bounds, legacy defaults and API-first rollout."}
 {"file": ".trellis/tasks/10-14-native-character-prompts/research/native-provider-contract.md", "reason": "Pinned public provider source verifies child fields, native model subset and centered coordinate limitation."}
 {"file": ".trellis/tasks/10-14-native-character-prompts/research/prompt-weight-contract.md", "reason": "Review tag blur/manual-edit behavior, numeric weight serialization and non-destructive grouped-text handling."}
+{"file": ".trellis/tasks/10-14-native-character-prompts/style-experiment-design.md", "reason": "Review full style experiment scope, interfaces, state transitions, source spans and URL ownership."}
+{"file": ".trellis/tasks/10-14-native-character-prompts/research/style-experiment-contract.md", "reason": "Review existing generation seed/scheduler/history/auth constraints and no paid retry behavior."}
+{"file": ".trellis/spec/frontend/style-experiment-contract.md", "reason": "Executable exact enumeration, seed-lock, stop/error and transient comparison-result contracts."}

@@ -80,7 +80,47 @@ bottom-right `手动编辑` button does that. Advice is outside this change.
   lint/type-check, a fresh env-free production build and public HTTP checks.
 - Publish a fresh web-only release under the existing deployment authorization.
 
-## Decisions and Provider Evidence (Native Characters)
+## Follow-up: Style Experiment
+
+Add a `画风实验` control to the right of the style heading. The operator
+requested selecting several style tag occurrences, setting a minimum,
+maximum and step, then generating every Cartesian combination of their
+weights in ascending order. A supplied seed is reused throughout; otherwise
+only the first request is random and subsequent requests use its effective
+seed. See `style-experiment-design.md` for the execution contract and
+`research/style-experiment-contract.md` for repository evidence.
+
+- Each selected occurrence has its own min/max/step. Use precise decimal
+  arithmetic and include `min+n*step <= max`, without an off-step endpoint.
+  The last selected occurrence varies fastest. Duplicate tag texts remain
+  independently selectable; original/unknown syntax is not guessed.
+- Show total groups and total images before Start, retaining the existing
+  per-group sample_count. Freeze all generation settings and prompt sections
+  at Start, including independent character boundaries. Draft edits cannot
+  alter the active experiment. Leave the draft's seed and style unchanged.
+- Submit one combination at a time through GenerationStore and the existing
+  API. Fetch its images before advancing, show labeled comparison results,
+  progress and the effective seed, and provide Stop for future submissions.
+- Stop cannot cancel an accepted task. Halt on failure, uncertain POST,
+  polling error or missing images; preserve prior results and existing
+  uncertainty/history checks. Never automatically re-POST a failed step.
+- Enumerate lazily without allocating the whole product or silently dropping
+  combinations. Page the result display; retain produced images in current
+  browser memory until explicit clear/logout/disposal. Reload stops further
+  work; individual task parameters still use existing durable history.
+  Starting a valid new experiment explicitly replaces the prior comparison;
+  disclose this before Start, and preserve prior results if validation fails.
+- Verify through source review, lint/type-check, an env-free build and public
+  HTTP checks; no frontend automated/browser tests or paid provider calls.
+  Publish the completed frontend under existing deployment authorization.
+
+Acceptance: two tags with three values each produce all nine distinct
+requests, with only those style weights varying; a null first seed is locked
+from its first observed effective_seed, and every later request uses it.
+Stop/error/logout prevent a successor POST. Completed images remain labeled
+and downloadable without being revoked by advancing to the next group.
+
+## Decisions and Provider Evidence (Original Native Characters)
 
 - A non-billable MCP initialization and tool listing on 2026-10-14 confirms
   deployed `generate_image.character_prompts` accepts an optional array of

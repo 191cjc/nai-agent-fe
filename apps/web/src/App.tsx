@@ -2,13 +2,14 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 
 import { observer } from 'mobx-react-lite'
 import {
   ArrowDownToLine, ArrowLeft, ArrowRight, Check, ChevronDown, ChevronUp, Clock3,
-  History, Image as ImageIcon, LogOut, Plus, RefreshCw, Search, Send, Settings2,
+  FlaskConical, History, Image as ImageIcon, LogOut, Plus, RefreshCw, Search, Send, Settings2,
   Sparkles, Tags, Trash2, WandSparkles, X,
 } from 'lucide-react'
 import { ApiFailure, errorText, type GenerationRequest } from './api'
 import type { GenerationDraft } from './store'
 import { AppStore, MAX_CHARACTERS, NATIVE_CHARACTER_MODELS, supportsNativeCharacters } from './store'
 import { PromptEditor } from './PromptEditor'
+import { StyleExperimentConfig, StyleExperimentProgress, StyleExperimentResults } from './StyleExperiment'
 
 const SOURCE_URL = 'https://huggingface.co/spaces/SAkizuki/DanbooruSearch'
 const RESOLUTION_PRESETS = [
@@ -74,9 +75,10 @@ function NumericField({ label, name, value, onChange, min, max, step = 1, placeh
 
 const Editor = observer(({ store, onOpenSettings }: { store: AppStore; onOpenSettings: () => void }) => {
   const [panel, setPanel] = useState<PromptPanel>('positive')
+  const [experimentOpen, setExperimentOpen] = useState(false)
   const generation = store.generation
   const draft = generation.draft
-  const active = generation.busy || generation.activeId !== null || generation.submitUncertain
+  const active = generation.operationLocked || generation.experimentRunning || generation.busy || generation.activeId !== null || generation.submitUncertain
 
   function onPromptTabKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     const current = PROMPT_TABS.findIndex(([name]) => name === panel)
@@ -102,10 +104,13 @@ const Editor = observer(({ store, onOpenSettings }: { store: AppStore; onOpenSet
             className={panel === name ? 'prompt-tab active' : 'prompt-tab'} onClick={() => setPanel(name)}>{label}</button>)}
         </div>
         <div className="prompt-panel prompt-stack" id="prompt-panel-positive" role="tabpanel" aria-labelledby="prompt-tab-positive" hidden={panel !== 'positive'}>
-          <div className="field prompt-field"><label htmlFor="style-prompt">画风</label>
+          <div className="field prompt-field"><div className="style-prompt-heading"><label htmlFor="style-prompt">画风</label>
+            <button className="text-action" type="button" aria-expanded={experimentOpen} aria-controls="style-experiment-config"
+              onClick={() => setExperimentOpen(!experimentOpen)}><FlaskConical size={14} aria-hidden="true" /> 画风实验</button></div>
             <PromptEditor id="style-prompt" label="画风" value={draft.style_prompt} rows={2} placeholder="画风、媒介与画质标签"
               onFocus={() => generation.setPositiveTagTarget('style_prompt')}
-              onChange={value => generation.setField('style_prompt', value)} /></div>
+              onChange={value => generation.setField('style_prompt', value)} />
+            <StyleExperimentConfig generation={generation} hidden={!experimentOpen} /></div>
           <div className="field prompt-field"><label htmlFor="shared-prompt">公共</label>
             <PromptEditor id="shared-prompt" label="公共" value={draft.positive_prompt} rows={3} placeholder="描述场景、构图与人物共有内容"
               onFocus={() => generation.setPositiveTagTarget('positive_prompt')}
@@ -149,10 +154,11 @@ const Editor = observer(({ store, onOpenSettings }: { store: AppStore; onOpenSet
         </button>
         {!generation.job && !generation.activeId && <Alert text={generation.error} />}
         <button className="primary" type="submit" disabled={active}>
-          <WandSparkles size={17} aria-hidden="true" />{generation.activeId ? '正在生成...' : generation.submitUncertain ? '待核对历史' : generation.busy ? '正在提交...' : '生成图像'}
+          <WandSparkles size={17} aria-hidden="true" />{generation.experimentRunning ? '画风实验进行中' : generation.activeId ? '正在生成...' : generation.submitUncertain ? '待核对历史' : generation.busy ? '正在提交...' : '生成图像'}
         </button>
       </div>
     </form>
+    <StyleExperimentProgress generation={generation} />
   </section>
 })
 
@@ -226,10 +232,12 @@ function PromptSummary({ parameters }: { parameters: Pick<GenerationRequest, 'st
 const Result = observer(({ store }: { store: AppStore }) => {
   const generation = store.generation
   const job = generation.job
+  if (generation.experimentRunning && !job && !generation.activeId) return null
+  if (job && generation.experiment?.results.some(result => result.job.id === job.id)) return null
   return <section className="result-section" aria-labelledby="result-title">
     <div className="section-heading">
       <div><span className="eyebrow">结果</span><h2 id="result-title">本次生成</h2></div>
-      {job && job.status !== 'queued' && job.status !== 'running' && <button type="button" className="icon-button" title="关闭结果" aria-label="关闭结果"
+      {job && !generation.experimentRunning && !generation.operationLocked && job.status !== 'queued' && job.status !== 'running' && <button type="button" className="icon-button" title="关闭结果" aria-label="关闭结果"
         onClick={() => generation.clearResult()}><Check size={18} /></button>}
     </div>
     {!job && !generation.activeId && !generation.checking && <div className="empty-result"><ImageIcon size={27} aria-hidden="true" /><span>暂无生成结果</span></div>}
@@ -259,7 +267,7 @@ const Result = observer(({ store }: { store: AppStore }) => {
             <a href={image.url} download={image.filename} className="icon-button" title={`下载图像 ${image.index + 1}`} aria-label={`下载图像 ${image.index + 1}`}><ArrowDownToLine size={17} /></a>
           </figcaption>
         </figure>)}</div>}
-      {job.status === 'succeeded' && !generation.images.length && !generation.imageError && <p className="subtle">图像已过期，参数仍可在历史记录中查看。</p>}
+      {job.status === 'succeeded' && !generation.images.length && !generation.imageError && !generation.operationLocked && <p className="subtle">图像已过期，参数仍可在历史记录中查看。</p>}
     </>}
   </section>
 })
@@ -337,7 +345,8 @@ const HistoryPanel = observer(({ store }: { store: AppStore }) => {
       {item.error_code && <p className="history-negative">{errorText(new ApiFailure(0, item.error_code, '生成失败，请检查服务状态。'))}</p>}
       <div className="history-actions">
         <button className="text-action" type="button" onClick={() => { store.generation.reuse(item); document.getElementById('editor-title')?.scrollIntoView({ behavior: 'smooth' }) }}><History size={15} /> 复用</button>
-        {(item.status === 'queued' || item.status === 'running') && <button className="text-action" type="button" disabled={store.generation.activeId !== null}
+        {(item.status === 'queued' || item.status === 'running') && <button className="text-action" type="button"
+          disabled={store.generation.experimentRunning || store.generation.operationLocked || store.generation.activeId !== null || store.generation.busy || store.generation.submitUncertain}
           onClick={() => { store.generation.resume(item.id); document.getElementById('result-title')?.scrollIntoView({ behavior: 'smooth' }) }}><RefreshCw size={15} /> 查看状态</button>}
         <button className="icon-button danger" type="button" title={item.status === 'queued' || item.status === 'running' ? '任务完成后可删除' : '删除历史记录'} aria-label={`删除 ${new Date(item.created_at * 1000).toLocaleString()} 的历史记录`}
           disabled={history.deletingId !== null || item.status === 'queued' || item.status === 'running'} onClick={() => {
@@ -409,7 +418,8 @@ const Workspace = observer(({ store }: { store: AppStore }) => {
       {settingsOpen && <button className="settings-scrim" type="button" aria-label="关闭生成设置" onClick={() => setSettingsOpen(false)} />}
       <SettingsPanel store={store} hidden={!settingsOpen} onClose={() => setSettingsOpen(false)} />
       <div className="main-column">
-        <div className="main-scroll"><Editor store={store} onOpenSettings={() => setSettingsOpen(true)} /><Result store={store} /></div>
+        <div className="main-scroll"><Editor store={store} onOpenSettings={() => setSettingsOpen(true)} />
+          <StyleExperimentResults generation={store.generation} /><Result store={store} /></div>
         {store.generation.submitUncertain && <div className="uncertain-bar" role="alert">
           <span>提交结果未知，请核对历史记录。</span>
           <button className="secondary" type="button" onClick={() => { openTool('history'); void store.history.load(0) }}>查看历史</button>

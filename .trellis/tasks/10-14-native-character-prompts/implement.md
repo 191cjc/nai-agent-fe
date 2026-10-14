@@ -60,7 +60,14 @@ compatibility distinction was explained. Implement the recorded behavior.
   checks passed. API pointer and PID unchanged; previous web assets retained.
 - [ ] Operator desktop/mobile/keyboard acceptance remains pending.
 
-## Deployment Considerations (Native Characters)
+## Follow-up Execution: Style Experiment
+
+The operator requested exhaustive, seed-locked selected style-tag weight
+experiments after the tag editor release. Continue with
+`style-experiment-design.md` and `style-experiment-implement.md`; implementation
+is split between state/helper and UI owners, followed by a full-scope check.
+
+## Deployment Considerations (Original Native Characters)
 
 Publishing both layers requires API-first order and a verified private backup
 before restarting the API, per deploy/README.md. Check for active jobs first;

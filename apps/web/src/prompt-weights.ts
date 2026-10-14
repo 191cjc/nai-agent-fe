@@ -43,7 +43,8 @@ function trimRange(source: string, start: number, end: number): SourceRange {
 
 // Keep decimal arithmetic exact even for manually entered weights with extra
 // precision or large integer parts. No floating-point rounding or weight cap.
-function decimalParts(value: string): { units: bigint; places: number } {
+export function decimalParts(value: string): { units: bigint; places: number } {
+  if (!/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(value)) throw new Error('权重须为普通十进制数，不支持科学计数法。')
   const negative = value.startsWith('-')
   const unsigned = value.replace(/^[+-]/, '')
   const [whole, fraction = ''] = unsigned.split('.')
@@ -52,7 +53,7 @@ function decimalParts(value: string): { units: bigint; places: number } {
   return { units: negative ? -units : units, places }
 }
 
-function formatDecimal(units: bigint, places: number): string {
+export function formatDecimal(units: bigint, places: number): string {
   const negative = units < 0n
   const digits = (negative ? -units : units).toString().padStart(places + 1, '0')
   const whole = digits.slice(0, -places)
@@ -160,6 +161,18 @@ export function adjustPromptTagWeight(source: string, tag: PromptTag, direction:
   if (tag.weight === null || source.slice(tag.start, tag.end) !== tag.source) return null
   const { units, places } = decimalParts(tag.weight)
   const nextWeight = formatDecimal(units + BigInt(direction) * 10n ** BigInt(places - 1), places)
+  return setPromptTagWeight(source, tag, nextWeight)
+}
+
+/** Set an absolute exact weight without changing the tag body or its siblings. */
+export function setPromptTagWeight(source: string, tag: PromptTag, weight: string): string | null {
+  if (tag.weight === null || source.slice(tag.start, tag.end) !== tag.source) return null
+  let nextWeight: string
+  try {
+    nextWeight = normalizedWeight(weight)
+  } catch {
+    return null
+  }
   if (tag.weightRange) {
     return source.slice(0, tag.weightRange.start) + nextWeight + source.slice(tag.weightRange.end)
   }

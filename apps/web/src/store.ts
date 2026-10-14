@@ -9,6 +9,13 @@ import {
   type UserInfo,
   WorkspaceApi,
 } from './api'
+import {
+  createStyleExperimentPlan,
+  styleExperimentCombination,
+  type StyleExperimentPlan,
+  type StyleExperimentRange,
+  type StyleExperimentWeight,
+} from './style-experiment'
 
 export const MAX_CHARACTERS = 6
 export const NATIVE_CHARACTER_MODELS = [
@@ -182,6 +189,41 @@ export interface ResultImage {
   index: number
 }
 
+export interface StyleExperimentResult {
+  ordinal: bigint
+  weights: StyleExperimentWeight[]
+  job: GenerationView
+  images: ResultImage[]
+  imageError: string
+}
+
+export interface StyleExperimentRun {
+  status: 'running' | 'stopping' | 'stopped' | 'completed' | 'failed'
+  total: bigint
+  completed: bigint
+  current: bigint
+  seed: number | null
+  sampleCount: number
+  error: string
+  results: StyleExperimentResult[]
+}
+
+interface ExperimentExecution {
+  readonly token: number
+  readonly plan: StyleExperimentPlan
+  readonly parameters: Readonly<Omit<GenerationRequest, 'character_prompts'>> & {
+    readonly character_prompts: readonly Readonly<GenerationRequest['character_prompts'][number]>[]
+  }
+}
+
+interface GenerationOperation {
+  token: number
+  runToken: number | null
+  ordinal: bigint
+  weights: StyleExperimentWeight[]
+  acceptedId: string | null
+}
+
 export class GenerationStore {
   draft = emptyDraft()
   positiveTagTarget: PositiveTagTarget = 'positive_prompt'
@@ -193,9 +235,14 @@ export class GenerationStore {
   submitUncertain = false
   error = ''
   imageError = ''
+  experiment: StyleExperimentRun | null = null
   private pollTimer: ReturnType<typeof setTimeout> | null = null
   private controller: AbortController | null = null
   private epoch = 0
+  private runVersion = 0
+  private operationVersion = 0
+  private execution: ExperimentExecution | null = null
+  private operation: GenerationOperation | null = null
 
   constructor(
     private readonly api: WorkspaceApi,
@@ -279,7 +326,7 @@ export class GenerationStore {
   }
 
   async submit(): Promise<void> {
-    if (this.busy || this.activeId || this.submitUncertain) return
+    if (this.operationLocked || this.busy || this.activeId || this.submitUncertain) return
     this.error = ''
     let parameters: GenerationRequest
     try {
@@ -288,70 +335,220 @@ export class GenerationStore {
       this.error = error instanceof Error ? error.message : '生成参数无效。'
       return
     }
-    this.clearResult()
-    const epoch = this.epoch
-    this.busy = true
+    this.clearActiveResult()
+    await this.submitParameters(parameters, null, 0n, [])
+  }
+
+  get experimentRunning(): boolean {
+    return this.experiment?.status === 'running' || this.experiment?.status === 'stopping'
+  }
+
+  get operationLocked(): boolean {
+    return this.operation !== null || this.experimentRunning
+  }
+
+  async startStyleExperiment(source: string, ranges: StyleExperimentRange[]): Promise<void> {
+    if (this.operationLocked || this.busy || this.activeId || this.submitUncertain) return
+    this.error = ''
+    let plan: StyleExperimentPlan
+    let parameters: GenerationRequest
     try {
-      const accepted = await this.api.submit(parameters)
-      if (epoch !== this.epoch) return
-      runInAction(() => { this.busy = false; this.activeId = accepted.id })
-      this.onSubmitted()
-      await this.refresh(accepted.id)
+      if (source !== this.draft.style_prompt) throw new Error('画风已变化，请重新选择实验词条。')
+      parameters = requestFromDraft(this.draft)
+      if (!supportsNativeCharacters(parameters.model)) throw new Error('画风实验需要列表中的 V4 / V4.5 / V5 模型。')
+      plan = createStyleExperimentPlan(source, ranges)
+      const trimmedStyleLength = plan.maxStyleLength - (source.length - source.trim().length)
+      const shared = parameters.positive_prompt.trim()
+      if (plan.maxStyleLength > 3000 || trimmedStyleLength + (shared ? 2 + shared.length : 0) > 3000) {
+        throw new Error('实验权重可能使画风和公共提示词超过 3000 字符，请缩短提示词或权重范围。')
+      }
     } catch (error) {
-      if (epoch === this.epoch) runInAction(() => {
+      this.error = error instanceof Error ? error.message : '画风实验参数无效。'
+      return
+    }
+    this.clearActiveResult()
+    this.clearExperimentArchive()
+    const token = ++this.runVersion
+    // Strings/scalars are immutable; explicitly freeze the native child list too.
+    const snapshot = Object.freeze({
+      ...parameters,
+      character_prompts: Object.freeze(parameters.character_prompts.map(character => Object.freeze({ ...character }))),
+    })
+    this.execution = Object.freeze({ token, plan, parameters: snapshot })
+    this.experiment = {
+      status: 'running', total: plan.total, completed: 0n, current: 0n,
+      seed: parameters.seed, sampleCount: parameters.sample_count, error: '', results: [],
+    }
+    await this.advanceExperiment(token, 0n)
+  }
+
+  stopStyleExperiment(): void {
+    if (!this.experimentRunning || !this.experiment) return
+    if (this.operation) {
+      this.experiment.status = 'stopping'
+    } else {
+      this.experiment.status = 'stopped'
+      this.execution = null
+      if (this.pollTimer) clearTimeout(this.pollTimer)
+      this.pollTimer = null
+    }
+  }
+
+  clearStyleExperimentResults(): void {
+    if (this.operationLocked) return
+    if (this.experiment?.results.some(result => result.job.id === this.job?.id)) this.clearActiveResult()
+    this.runVersion += 1
+    this.execution = null
+    this.clearExperimentArchive()
+  }
+
+  private clearExperimentArchive(): void {
+    this.experiment?.results.forEach(result => result.images.forEach(image => URL.revokeObjectURL(image.url)))
+    this.experiment = null
+  }
+
+  private haltExperiment(message: string): void {
+    if (!this.experiment || !this.execution || this.execution.token !== this.runVersion) return
+    this.experiment.status = 'failed'
+    this.experiment.error = message
+  }
+
+  private async advanceExperiment(token: number, index: bigint): Promise<void> {
+    const execution = this.execution
+    if (!execution || execution.token !== token || token !== this.runVersion || this.experiment?.status !== 'running') return
+    if (this.operation || this.busy || this.activeId || this.submitUncertain) return
+    let parameters: GenerationRequest
+    let weights: StyleExperimentWeight[]
+    try {
+      if (index > 0n && this.experiment.seed === null) throw new Error('尚未取得第一组种子，实验已停止。')
+      const combination = styleExperimentCombination(execution.plan, index)
+      weights = combination.weights
+      // Reuse all normal request validation for each actual weighted source.
+      const base = execution.parameters
+      parameters = requestFromDraft({
+        ...base, style_prompt: combination.stylePrompt,
+        character_prompts: base.character_prompts.map((character, child) => ({ ...character, id: `snapshot-${child}` })),
+        width: String(base.width), height: String(base.height), steps: String(base.steps),
+        cfg_scale: String(base.cfg_scale), seed: this.experiment.seed === null ? '' : String(this.experiment.seed),
+        sample_count: String(base.sample_count),
+      })
+    } catch (error) {
+      this.haltExperiment(error instanceof Error ? error.message : '画风实验参数无效。')
+      return
+    }
+    this.clearActiveResult()
+    this.experiment.current = index + 1n
+    await this.submitParameters(parameters, token, index + 1n, weights)
+  }
+
+  /** Sole paid POST path; the operation remains reserved through image settlement. */
+  private async submitParameters(parameters: GenerationRequest, runToken: number | null, ordinal: bigint, weights: StyleExperimentWeight[]): Promise<void> {
+    const epoch = this.epoch
+    const token = ++this.operationVersion
+    this.operation = { token, runToken, ordinal, weights, acceptedId: null }
+    this.busy = true
+    let accepted
+    try {
+      accepted = await this.api.submit(parameters)
+    } catch (error) {
+      if (epoch === this.epoch && this.operation?.token === token) runInAction(() => {
         this.busy = false
+        this.operation = null
         this.submitUncertain = !(error instanceof ApiFailure) || error.status >= 500
         this.error = this.submitUncertain
           ? '提交结果未知。请先检查历史记录，再决定是否重新提交。'
           : errorText(error)
+        if (runToken !== null) this.haltExperiment(this.error)
+        if (runToken !== null) this.execution = null
       })
+      return
     }
+    if (epoch !== this.epoch || this.operation?.token !== token) return
+    runInAction(() => {
+      this.busy = false
+      this.activeId = accepted.id
+      this.operation!.acceptedId = accepted.id
+    })
+    this.onSubmitted()
+    await this.refresh(accepted.id)
   }
 
   async refresh(id = this.activeId ?? this.job?.id): Promise<void> {
     if (!id || this.checking) return
+    // Archived tasks already own their URLs. Rechecking must not fetch them again.
+    if (this.experiment?.results.some(result => result.job.id === id)) return
+    if (this.operation && this.operation.acceptedId !== id) return
+    if (!this.operation) {
+      if (this.experimentRunning) return
+      this.operation = { token: ++this.operationVersion, runToken: null, ordinal: 0n, weights: [], acceptedId: id }
+    }
+    const operationToken = this.operation.token
     const epoch = this.epoch
     if (this.pollTimer) clearTimeout(this.pollTimer)
     this.pollTimer = null
     this.controller?.abort()
-    this.controller = new AbortController()
+    const controller = new AbortController()
+    this.controller = controller
     this.checking = true
     this.error = ''
+    let terminalJob: GenerationView | null = null
     try {
-      const job = await this.api.generation(id, this.controller.signal)
-      if (epoch !== this.epoch) return
+      const job = await this.api.generation(id, controller.signal)
+      if (epoch !== this.epoch || this.operation?.token !== operationToken) return
       const firstTerminalObservation = (job.status === 'succeeded' || job.status === 'failed')
         && (this.job?.id !== job.id || this.job.status !== job.status)
       runInAction(() => {
         this.job = job
-        this.checking = false
         this.activeId = job.status === 'queued' || job.status === 'running' ? job.id : null
+        if (this.operation?.runToken === this.runVersion && this.experiment?.seed === null) {
+          this.experiment.seed = job.effective_seed
+        }
       })
       if (firstTerminalObservation) this.onTerminal()
       if (job.status === 'queued' || job.status === 'running') {
         this.pollTimer = setTimeout(() => { void this.refresh(id) }, 2000)
-      } else if (job.status === 'succeeded' && job.image_urls.length) {
-        await this.loadImages(job, epoch)
-      } else if (job.status === 'failed') {
-        runInAction(() => { this.error = errorText(new ApiFailure(0, job.error_code ?? 'generation_failed', '生成失败，请检查服务状态。')) })
+      } else {
+        if (job.status === 'succeeded') {
+          if (job.image_urls.length) await this.loadImages(job, epoch, operationToken, controller.signal)
+          else if (this.operation?.runToken !== null) runInAction(() => { this.imageError = '图像已过期或暂不可用，实验已停止。' })
+        } else if (job.status === 'failed') {
+          runInAction(() => { this.error = errorText(new ApiFailure(0, job.error_code ?? 'generation_failed', '生成失败，请检查服务状态。')) })
+        }
+        terminalJob = job
       }
     } catch (error) {
-      if (epoch === this.epoch) runInAction(() => {
-        this.checking = false
-        if (error instanceof ApiFailure && error.status === 404) this.activeId = null
+      if (epoch === this.epoch && this.operation?.token === operationToken) runInAction(() => {
         this.error = errorText(error)
+        if (this.operation?.runToken !== null) this.haltExperiment(this.error)
+        // An accepted task remains owned after GET failure until explicit recheck
+        // settles it. An ordinary vanished task has no experiment metadata to save.
+        if (error instanceof ApiFailure && error.status === 404 && this.operation?.runToken === null) {
+          this.activeId = null
+          this.operation = null
+        }
       })
+    } finally {
+      if (epoch === this.epoch) runInAction(() => { this.checking = false })
     }
+    if (terminalJob && epoch === this.epoch && this.operation?.token === operationToken) this.finishOperation(terminalJob, operationToken)
   }
 
-  private async loadImages(job: GenerationView, epoch: number): Promise<void> {
+  private async loadImages(job: GenerationView, epoch: number, operationToken: number, signal: AbortSignal): Promise<void> {
     const missing = job.image_urls.flatMap((path, index) => this.images.some(image => image.index === index)
       ? [] : [{ path, index }])
-    const results = await Promise.allSettled(missing.map(image => this.api.image(image.path, this.controller?.signal)))
-    if (epoch !== this.epoch) return
-    const images = results.flatMap((result, index) => result.status === 'fulfilled'
-      ? [{ url: URL.createObjectURL(result.value), filename: `generation-${job.effective_seed}-${missing[index].index + 1}.png`, index: missing[index].index }]
-      : [])
+    const results = await Promise.allSettled(missing.map(image => this.api.image(image.path, signal)))
+    if (epoch !== this.epoch || this.operation?.token !== operationToken) return
+    const images: ResultImage[] = []
+    try {
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled') images.push({
+          url: URL.createObjectURL(result.value), filename: `generation-${job.effective_seed}-${missing[index].index + 1}.png`, index: missing[index].index,
+        })
+      })
+    } catch (error) {
+      images.forEach(image => URL.revokeObjectURL(image.url))
+      throw error
+    }
     runInAction(() => {
       this.images = [...this.images, ...images].sort((left, right) => left.index - right.index)
       this.imageError = results.some(result => result.status === 'rejected')
@@ -360,7 +557,39 @@ export class GenerationStore {
     })
   }
 
-  clearResult(): void {
+  private finishOperation(job: GenerationView, operationToken: number): void {
+    const operation = this.operation
+    if (!operation || operation.token !== operationToken) return
+    this.operation = null
+    if (operation.runToken === null || operation.runToken !== this.runVersion || !this.experiment) return
+    if (this.experiment.results.some(result => result.job.id === job.id)) return
+    // Transfer URL ownership. Clearing the active slot must not revoke this row.
+    this.experiment.results.push({
+      ordinal: operation.ordinal, weights: operation.weights, job, images: this.images, imageError: this.imageError,
+    })
+    this.images = []
+    this.experiment.completed += 1n
+    if (job.status === 'failed' || this.imageError) this.haltExperiment(this.error || this.imageError)
+    if (this.experiment.status === 'failed') {
+      this.execution = null
+    } else if (this.experiment.status === 'stopping') {
+      this.experiment.status = 'stopped'
+      this.execution = null
+    } else if (this.experiment.completed >= this.experiment.total) {
+      this.experiment.status = 'completed'
+      this.execution = null
+    } else if (this.experiment.status === 'running') {
+      const token = operation.runToken
+      // A new turn prevents a long chain of already-terminal tasks retaining
+      // every preceding async stack. The run token/status guard owns the gap.
+      this.pollTimer = setTimeout(() => {
+        this.pollTimer = null
+        void this.advanceExperiment(token, operation.ordinal)
+      }, 0)
+    }
+  }
+
+  private clearActiveResult(): void {
     this.epoch += 1
     this.controller?.abort()
     this.controller = null
@@ -370,13 +599,28 @@ export class GenerationStore {
     this.images = []
     this.job = null
     this.activeId = null
+    this.operation = null
+    this.busy = false
     this.checking = false
     this.imageError = ''
+  }
+
+  clearResult(): void {
+    const submissionPending = this.busy
+    this.runVersion += 1
+    this.execution = null
+    if (this.experimentRunning && this.experiment) this.experiment.status = 'stopped'
+    this.clearActiveResult()
+    if (submissionPending) {
+      this.submitUncertain = true
+      this.error = '提交结果未知。请先检查历史记录，再决定是否重新提交。'
+    }
   }
 
   suspendForLogout(): void {
     const submissionPending = this.busy
     this.clearResult()
+    this.clearExperimentArchive()
     this.busy = false
     if (submissionPending) {
       this.submitUncertain = true
@@ -386,6 +630,7 @@ export class GenerationStore {
 
   reset(): void {
     this.clearResult()
+    this.clearExperimentArchive()
     this.draft = emptyDraft()
     this.positiveTagTarget = 'positive_prompt'
     this.busy = false
@@ -394,8 +639,13 @@ export class GenerationStore {
   }
 
   resume(id: string): void {
-    if (this.activeId || this.busy) return
-    this.clearResult()
+    if (this.operationLocked || this.activeId || this.busy) return
+    this.clearActiveResult()
+    const archived = this.experiment?.results.find(result => result.job.id === id)
+    if (archived) {
+      this.job = archived.job
+      return
+    }
     this.activeId = id
     void this.refresh(id)
   }
@@ -627,6 +877,7 @@ export class AppStore {
 
   dispose(): void {
     this.generation.clearResult()
+    this.generation.clearStyleExperimentResults()
     this.tags.reset()
   }
 }
