@@ -121,3 +121,42 @@ Published reviewed web source c63d64c to production release 20261014T082041 and 
 
 - Operator can test the interface and existing parameter history at the public URL; generation and AI advice remain disabled pending credential configuration.
 - Keep deployment task open for broader provider, backup/restore and manual acceptance gates.
+
+
+## Session 4: Native character prompt editor and production release
+<!-- trellis-session: v=2 fp=813eb6fd89c06b84 -->
+
+**Date**: 2026-10-14
+**Task**: Native character prompt editor and production release
+**Branch**: `feat/native-character-prompts`
+
+### Summary
+
+Implemented independent native character prompts with style/shared editing and a negative side tab; deployed API first and web release 20261014T085902 at the existing public URL.
+
+### Main Changes
+
+- Kept style/shared/characters distinct through browser draft, typed API, saved settings JSON, history reuse and native MCP payload; added stable tag targets and a workspace cap of six characters.
+- Recorded provider source/schema evidence and saved-format rollback limitations; took a verified private snapshot and retained prior releases and assets.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `93e146b` | feat: add native character prompt editor |
+| `6ab708e` | docs: record native prompt editor production release |
+
+### Testing
+
+- [OK] PASS: 211 offline backend tests, Ruff, frozen offline dependencies and lock consistency; frontend ESLint/TypeScript and env-free clean /novelai/ production build.
+- [OK] PASS: independent full-scope source review, exact deployed page/asset hashes, public API and /aiqq health, local new schema and active release pointers.
+- [OK] No frontend automated/browser tests, paid provider calls or credential changes. Production remains provider-disabled; real image output and interactive acceptance are pending.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Operator should hard refresh https://www.firesoul.cn/novelai/ and test style/shared/character editing, add/remove controls, side tabs and tag destinations on desktop/mobile.
+- Keep native prompt task and broader release tasks open for manual/provider acceptance; retain new API during frontend fallback and verify saved-format compatibility before any API downgrade.
