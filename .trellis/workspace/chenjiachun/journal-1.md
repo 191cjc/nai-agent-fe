@@ -44,3 +44,42 @@ Committed bounded provider response handling and API quality fixes; recorded off
 
 - Obtain explicit operator authorization for the exact one-image and one-advice probes documented in API verification.md; use local private credentials, no automatic retry and no production enablement.
 - Integrate the reviewed branch, obtain desktop/mobile manual acceptance, verify upstream size/cost choices, and configure encrypted off-host backups with a two-account restore rehearsal before final task closure.
+
+
+## Session 2: Web interaction polish
+<!-- trellis-session: v=2 fp=db34827b7adcdc2f -->
+
+**Date**: 2026-10-14
+**Task**: Web interaction polish
+**Branch**: `fix/web-interaction-polish`
+
+### Summary
+
+Aligned tool-tab keyboard navigation and synchronized parameter history on first terminal generation observation; committed the approved batch and archived the follow-up.
+
+### Main Changes
+
+- Shared TOOL_TABS controls rendering, keyboard order, focus and selection.
+- Terminal observations notify history once before image handling; coalesced refresh follows the latest requested page and clears on reset.
+- Updated the frontend workspace contract, recorded static acceptance and independent review, and archived only the scoped web follow-up.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0501744` | fix(web): align tool navigation and refresh completed history |
+
+### Testing
+
+- [OK] PASS: implementation npm run lint (ESLint and TypeScript), exit 0; independent full-scope source review found no remaining issues.
+- [OK] PASS: env-free locked offline npm install and /novelai/ production build; staged inputs match the reviewed source.
+- [OK] PASS: Trellis context validation and git diff checks. Frontend automated/browser tests were not run under the retained operator restriction; no provider calls.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Desktop/mobile interactive acceptance and broader provider/deployment release gates remain with the parent tasks.
+- The fix/web-interaction-polish branch is committed locally; integrate it through the normal review flow when ready.
