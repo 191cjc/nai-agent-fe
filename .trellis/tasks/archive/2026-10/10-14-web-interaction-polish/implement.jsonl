@@ -1,4 +1,4 @@
 {"file":".trellis/spec/frontend/index.md","reason":"Frontend guideline index; template-only documents do not establish project conventions."}
 {"file":".trellis/spec/frontend/workspace-contract.md","reason":"Preserve same-origin API, auth cleanup, temporary results, drawer state and frontend validation restrictions."}
 {"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Use one tool order for rendering and keyboard navigation, and coordinate stores through their existing owner."}
-{"file":".trellis/tasks/10-14-web-interaction-polish/research/interaction-findings.md","reason":"Concrete bug anchors, narrow ownership, completion notification and history-request concurrency considerations."}
+{"file":".trellis/tasks/archive/2026-10/10-14-web-interaction-polish/research/interaction-findings.md","reason":"Concrete bug anchors, narrow ownership, completion notification and history-request concurrency considerations."}
