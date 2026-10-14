@@ -56,7 +56,8 @@ compatibility distinction was explained. Implement the recorded behavior.
 - [x] Fresh explicit-input, sanitized-environment offline install/build for
   `/novelai/`; source map SHA-256
   `b9fd55969666fe254073733bcd1e51b026b97b32afcd715b1085cef48a65156c`.
-- [ ] Web-only production release and public page/asset/health checks.
+- [x] Web-only release `20261014T093928`; public page/asset SHA-256 and health
+  checks passed. API pointer and PID unchanged; previous web assets retained.
 - [ ] Operator desktop/mobile/keyboard acceptance remains pending.
 
 ## Deployment Considerations (Native Characters)
