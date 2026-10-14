@@ -160,3 +160,40 @@ Implemented independent native character prompts with style/shared editing and a
 
 - Operator should hard refresh https://www.firesoul.cn/novelai/ and test style/shared/character editing, add/remove controls, side tabs and tag destinations on desktop/mobile.
 - Keep native prompt task and broader release tasks open for manual/provider acceptance; retain new API during frontend fallback and verify saved-format compatibility before any API downgrade.
+
+
+## Session 5: Prompt tags and weight controls deployed
+<!-- trellis-session: v=2 fp=021b0d7a193add90 -->
+
+**Date**: 2026-10-14
+**Task**: Prompt tags and weight controls deployed
+**Branch**: `feat/native-character-prompts`
+
+### Summary
+
+Implemented blur-to-tag prompt editing with manual-only text mode and precise 0.1 weight controls; deployed fresh web release 20261014T093928. Keep native-character-prompts open for operator interaction acceptance.
+
+### Main Changes
+
+- Shared controlled editor covers style, shared, native characters and global negative; exact decimal numeric emphasis preserves source spans and complex original syntax.
+- Independent review fixed blur layout movement and ambiguous trailing-colon handling; API and existing draft/history/auth lifecycle preserved.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0d12ea3` | feat(web): add prompt tags with precise weight controls |
+| `9f9dc24` | docs: record prompt weight editor production release |
+
+### Testing
+
+- [OK] PASS: ESLint/TypeScript, independent full-scope source review, context validation and diff checks; no frontend automated tests or browser automation.
+- [OK] PASS: fresh explicit-input env-free offline locked production build; committed source and public page/assets match SHA-256; health and retained old assets passed.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Operator refreshes https://www.firesoul.cn/novelai/ and accepts desktop/mobile/keyboard tag, arrow and manual-edit interactions; no paid provider output was exercised.
