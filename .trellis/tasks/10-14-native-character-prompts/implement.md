@@ -14,6 +14,17 @@ compatibility distinction was explained. Implement the recorded behavior.
 5. Main session captures contracts and validation evidence, commits the scoped
    change and records session progress. Keep broader parent release gates open.
 
+## Progress
+
+- [x] Pinned public provider research and non-billable deployed schema evidence.
+- [x] Typed backend validation, native mapping and reviewed OpenAPI additions.
+- [x] Structured frontend editor, stable tag targets, summaries and reuse.
+- [x] Independent full-scope source review and required static/offline checks.
+- [x] Commit `93e146b`; API-first production release `20261014T085902` verified.
+- [ ] Operator desktop/mobile interaction and real-provider acceptance. Keep
+  this task open while the operator tests; broader parent/provider/restore
+  acceptance is unchanged.
+
 ## Checks
 
 - Backend: frozen offline dependency sync with test/lint extras, offline pytest
