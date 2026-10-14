@@ -153,7 +153,11 @@ export class GenerationStore {
   private controller: AbortController | null = null
   private epoch = 0
 
-  constructor(private readonly api: WorkspaceApi, private readonly onSubmitted: () => void) {
+  constructor(
+    private readonly api: WorkspaceApi,
+    private readonly onSubmitted: () => void,
+    private readonly onTerminal: () => void,
+  ) {
     makeAutoObservable(this, undefined, { autoBind: true })
   }
 
@@ -223,11 +227,14 @@ export class GenerationStore {
     try {
       const job = await this.api.generation(id, this.controller.signal)
       if (epoch !== this.epoch) return
+      const firstTerminalObservation = (job.status === 'succeeded' || job.status === 'failed')
+        && (this.job?.id !== job.id || this.job.status !== job.status)
       runInAction(() => {
         this.job = job
         this.checking = false
         this.activeId = job.status === 'queued' || job.status === 'running' ? job.id : null
       })
+      if (firstTerminalObservation) this.onTerminal()
       if (job.status === 'queued' || job.status === 'running') {
         this.pollTimer = setTimeout(() => { void this.refresh(id) }, 2000)
       } else if (job.status === 'succeeded' && job.image_urls.length) {
@@ -314,6 +321,7 @@ export class HistoryStore {
   error = ''
   private epoch = 0
   private sessionVersion = 0
+  private refreshPending = false
 
   constructor(private readonly api: WorkspaceApi) {
     makeAutoObservable(this, undefined, { autoBind: true })
@@ -334,7 +342,21 @@ export class HistoryStore {
       })
     } catch (error) {
       if (epoch === this.epoch) runInAction(() => { this.loading = false; this.error = errorText(error) })
+    } finally {
+      if (epoch === this.epoch && this.refreshPending) {
+        runInAction(() => { this.refreshPending = false })
+        // Follow the latest requested page, even if it differs from the displayed page.
+        void this.load(offset)
+      }
     }
+  }
+
+  refresh(): void {
+    if (this.loading) {
+      this.refreshPending = true
+      return
+    }
+    void this.load()
   }
 
   async delete(id: string): Promise<void> {
@@ -357,6 +379,7 @@ export class HistoryStore {
   reset(): void {
     this.epoch += 1
     this.sessionVersion += 1
+    this.refreshPending = false
     this.items = []
     this.offset = 0
     this.nextOffset = null
@@ -492,7 +515,11 @@ export class AppStore {
     this.api = new WorkspaceApi(fetcher, () => this.auth.expire())
     this.auth = new AuthStore(this.api, () => this.resetProtected(), () => this.generation.suspendForLogout())
     this.history = new HistoryStore(this.api)
-    this.generation = new GenerationStore(this.api, () => { void this.history.load(0) })
+    this.generation = new GenerationStore(
+      this.api,
+      () => { void this.history.load(0) },
+      () => this.history.refresh(),
+    )
     this.tags = new TagStore(this.api)
     this.advice = new AdviceStore(this.api)
   }

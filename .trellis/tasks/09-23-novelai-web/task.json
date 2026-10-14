@@ -18,7 +18,9 @@
   "commit": null,
   "pr_url": null,
   "subtasks": [],
-  "children": [],
+  "children": [
+    "10-14-web-interaction-polish"
+  ],
   "parent": "09-22-novelai-image-workspace",
   "relatedFiles": [],
   "notes": "",

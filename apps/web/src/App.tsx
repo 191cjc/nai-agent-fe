@@ -281,7 +281,8 @@ const HistoryPanel = observer(({ store }: { store: AppStore }) => {
   </div>
 })
 
-type Tool = 'tags' | 'advice' | 'history'
+const TOOL_TABS = [['history', Clock3, '历史'], ['tags', Tags, '标签'], ['advice', Sparkles, '建议']] as const
+type Tool = (typeof TOOL_TABS)[number][0]
 
 const Workspace = observer(({ store }: { store: AppStore }) => {
   const [tool, setTool] = useState<Tool>('history')
@@ -302,14 +303,13 @@ const Workspace = observer(({ store }: { store: AppStore }) => {
   }
 
   function onTabKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    const order: Tool[] = ['tags', 'advice', 'history']
-    const current = order.indexOf(tool)
-    const next = event.key === 'ArrowRight' ? (current + 1) % order.length
-      : event.key === 'ArrowLeft' ? (current + order.length - 1) % order.length
-        : event.key === 'Home' ? 0 : event.key === 'End' ? order.length - 1 : null
+    const current = TOOL_TABS.findIndex(([name]) => name === tool)
+    const next = event.key === 'ArrowRight' ? (current + 1) % TOOL_TABS.length
+      : event.key === 'ArrowLeft' ? (current + TOOL_TABS.length - 1) % TOOL_TABS.length
+        : event.key === 'Home' ? 0 : event.key === 'End' ? TOOL_TABS.length - 1 : null
     if (next === null) return
     event.preventDefault()
-    openTool(order[next])
+    openTool(TOOL_TABS[next][0])
     event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus()
   }
 
@@ -344,7 +344,7 @@ const Workspace = observer(({ store }: { store: AppStore }) => {
         <section className={drawerOpen ? 'workspace-drawer open' : 'workspace-drawer'} aria-label="工作台抽屉">
           <div className="drawer-header">
             <div className="tool-tabs" role="tablist" aria-label="工作台工具" onKeyDown={onTabKeyDown}>
-              {([['history', Clock3, '历史'], ['tags', Tags, '标签'], ['advice', Sparkles, '建议']] as const).map(([name, Icon, label]) =>
+              {TOOL_TABS.map(([name, Icon, label]) =>
                 <button key={name} type="button" role="tab" aria-selected={tool === name} aria-controls="drawer-panel"
                   tabIndex={tool === name ? 0 : -1} className={tool === name ? 'tool-tab active' : 'tool-tab'} onClick={() => openTool(name)}><Icon size={16} /><span>{label}</span></button>)}
             </div>

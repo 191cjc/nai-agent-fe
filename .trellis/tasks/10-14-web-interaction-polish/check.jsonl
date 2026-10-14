@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Review against established frontend conventions rather than unfilled templates."}
+{"file":".trellis/spec/frontend/workspace-contract.md","reason":"Check auth/session cleanup, parameter-only history, no paid retries and frontend validation boundaries."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Ensure a shared tool declaration removes order drift without unnecessary abstractions."}
+{"file":".trellis/tasks/10-14-web-interaction-polish/research/interaction-findings.md","reason":"Review keyboard selection/focus, terminal notification deduplication, pagination and stale async work against concrete sequences."}

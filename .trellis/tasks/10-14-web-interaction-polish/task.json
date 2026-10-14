@@ -1,0 +1,29 @@
+{
+  "id": "web-interaction-polish",
+  "name": "web-interaction-polish",
+  "title": "Fix workspace tab navigation and generation history refresh",
+  "description": "Align keyboard navigation with the visible tool tabs and refresh parameter history once a generation reaches a terminal state.",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "chenjiachun",
+  "assignee": "chenjiachun",
+  "createdAt": "2026-10-14",
+  "completedAt": null,
+  "branch": "fix/web-interaction-polish",
+  "base_branch": "chore/novelai-api-quality",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "09-23-novelai-web",
+  "relatedFiles": [],
+  "notes": "2026-10-14: both frontend fixes implemented; independent source review found no remaining issues. ESLint/TypeScript and an env-free locked production build passed. See verification.md and commit-plan.md. User approved the work commit and archive/journal sequence; interactive browser acceptance remains deferred under the existing frontend restriction.",
+  "meta": {
+    "planning_approval": "User approved the final PRD and implementation scope on 2026-10-14: 开始吧",
+    "commit_approval": "User approved the exact commit plan and archive/journal sequence on 2026-10-14: 是的"
+  }
+}
