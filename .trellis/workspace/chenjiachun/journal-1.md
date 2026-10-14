@@ -83,3 +83,41 @@ Aligned tool-tab keyboard navigation and synchronized parameter history on first
 
 - Desktop/mobile interactive acceptance and broader provider/deployment release gates remain with the parent tasks.
 - The fix/web-interaction-polish branch is committed locally; integrate it through the normal review flow when ready.
+
+
+## Session 3: Web deployment for manual testing
+<!-- trellis-session: v=2 fp=1bff3555e435b97c -->
+
+**Date**: 2026-10-14
+**Task**: Web deployment for manual testing
+**Branch**: `fix/web-interaction-polish`
+
+### Summary
+
+Published reviewed web source c63d64c to production release 20261014T082041 and verified page, assets and health endpoints. Broader deployment acceptance remains open.
+
+### Main Changes
+
+- Activated /srv/www/novelai/releases/20261014T082041 at https://www.firesoul.cn/novelai/; retained release 20261008T025018 and existing shared assets for rollback and open tabs.
+- Used env-free committed build inputs and sanitized locked offline install/build; API release and process, SQLite and Nginx configuration were unchanged.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b33d0a4` | docs: record verified web deployment for testing |
+
+### Testing
+
+- [OK] PASS: public page and new JS/CSS returned HTTP 200 and exact build SHA-256; previous JS asset remains HTTP 200.
+- [OK] PASS: /novelai/api/health/ready and /aiqq/health returned HTTP 200; web pointer matched the new release and API PID/release remained unchanged.
+- [OK] No paid provider calls, credential changes, frontend automated tests or browser automation; production NovelAI and Codex credentials remain unset.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Operator can test the interface and existing parameter history at the public URL; generation and AI advice remain disabled pending credential configuration.
+- Keep deployment task open for broader provider, backup/restore and manual acceptance gates.
