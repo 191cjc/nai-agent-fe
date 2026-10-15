@@ -481,3 +481,40 @@ Implemented private seven-day disk images with bounded admission and lazy owner-
 ### Status
 
 [OK] **Completed**
+
+
+## Session 14: Bounded viewer image cache and web release
+<!-- trellis-session: v=2 fp=f2541d324f3617ff -->
+
+**Date**: 2026-10-15
+**Task**: Bounded viewer image cache and web release
+**Branch**: `feat/native-character-prompts`
+
+### Summary
+
+Added and published viewer-local LRU image caching so saved-image comparisons reuse PNG bytes within 32 entries and 64 MiB, with fresh authenticated metadata and original expiry.
+
+### Main Changes
+
+- SavedResultsStore owns cached versus transient URLs; navigation, expiry, LRU eviction and session cleanup preserve independent ordinary-generation and background-run state.
+- Synchronized viewer cache specs/task context; web-only release 20261015T145554 preserves API release20261015T140424 and PID3184888.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b30250c` | perf: cache recently viewed history images |
+| `42a89f2` | docs: record viewer cache deployment |
+
+### Testing
+
+- [OK] Independent affected frontend source review, ESLint/TypeScript, diff/context checks and a fresh 19-input env-free locked build passed.
+- [OK] Exact public HTML/JS/CSS, readiness, neighboring health and previous assets passed; no API restart, frontend/helper/browser automated tests or paid calls.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Operator verifies arrow comparison and outstanding real-provider/background/desktop/mobile acceptance; keep the broader task in_progress.
