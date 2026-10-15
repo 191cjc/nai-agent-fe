@@ -5,8 +5,10 @@ HTTPS server and its `/api` proxy; see `apps/web/README.md` and
 `apps/api/README.md`. Production uses the existing `www.firesoul.cn` HTTPS
 Nginx server, one loopback-only Uvicorn process under systemd, and a private
 SQLite file. Keep the existing `/aiqq` route and TLS configuration. Generated
-images live only in API process memory and disappear on restart; only tokens,
-sessions and generation parameters persist in SQLite.
+images are privately retained for seven days under
+`/var/lib/novelai/generation-images/` and survive process restarts. Tokens,
+sessions, generation parameters and experiment metadata persist in SQLite;
+PNG bytes never enter SQLite or the web root.
 
 ## Host setup
 
@@ -190,9 +192,10 @@ start it and verify readiness **before** switching the web symlink. A brief
 API outage is expected; keep traffic closed if the schema change is not
 backward compatible. `sudo systemctl stop novelai-api` waits up to 65 seconds
 for graceful shutdown; then use `sudo systemctl start novelai-api`. One API
-process is required by SQLite and in-memory results. A restart loses transient
-images and leaves uncertain paid jobs for the user to review in parameter
-history; do not automatically retry them. Inspect failures with
+process is required by SQLite and generation admission ownership. Completed
+unexpired disk images survive restart; older memory-only releases lose their
+transient images. A restart leaves uncertain paid jobs for the user to review
+in history; do not automatically retry them. Inspect failures with
 `systemctl status novelai-api` and `journalctl -u novelai-api`.
 
 ## Backup and restore
@@ -310,7 +313,10 @@ symlinks to a compatible pair while the service is stopped, then restart and
 verify. An API-only rollback is valid only if intervening DB migrations and
 saved parameter formats are backward compatible; otherwise restore its matching pre-upgrade snapshot
 into a fresh state directory and accept loss of newer parameter writes. Do
-not merge SQLite directories. No generated image can be recovered by design.
+not merge SQLite directories. SQLite snapshots contain no image bytes. To
+restore images too, retain/restore their separate private generation-images
+directory with its original modes and manifests; missing or expired image
+files cannot be recovered from the parameter database.
 
 For native-character prompt releases, deploy the new API before the new web
 assets. A style-only generation can save an empty `positive_prompt` with
@@ -329,5 +335,55 @@ numbers within 0.1–0.9, using existing settings_json without a migration.
 Verify the running OpenAPI coordinate fields before publishing the web. If
 reverting the web afterwards, retain this API so already-open pages keep
 their positions. Take the verified private online backup and check for active
-jobs before the restart; existing transient images are lost. No provider
+jobs before the restart; images from older memory-only releases are lost. No provider
 configuration change or paid generation is needed to deploy this addition.
+
+
+## Private seven-day image retention
+
+New successful results are stored beside SQLite in generation-images/, under
+service ownership, directories 0700/files 0600. Startup and periodic cleanup
+remove expired/abandoned artifacts. Original seven-day wall-clock expiry does
+not reset on restart; parameter/experiment metadata lasts until deleted.
+Existing authenticated API image routes serve these bytes; never add an Nginx
+alias for this directory. Browser history can reopen ordinary images or saved
+experiment comparisons without submitting a paid request.
+
+The default store budgets 2 GiB and reserves at least 1 GiB free disk. Pending
+accepted jobs reserve their maximum bounded image output before provider work.
+Full/unwritable storage refuses new generation safely; it does not evict
+unexpired seven-day results. Monitor filesystem space/inodes and plan capacity
+for image storage, logs, SQLite/WAL, backups and release directories together.
+
+Database.backup remains SQLite-only. It does not back up generation-images/.
+A separate private image backup is needed for host/disk recovery; retain the
+original expiry metadata and apply its expiration policy to backup copies too.
+Do not expose, print or include images in source/control or public releases.
+Provider-free restore drills use a separate state/image root, never the live
+store. Keep generation-images/ unchanged during API/web release switches.
+
+Deploy API first, verify its exact OpenAPI/private store/readiness, then web.
+The combined background-experiment release needs migration3; no provider
+configuration or paid probe is needed. After verified private online backup
+and zero active jobs/runs, stop API, migrate with the staged service-user CLI,
+verify schema3/integrity and preserved auth/history counts, then start and
+verify the new API before web. Keep the new API during web fallback: old APIs
+are incompatible with schema3 and cannot serve these saved files. Never restore
+the live DB as rollout recovery. Images lost before this release cannot be
+reconstructed without another generation.
+
+## Durable background experiments
+
+Explicit Start creates one persisted compact plan. One server scheduler uses
+the existing single-worker paid executor; each failed group is recorded and
+followed by the next distinct combination. It never automatically retries an
+uncertain/failed group. Stop persists the boundary; the current accepted group
+may finish. Closing/reloading/logging out only detaches observation; reentry
+reads the same active run. Restart reconciles old interrupted jobs once and
+continues at the next ordinal with the original seed/settings.
+
+SQLite snapshots include active definitions/cursors. For a disposable recovery
+drill, disable copied active runs before starting any application lifespan,
+keep all image/advice providers unconfigured and use a separate state/image
+root. Do not let a backup clone resume work against live paid credentials.
+Private image files require their own backup and keep their original expiry.

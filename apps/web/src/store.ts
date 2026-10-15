@@ -11,11 +11,11 @@ import {
 } from './api'
 import {
   createStyleExperimentPlan,
-  styleExperimentCombination,
   type StyleExperimentPlan,
   type StyleExperimentRange,
-  type StyleExperimentWeight,
 } from './style-experiment'
+import { SavedResultsStore } from './saved-results'
+import { StyleRunStore } from './style-run-store'
 
 export const MAX_CHARACTERS = 6
 export const CHARACTER_POSITION_MIN = 0.1
@@ -39,7 +39,7 @@ export interface CharacterDraft {
 
 export type PositiveTagTarget = 'style_prompt' | 'positive_prompt' | `character:${string}`
 
-export type GenerationDraft = Omit<GenerationRequest, 'width' | 'height' | 'steps' | 'cfg_scale' | 'seed' | 'sample_count' | 'character_prompts'> & {
+export type GenerationDraft = Omit<GenerationRequest, 'width' | 'height' | 'steps' | 'cfg_scale' | 'seed' | 'sample_count' | 'character_prompts' | 'experiment'> & {
   width: string
   height: string
   steps: string
@@ -201,38 +201,29 @@ export interface ResultImage {
   index: number
 }
 
-export interface StyleExperimentResult {
-  ordinal: bigint
-  weights: StyleExperimentWeight[]
-  job: GenerationView
-  images: ResultImage[]
-  imageError: string
-}
-
-export interface StyleExperimentRun {
-  status: 'running' | 'stopping' | 'stopped' | 'completed' | 'failed'
-  total: bigint
-  completed: bigint
-  current: bigint
-  seed: number | null
-  sampleCount: number
-  error: string
-  results: StyleExperimentResult[]
-}
-
-interface ExperimentExecution {
-  readonly token: number
-  readonly plan: StyleExperimentPlan
-  readonly parameters: Readonly<Omit<GenerationRequest, 'character_prompts'>> & {
-    readonly character_prompts: readonly Readonly<GenerationRequest['character_prompts'][number]>[]
+/** Bound every lazily emitted context before the first paid request. */
+function validateExperimentMetadata(plan: StyleExperimentPlan): void {
+  if (plan.total.toString().length > 1000) throw new Error('实验组合总数不能超过 1000 位，请缩小范围。')
+  if (!plan.dimensions.length || plan.dimensions.length > 1500) throw new Error('实验最多选择 1500 个画风词条。')
+  let labelLength = 0
+  for (const dimension of plan.dimensions) {
+    if (!Number.isInteger(dimension.tagIndex) || dimension.tagIndex < 0 || dimension.tagIndex > 2999 || !dimension.label.trim()) {
+      throw new Error('实验词条信息无效，请重新选择。')
+    }
+    labelLength += dimension.label.length
+    const last = dimension.minUnits + (dimension.count - 1n) * dimension.stepUnits
+    const absolute = (value: bigint) => value < 0n ? -value : value
+    const largest = absolute(dimension.minUnits) > absolute(last) ? absolute(dimension.minUnits) : absolute(last)
+    const integerDigits = (largest / 10n ** BigInt(dimension.places)).toString().length
+    const length = dimension.count === 1n ? dimension.min.length
+      : integerDigits + 1 + dimension.places + (dimension.minUnits < 0n ? 1 : 0)
+    if (length > 100) throw new Error('实验权重不能超过 100 字符，请缩小数值或精度。')
   }
+  if (labelLength > 3000) throw new Error('所选实验词条合计不能超过 3000 字符。')
 }
 
 interface GenerationOperation {
   token: number
-  runToken: number | null
-  ordinal: bigint
-  weights: StyleExperimentWeight[]
   acceptedId: string | null
 }
 
@@ -247,18 +238,16 @@ export class GenerationStore {
   submitUncertain = false
   error = ''
   imageError = ''
-  experiment: StyleExperimentRun | null = null
   private pollTimer: ReturnType<typeof setTimeout> | null = null
   private controller: AbortController | null = null
   private epoch = 0
-  private runVersion = 0
   private operationVersion = 0
   private draftVersion = 0
-  private execution: ExperimentExecution | null = null
   private operation: GenerationOperation | null = null
 
   constructor(
     private readonly api: WorkspaceApi,
+    readonly runs: StyleRunStore,
     private readonly onSubmitted: () => void,
     private readonly onTerminal: () => void,
   ) {
@@ -349,8 +338,11 @@ export class GenerationStore {
 
   reuse(item: HistoryItem): void {
     this.draftVersion += 1
+    const parameters = { ...item.parameters }
+    // Historical experiment identity belongs to its saved run, never a draft.
+    delete parameters.experiment
     this.draft = {
-      ...item.parameters,
+      ...parameters,
       style_prompt: item.parameters.style_prompt ?? '',
       character_prompts: item.parameters.character_prompts?.length
         ? item.parameters.character_prompts.map(character => newCharacter(character.prompt, character.x, character.y)) : [newCharacter()],
@@ -373,15 +365,19 @@ export class GenerationStore {
       return
     }
     this.clearActiveResult()
-    await this.submitParameters(parameters, null, 0n, [])
+    await this.submitParameters(parameters)
   }
 
   get experimentRunning(): boolean {
-    return this.experiment?.status === 'running' || this.experiment?.status === 'stopping'
+    return this.runs.running
   }
 
   get operationLocked(): boolean {
-    return this.operation !== null || this.experimentRunning
+    return this.ordinaryOperationLocked || this.runs.locked
+  }
+
+  get ordinaryOperationLocked(): boolean {
+    return this.operation !== null
   }
 
   async startStyleExperiment(source: string, ranges: StyleExperimentRange[]): Promise<void> {
@@ -394,6 +390,7 @@ export class GenerationStore {
       parameters = requestFromDraft(this.draft)
       if (!supportsNativeCharacters(parameters.model)) throw new Error('画风实验需要列表中的 V4 / V4.5 / V5 模型。')
       plan = createStyleExperimentPlan(source, ranges)
+      validateExperimentMetadata(plan)
       const trimmedStyleLength = plan.maxStyleLength - (source.length - source.trim().length)
       const shared = parameters.positive_prompt.trim()
       if (plan.maxStyleLength > 3000 || trimmedStyleLength + (shared ? 2 + shared.length : 0) > 3000) {
@@ -404,88 +401,17 @@ export class GenerationStore {
       return
     }
     this.clearActiveResult()
-    this.clearExperimentArchive()
-    const token = ++this.runVersion
-    // Strings/scalars are immutable; explicitly freeze the native child list too.
-    const snapshot = Object.freeze({
-      ...parameters,
-      character_prompts: Object.freeze(parameters.character_prompts.map(character => Object.freeze({ ...character }))),
-    })
-    this.execution = Object.freeze({ token, plan, parameters: snapshot })
-    this.experiment = {
-      status: 'running', total: plan.total, completed: 0n, current: 0n,
-      seed: parameters.seed, sampleCount: parameters.sample_count, error: '', results: [],
-    }
-    await this.advanceExperiment(token, 0n)
+    this.operationVersion += 1
+    await this.runs.start(parameters, plan.dimensions.map(dimension => ({
+      tag_index: dimension.tagIndex, min: dimension.min, max: dimension.max, step: dimension.step,
+    })))
   }
 
-  stopStyleExperiment(): void {
-    if (!this.experimentRunning || !this.experiment) return
-    if (this.operation) {
-      this.experiment.status = 'stopping'
-    } else {
-      this.experiment.status = 'stopped'
-      this.execution = null
-      if (this.pollTimer) clearTimeout(this.pollTimer)
-      this.pollTimer = null
-    }
-  }
-
-  clearStyleExperimentResults(): void {
-    if (this.operationLocked) return
-    if (this.experiment?.results.some(result => result.job.id === this.job?.id)) this.clearActiveResult()
-    this.runVersion += 1
-    this.execution = null
-    this.clearExperimentArchive()
-  }
-
-  private clearExperimentArchive(): void {
-    this.experiment?.results.forEach(result => result.images.forEach(image => URL.revokeObjectURL(image.url)))
-    this.experiment = null
-  }
-
-  private haltExperiment(message: string): void {
-    if (!this.experiment || !this.execution || this.execution.token !== this.runVersion) return
-    this.experiment.status = 'failed'
-    this.experiment.error = message
-  }
-
-  private async advanceExperiment(token: number, index: bigint): Promise<void> {
-    const execution = this.execution
-    if (!execution || execution.token !== token || token !== this.runVersion || this.experiment?.status !== 'running') return
-    if (this.operation || this.busy || this.activeId || this.submitUncertain) return
-    let parameters: GenerationRequest
-    let weights: StyleExperimentWeight[]
-    try {
-      if (index > 0n && this.experiment.seed === null) throw new Error('尚未取得第一组种子，实验已停止。')
-      const combination = styleExperimentCombination(execution.plan, index)
-      weights = combination.weights
-      // Reuse all normal request validation for each actual weighted source.
-      const base = execution.parameters
-      parameters = requestFromDraft({
-        ...base, style_prompt: combination.stylePrompt,
-        character_prompts: base.character_prompts.map((character, child) => ({
-          ...character, id: `snapshot-${child}`,
-          x: character.x ?? CHARACTER_POSITION_CENTER, y: character.y ?? CHARACTER_POSITION_CENTER,
-        })),
-        width: String(base.width), height: String(base.height), steps: String(base.steps),
-        cfg_scale: String(base.cfg_scale), seed: this.experiment.seed === null ? '' : String(this.experiment.seed),
-        sample_count: String(base.sample_count),
-      })
-    } catch (error) {
-      this.haltExperiment(error instanceof Error ? error.message : '画风实验参数无效。')
-      return
-    }
-    this.clearActiveResult()
-    this.experiment.current = index + 1n
-    await this.submitParameters(parameters, token, index + 1n, weights)
-  }
-
-  /** Sole paid POST path; the operation remains reserved through image settlement. */
-  private async submitParameters(parameters: GenerationRequest, runToken: number | null, ordinal: bigint, weights: StyleExperimentWeight[]): Promise<void> {
+  /** Ordinary generation only; server experiments never use this POST path. */
+  private async submitParameters(parameters: GenerationRequest): Promise<void> {
     const epoch = this.epoch
     const token = ++this.operationVersion
-    this.operation = { token, runToken, ordinal, weights, acceptedId: null }
+    this.operation = { token, acceptedId: null }
     this.busy = true
     let accepted
     try {
@@ -496,14 +422,13 @@ export class GenerationStore {
         this.operation = null
         // This exact POST refusal occurs before history creation or enqueue.
         const providerUnconfigured = error instanceof ApiFailure && error.status === 503 && error.code === 'provider_unavailable'
-        this.submitUncertain = !(error instanceof ApiFailure) || (error.status >= 500 && !providerUnconfigured)
+        const storageRefused = error instanceof ApiFailure && error.status === 503 && error.code === 'result_storage_unavailable'
+        this.submitUncertain = !(error instanceof ApiFailure) || (error.status >= 500 && !providerUnconfigured && !storageRefused)
         this.error = providerUnconfigured
           ? '图像生成服务尚未配置，暂时无法生图，请联系管理员。'
           : this.submitUncertain
             ? '提交结果未知。请先检查历史记录，再决定是否重新提交。'
             : errorText(error)
-        if (runToken !== null) this.haltExperiment(this.error)
-        if (runToken !== null) this.execution = null
       })
       return
     }
@@ -519,12 +444,10 @@ export class GenerationStore {
 
   async refresh(id = this.activeId ?? this.job?.id): Promise<void> {
     if (!id || this.checking) return
-    // Archived tasks already own their URLs. Rechecking must not fetch them again.
-    if (this.experiment?.results.some(result => result.job.id === id)) return
     if (this.operation && this.operation.acceptedId !== id) return
     if (!this.operation) {
-      if (this.experimentRunning) return
-      this.operation = { token: ++this.operationVersion, runToken: null, ordinal: 0n, weights: [], acceptedId: id }
+      if (this.runs.locked) return
+      this.operation = { token: ++this.operationVersion, acceptedId: id }
     }
     const operationToken = this.operation.token
     const epoch = this.epoch
@@ -544,9 +467,6 @@ export class GenerationStore {
       runInAction(() => {
         this.job = job
         this.activeId = job.status === 'queued' || job.status === 'running' ? job.id : null
-        if (this.operation?.runToken === this.runVersion && this.experiment?.seed === null) {
-          this.experiment.seed = job.effective_seed
-        }
       })
       if (firstTerminalObservation) this.onTerminal()
       if (job.status === 'queued' || job.status === 'running') {
@@ -554,7 +474,6 @@ export class GenerationStore {
       } else {
         if (job.status === 'succeeded') {
           if (job.image_urls.length) await this.loadImages(job, epoch, operationToken, controller.signal)
-          else if (this.operation?.runToken !== null) runInAction(() => { this.imageError = '图像已过期或暂不可用，实验已停止。' })
         } else if (job.status === 'failed') {
           runInAction(() => { this.error = errorText(new ApiFailure(0, job.error_code ?? 'generation_failed', '生成失败，请检查服务状态。')) })
         }
@@ -563,10 +482,8 @@ export class GenerationStore {
     } catch (error) {
       if (epoch === this.epoch && this.operation?.token === operationToken) runInAction(() => {
         this.error = errorText(error)
-        if (this.operation?.runToken !== null) this.haltExperiment(this.error)
-        // An accepted task remains owned after GET failure until explicit recheck
-        // settles it. An ordinary vanished task has no experiment metadata to save.
-        if (error instanceof ApiFailure && error.status === 404 && this.operation?.runToken === null) {
+        // An accepted task remains owned after GET failure until explicit recheck.
+        if (error instanceof ApiFailure && error.status === 404) {
           this.activeId = null
           this.operation = null
         }
@@ -574,7 +491,7 @@ export class GenerationStore {
     } finally {
       if (epoch === this.epoch) runInAction(() => { this.checking = false })
     }
-    if (terminalJob && epoch === this.epoch && this.operation?.token === operationToken) this.finishOperation(terminalJob, operationToken)
+    if (terminalJob && epoch === this.epoch && this.operation?.token === operationToken) runInAction(() => { this.operation = null })
   }
 
   private async loadImages(job: GenerationView, epoch: number, operationToken: number, signal: AbortSignal): Promise<void> {
@@ -601,38 +518,6 @@ export class GenerationStore {
     })
   }
 
-  private finishOperation(job: GenerationView, operationToken: number): void {
-    const operation = this.operation
-    if (!operation || operation.token !== operationToken) return
-    this.operation = null
-    if (operation.runToken === null || operation.runToken !== this.runVersion || !this.experiment) return
-    if (this.experiment.results.some(result => result.job.id === job.id)) return
-    // Transfer URL ownership. Clearing the active slot must not revoke this row.
-    this.experiment.results.push({
-      ordinal: operation.ordinal, weights: operation.weights, job, images: this.images, imageError: this.imageError,
-    })
-    this.images = []
-    this.experiment.completed += 1n
-    if (job.status === 'failed' || this.imageError) this.haltExperiment(this.error || this.imageError)
-    if (this.experiment.status === 'failed') {
-      this.execution = null
-    } else if (this.experiment.status === 'stopping') {
-      this.experiment.status = 'stopped'
-      this.execution = null
-    } else if (this.experiment.completed >= this.experiment.total) {
-      this.experiment.status = 'completed'
-      this.execution = null
-    } else if (this.experiment.status === 'running') {
-      const token = operation.runToken
-      // A new turn prevents a long chain of already-terminal tasks retaining
-      // every preceding async stack. The run token/status guard owns the gap.
-      this.pollTimer = setTimeout(() => {
-        this.pollTimer = null
-        void this.advanceExperiment(token, operation.ordinal)
-      }, 0)
-    }
-  }
-
   private clearActiveResult(): void {
     this.epoch += 1
     this.controller?.abort()
@@ -651,9 +536,6 @@ export class GenerationStore {
 
   clearResult(): void {
     const submissionPending = this.busy
-    this.runVersion += 1
-    this.execution = null
-    if (this.experimentRunning && this.experiment) this.experiment.status = 'stopped'
     this.clearActiveResult()
     if (submissionPending) {
       this.submitUncertain = true
@@ -664,7 +546,6 @@ export class GenerationStore {
   suspendForLogout(): void {
     const submissionPending = this.busy
     this.clearResult()
-    this.clearExperimentArchive()
     this.busy = false
     if (submissionPending) {
       this.submitUncertain = true
@@ -674,7 +555,6 @@ export class GenerationStore {
 
   reset(): void {
     this.clearResult()
-    this.clearExperimentArchive()
     this.draftVersion += 1
     this.draft = emptyDraft()
     this.positiveTagTarget = 'positive_prompt'
@@ -686,11 +566,6 @@ export class GenerationStore {
   resume(id: string): void {
     if (this.operationLocked || this.activeId || this.busy) return
     this.clearActiveResult()
-    const archived = this.experiment?.results.find(result => result.job.id === id)
-    if (archived) {
-      this.job = archived.job
-      return
-    }
     this.activeId = id
     void this.refresh(id)
   }
@@ -911,6 +786,8 @@ export class AppStore {
   readonly history: HistoryStore
   readonly tags: TagStore
   readonly advice: AdviceStore
+  readonly savedResults: SavedResultsStore
+  readonly styleRuns: StyleRunStore
   private workspaceUser: UserInfo | null = null
   private workspaceEntryVersion = 0
 
@@ -919,10 +796,15 @@ export class AppStore {
     this.auth = new AuthStore(this.api, () => this.resetProtected(), () => {
       this.workspaceEntryVersion += 1
       this.generation.suspendForLogout()
+      this.styleRuns.detach()
+      this.savedResults.reset()
     })
+    this.savedResults = new SavedResultsStore(this.api)
     this.history = new HistoryStore(this.api)
+    this.styleRuns = new StyleRunStore(this.api, () => this.history.refresh())
     this.generation = new GenerationStore(
       this.api,
+      this.styleRuns,
       () => { void this.history.load(0) },
       () => this.history.refresh(),
     )
@@ -932,7 +814,10 @@ export class AppStore {
 
   async enterWorkspace(): Promise<void> {
     const user = this.auth.user
-    if (this.auth.status !== 'ready' || this.auth.loggingOut || !user || this.workspaceUser === user) return
+    if (this.auth.status !== 'ready' || this.auth.loggingOut || !user) return
+    // Failed logout remounts must reconnect the observer without restoring drafts again.
+    this.styleRuns.enterWorkspace()
+    if (this.workspaceUser === user) return
     // A failed logout or StrictMode effect replay retains this authenticated entry.
     this.workspaceUser = user
     const entryVersion = ++this.workspaceEntryVersion
@@ -941,7 +826,7 @@ export class AppStore {
     if (!page || entryVersion !== this.workspaceEntryVersion
       || this.auth.status !== 'ready' || this.auth.loggingOut || this.auth.user !== user
       || draftRevision !== this.generation.entryRestoreRevision || !this.history.isCurrentLoad(page)
-      || this.generation.operationLocked || this.generation.busy || this.generation.activeId
+      || this.generation.ordinaryOperationLocked || this.generation.busy || this.generation.activeId
       || this.generation.checking || this.generation.submitUncertain) return
     if (page.items[0]) this.generation.reuse(page.items[0])
   }
@@ -953,12 +838,15 @@ export class AppStore {
     this.history.reset()
     this.tags.reset()
     this.advice.reset()
+    this.savedResults.reset()
+    this.styleRuns.reset()
   }
 
   dispose(): void {
     this.workspaceEntryVersion += 1
     this.generation.clearResult()
-    this.generation.clearStyleExperimentResults()
+    this.styleRuns.reset()
     this.tags.reset()
+    this.savedResults.reset()
   }
 }

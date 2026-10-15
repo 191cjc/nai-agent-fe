@@ -6,7 +6,9 @@ Use this contract when changing `deploy/novelai-api.service`,
 `deploy/nginx-novelai.conf.example`, `deploy/.env.api.example`, static release
 instructions, or API environment wiring. The operator chose a single-server
 deployment without Docker: Vite/FastAPI locally, host Nginx and one systemd
-API process in production. Generated image bytes are transient.
+API process in production. Generated images use private seven-day disk retention;
+see [Image Retention](./image-retention-contract.md) and
+[Durable Experiments](./durable-experiment-contract.md) (schema3).
 
 ## Signatures
 
@@ -45,7 +47,7 @@ API process in production. Generated image bytes are transient.
   retained directory. Publish new hashes before switching the symlink; keep
   old hashes through the browser-cache and rollback window. The more specific
   `/novelai/api/` location rewrites that prefix to backend `/api/`; returned
-  transient image links remain backend `/api/*` paths that the web client
+  authenticated image links remain backend `/api/*` paths that the web client
   prefixes. Keep `/aiqq` and existing TLS untouched.
 - Nginx preserves `Host` and browser `Origin`, replaces client-supplied
   forwarding IP headers with `$remote_addr`, sets HTTPS forwarding headers,
@@ -69,6 +71,22 @@ API process in production. Generated image bytes are transient.
   and preserve provider configuration. Back up privately and inspect active
   jobs before restarting; this additive change needs no DB restore/migration.
 
+- Retained images live under /var/lib/novelai/generation-images/, service-owned
+  with 0700 directories/0600 files, outside the immutable release/web trees.
+  Keep this private directory during code switches; no new Nginx alias or unit
+  writable path is needed. API-first retention rollout verifies its private
+  root and OpenAPI before web. Keep the retention API during web fallback.
+  SQLite online backup excludes images; separate private image backup is
+  required for host recovery. Preserve original expiry when restoring files.
+
+- Durable experiments require migration3. Verify a private online v2 backup,
+  zero active jobs/runs, stop API, run the staged service-user migration and
+  verify schema3/integrity/auth+job counts before API readiness and web switch.
+  After schema3 commit retain the new API even if the web falls back. Do not
+  restore the live DB or start the older schema2 API as rollout recovery.
+  In a disposable recovery drill, disable/stop copied runs before application
+  lifespan; a restored scheduler must never reach real configured providers.
+
 ## Validation & Error Matrix
 
 | Condition | Required behavior |
@@ -79,8 +97,8 @@ API process in production. Generated image bytes are transient.
 | HTTP package source or missing lockfile integrity | Refuse release staging; use an HTTPS source with verified pinned archives |
 | Web base path and Nginx prefix differ | Treat as a release-blocking same-origin route defect |
 | Old hashed assets removed during switch | Existing tabs can fail; retain them for the cache/rollback window |
-| API restart during generation | No automatic paid retry; transient images disappear |
-| Rolled-back API sees a newer incompatible schema | Restore the matching pre-upgrade snapshot, accepting newer write loss |
+| API restart during generation | No automatic paid retry; unexpired completed disk images survive |
+| Web fallback after durable schema3 migration | Retain compatible new API/private state; never start schema2-only API or restore live DB |
 
 ## Good / Base / Bad Cases
 

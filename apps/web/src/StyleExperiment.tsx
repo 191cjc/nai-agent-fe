@@ -1,21 +1,17 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { observer } from 'mobx-react-lite'
-import { ArrowDownToLine, ArrowLeft, ArrowRight, FlaskConical, Square, Trash2 } from 'lucide-react'
+import { FlaskConical, RefreshCw, Square } from 'lucide-react'
 import { ApiFailure, errorText } from './api'
 import { parsePromptTags } from './prompt-weights'
 import { createStyleExperimentPlan, type StyleExperimentPlan, type StyleExperimentRange } from './style-experiment'
 import { supportsNativeCharacters, type GenerationStore } from './store'
+import { PromptSummary } from './PromptSummary'
+import type { SavedResultsStore } from './saved-results'
 
 interface Configuration {
   source: string
   ranges: StyleExperimentRange[]
   notice: string
-}
-
-interface RunConfiguration {
-  source: string
-  ranges: StyleExperimentRange[]
-  sampleCount: string
 }
 
 const SOURCE_CHANGED = '画风已修改，已清除所选词条，请重新选择。'
@@ -38,18 +34,21 @@ function planPreview(source: string, ranges: StyleExperimentRange[]): { plan: St
 export const StyleExperimentConfig = observer(({ generation, hidden }: { generation: GenerationStore; hidden: boolean }) => {
   const source = generation.draft.style_prompt
   const [configuration, setConfiguration] = useState<Configuration>({ source, ranges: [], notice: '' })
-  const [runConfiguration, setRunConfiguration] = useState<RunConfiguration | null>(null)
   const sourceChanged = configuration.source !== source
   const liveRanges = sourceChanged ? [] : configuration.ranges
-  const running = generation.experimentRunning
-  const displayed = running && runConfiguration
-    ? runConfiguration : { source, ranges: liveRanges, sampleCount: generation.draft.sample_count }
+  const snapshot = generation.runs.snapshot
+  const frozen = snapshot !== null
+  const displayed = snapshot ? {
+    source: snapshot.parameters.style_prompt,
+    ranges: snapshot.ranges.map(range => ({ tagIndex: range.tag_index, min: range.min, max: range.max, step: range.step })),
+    sampleCount: String(snapshot.parameters.sample_count),
+  } : { source, ranges: liveRanges, sampleCount: generation.draft.sample_count }
   const tags = parsePromptTags(displayed.source)
   const { plan, error } = planPreview(displayed.source, displayed.ranges)
   const samples = sampleCount(displayed.sampleCount)
-  const supportedModel = supportsNativeCharacters(generation.draft.model)
+  const supportedModel = supportsNativeCharacters(snapshot?.parameters.model ?? generation.draft.model)
   const notice = sourceChanged && configuration.ranges.length ? SOURCE_CHANGED : configuration.notice
-  const locked = running || generation.operationLocked || generation.activeId !== null || generation.busy || generation.submitUncertain
+  const locked = generation.operationLocked || generation.activeId !== null || generation.busy || generation.submitUncertain
 
   useEffect(() => {
     setConfiguration(current => current.source === source ? current : {
@@ -77,7 +76,6 @@ export const StyleExperimentConfig = observer(({ generation, hidden }: { generat
   function start() {
     if (locked || !plan || !samples || !supportedModel || configuration.source !== source) return
     const ranges = liveRanges.map(range => ({ ...range }))
-    setRunConfiguration({ source, ranges, sampleCount: generation.draft.sample_count })
     void generation.startStyleExperiment(source, ranges)
   }
 
@@ -85,9 +83,9 @@ export const StyleExperimentConfig = observer(({ generation, hidden }: { generat
     onKeyDown={event => { if (event.key === 'Enter' && event.target instanceof HTMLInputElement) event.preventDefault() }}>
     <h3 id="style-experiment-config-title"><FlaskConical size={15} aria-hidden="true" /> 画风实验</h3>
     <p className="prompt-hint">选择要模糊测试的画风词条，为每个词条设置下限、上限和步长，依次尝试所有权重组合。</p>
-    {running && <p className="experiment-note" role="status">正在使用开始时的画风和生成设置。编辑草稿不会改变本次实验。</p>}
-    {!running && notice && <p className="experiment-note" role="status">{notice}</p>}
-    <fieldset className="experiment-tag-options" disabled={running}>
+    {frozen && <p className="experiment-note" role="status">这里展示本次实验固定的画风和范围。编辑草稿不会改变服务器实验。</p>}
+    {!frozen && notice && <p className="experiment-note" role="status">{notice}</p>}
+    <fieldset className="experiment-tag-options" disabled={frozen}>
       <legend>模糊画风词条</legend>
       {tags.length ? tags.map((tag, tagIndex) => <label className={tag.weight === null ? 'experiment-tag-option original' : 'experiment-tag-option'} key={tagIndex}>
         <input type="checkbox" checked={displayed.ranges.some(range => range.tagIndex === tagIndex)} disabled={tag.weight === null}
@@ -100,7 +98,7 @@ export const StyleExperimentConfig = observer(({ generation, hidden }: { generat
     </fieldset>
     <div className="experiment-ranges">{[...displayed.ranges].sort((left, right) => left.tagIndex - right.tagIndex).map(range => {
       const tag = tags[range.tagIndex]
-      return <fieldset className="experiment-range" disabled={running} key={range.tagIndex}>
+      return <fieldset className="experiment-range" disabled={frozen} key={range.tagIndex}>
         <legend>{range.tagIndex + 1}. {tag?.text}</legend>
         <div className="experiment-range-fields">{([['min', '下限'], ['max', '上限'], ['step', '步长']] as const).map(([name, label]) =>
           <label className="field" key={name} htmlFor={`experiment-${range.tagIndex}-${name}`}><span>{label}</span>
@@ -119,11 +117,11 @@ export const StyleExperimentConfig = observer(({ generation, hidden }: { generat
       {samples === null && <p className="experiment-note">请在生成设置中将每组张数设为 1–8。</p>}
       <p className="prompt-hint">从下限递增，未恰好落在步长上的上限不追加；按词条顺序组合，最后一个词条变化最快。</p>
     </div>}
-    <p className="prompt-hint">固定种子会用于所有组；种子留空时仅第一组随机，之后沿用第一组的实际种子。</p>
-    <p className="prompt-hint">实验和对比图像仅保留在当前页面。刷新、关闭页面或停止会阻止后续组，已提交的组仍可能完成；每组参数保存在历史记录中。</p>
-    <p className="prompt-hint">开始新实验会替换上一次的对比结果，请先下载需要保留的图像。</p>
-    {!running && !supportedModel && <p className="experiment-note">画风实验需要生成设置列表中的 V4 / V4.5 / V5 模型。</p>}
-    {!running && generation.error && !generation.submitUncertain && <p className="alert" role="alert">{generation.error}</p>}
+    <p className="prompt-hint">固定种子用于所有组；留空时服务器在创建实验时随机一次，即使首组失败也沿用同一种子。</p>
+    <p className="prompt-hint">实验在服务器依次执行，单组失败后继续下一组。刷新、关闭页面、断线或退出登录都不会停止；重新进入会接回进度。只在点击“停止实验”后停止后续组。</p>
+    <p className="prompt-hint">新图片私有保存 7 天，参数和权重保留更久；从进度区或历史记录的“画风实验”打开对比。</p>
+    {!frozen && !supportedModel && <p className="experiment-note">画风实验需要生成设置列表中的 V4 / V4.5 / V5 模型。</p>}
+    {!frozen && generation.error && !generation.submitUncertain && <p className="alert" role="alert">{generation.error}</p>}
     <div className="experiment-config-actions">
       <button className="primary" type="button" disabled={locked || !plan || samples === null || !supportedModel} onClick={start}>
         <FlaskConical size={15} aria-hidden="true" /> 开始批量测试
@@ -133,105 +131,56 @@ export const StyleExperimentConfig = observer(({ generation, hidden }: { generat
 })
 
 function experimentStatus(status: string): string {
-  return { running: '测试中', stopping: '正在停止', stopped: '已停止', completed: '全部完成', failed: '实验已中止' }[status] ?? status
+  return { running: '服务器运行中', stopping: '正在停止', stopped: '已停止', completed: '已完成' }[status] ?? status
 }
 
-function jobStatus(status: string): string {
-  return { queued: '排队中', running: '生成中', succeeded: '已完成', failed: '失败' }[status] ?? status
-}
-
-export const StyleExperimentProgress = observer(({ generation }: { generation: GenerationStore }) => {
-  const experiment = generation.experiment
-  if (!experiment) return null
+export const StyleExperimentProgress = observer(({ generation, saved }: { generation: GenerationStore; saved: SavedResultsStore }) => {
+  const runs = generation.runs
+  const run = runs.run
+  if (!run && runs.initialized && !runs.pendingId && !runs.error && !runs.creating) return null
+  const stateLabel = run ? experimentStatus(run.status) : runs.creating ? '正在创建'
+    : runs.pendingId ? '提交待核对' : runs.checking ? '正在检查服务器' : '等待连接'
   return <div className="experiment-progress" aria-label="画风实验进度">
     <div className="experiment-progress-line" role="status" aria-live="polite" aria-atomic="true">
-      <strong>画风实验 · {experimentStatus(experiment.status)}</strong>
-      <span>已处理 {experiment.completed.toString()} / {experiment.total.toString()} 组</span>
-      <span>每组 {experiment.sampleCount} 张 · 共 {(experiment.total * BigInt(experiment.sampleCount)).toString()} 张</span>
-      {generation.experimentRunning && <span>当前第 {experiment.current.toString()} 组</span>}
-      <span>{experiment.seed === null ? '种子：等待第一组结果' : `统一请求种子 ${experiment.seed}`}</span>
+      <strong>画风实验 · {stateLabel}</strong>
+      {run && <>
+        <span>已处理 {run.processed_count} / {run.total} 组</span>
+        <span>成功 {run.succeeded_count} · 失败 {run.failed_count}</span>
+        <span>每组 {run.sample_count} 张 · 计划 {(BigInt(run.total) * BigInt(run.sample_count)).toString()} 张</span>
+        {run.current_ordinal !== null && <span>当前第 {run.current_ordinal} 组</span>}
+        <span>统一请求种子 {run.seed}</span>
+        {runs.running && !runs.connected && <span>进度连接中断，后台可能仍在运行</span>}
+      </>}
+      {runs.pendingId && <span>实验编号 {runs.pendingId}</span>}
     </div>
-    {generation.experimentRunning && <button className="secondary" type="button" disabled={experiment.status === 'stopping'} onClick={() => generation.stopStyleExperiment()}>
-      <Square size={13} aria-hidden="true" /> {experiment.status === 'stopping' ? '等待当前组完成' : '停止后续组'}
-    </button>}
-    {experiment.error && <p className="alert" role="alert">{experiment.error}</p>}
+    <div className="server-run-actions">
+      <button className="secondary" type="button" disabled={runs.creating || runs.checking || runs.stopping}
+        onClick={() => void runs.refresh()}><RefreshCw size={14} aria-hidden="true" />{runs.checking ? '正在连接...' : runs.connected ? '刷新进度' : '重新连接'}</button>
+      {run && <button className="secondary" type="button" onClick={() => void saved.openExperiment(run.id)}>
+        <FlaskConical size={14} aria-hidden="true" /> 查看已保存结果
+      </button>}
+      {(runs.running || runs.pendingId) && <button className="secondary" type="button"
+        disabled={runs.creating || runs.stopping || run?.status === 'stopping'} onClick={() => void runs.stop()}>
+        <Square size={13} aria-hidden="true" />{runs.stopping ? '正在请求停止...' : run?.status === 'stopping' ? '等待当前组结束' : '停止实验'}
+      </button>}
+    </div>
+    {runs.error && <p className="alert" role="alert">{runs.error}</p>}
+    {runs.stopError && <p className="alert" role="alert">{runs.stopError}</p>}
+    {runs.pendingId && runs.missing && <button className="text-action" type="button" disabled={runs.creating || runs.checking || runs.stopping}
+      onClick={() => {
+        if (window.confirm('请先核对历史和已保存实验。解除锁后将再次检查服务器是否有活动实验，不会重新提交原实验。确认已核对？')) void runs.acknowledgeMissing()
+      }}>已核对历史，解除未知提交锁</button>}
+    {run?.error_code && <p className="experiment-note">最近一组诊断：{errorText(new ApiFailure(0, run.error_code, '本组处理失败。'))}
+      {run.status === 'running' && ' 服务器会继续处理后续组，不会重试这一组。'}</p>}
+    {run && <details className="result-parameters server-run-snapshot"><summary>本次实验固定配置</summary>
+      <PromptSummary parameters={run.parameters} />
+      {run.parameters.negative_prompt && <p>负向：{run.parameters.negative_prompt}</p>}
+      <ul>{run.ranges.map(range => <li key={range.tag_index}>词条 {range.tag_index + 1} · {range.min} → {range.max} · 步长 {range.step}</li>)}</ul>
+      <p>{run.parameters.model} · {run.parameters.width}×{run.parameters.height} · {run.parameters.sampler}</p>
+      <p>{run.parameters.steps} 步 · CFG {run.parameters.cfg_scale} · 每组 {run.sample_count} 张 · {run.parameters.quality ? '高质量' : '标准质量'}</p>
+      <p>原始请求种子 {run.parameters.seed ?? '随机'} · 统一实际种子 {run.seed}</p>
+      <p>实验编号 {run.id} · {new Date(run.created_at * 1000).toLocaleString()}</p>
+    </details>}
+    <p className="prompt-hint server-run-note">服务器执行实验；离开页面或退出登录仅断开查看。单组失败会继续后续组，只有“停止实验”会阻止新的组。</p>
   </div>
-})
-
-export const StyleExperimentResults = observer(({ generation }: { generation: GenerationStore }) => {
-  const [position, setPosition] = useState(0)
-  const viewerRef = useRef<HTMLDivElement>(null)
-  const experiment = generation.experiment
-  useEffect(() => { setPosition(0) }, [experiment])
-  if (!experiment || !experiment.results.length) return null
-  const resultCount = experiment.results.reduce((count, row) => count + Math.max(1, row.images.length), 0)
-  const imageCount = experiment.results.reduce((count, row) => count + row.images.length, 0)
-  const currentPosition = Math.min(position, resultCount - 1)
-  let row = experiment.results[0]
-  let imagePosition = currentPosition
-  for (const result of experiment.results) {
-    const count = Math.max(1, result.images.length)
-    if (imagePosition < count) {
-      row = result
-      break
-    }
-    imagePosition -= count
-  }
-  const image = row.images[imagePosition]
-
-  function move(direction: -1 | 1) {
-    setPosition(Math.max(0, Math.min(currentPosition + direction, resultCount - 1)))
-    viewerRef.current?.focus({ preventScroll: true })
-  }
-
-  return <section className="experiment-results" aria-labelledby="experiment-results-title">
-    <div className="section-heading">
-      <div><span className="eyebrow">画风实验</span><h2 id="experiment-results-title">权重组合对比</h2></div>
-      <button className="text-action" type="button" disabled={generation.experimentRunning || generation.operationLocked || generation.activeId !== null || generation.busy}
-        onClick={() => generation.clearStyleExperimentResults()}><Trash2 size={14} aria-hidden="true" /> 清除对比结果</button>
-    </div>
-    <p className="subtle">已保留 {experiment.results.length} 组 · {imageCount} 张图像。图像仅在当前页面内存中可用，请及时下载。</p>
-    <article className="experiment-result-card">
-      <figure className="experiment-image-item">
-        <div className="experiment-image-viewer" role="group" aria-label="画风实验图像切换" aria-describedby="experiment-navigation-help"
-          tabIndex={0} ref={viewerRef} onKeyDown={event => {
-            if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
-            if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
-            event.preventDefault()
-            move(event.key === 'ArrowLeft' ? -1 : 1)
-          }}>
-          <button className="icon-button experiment-image-arrow" type="button" title="上一个实验结果" aria-label="上一个实验结果"
-            disabled={currentPosition === 0} onClick={() => move(-1)}><ArrowLeft size={22} aria-hidden="true" /></button>
-          <div className="experiment-image-frame">
-            {image ? <img key={image.url} src={image.url} alt={`画风实验第 ${row.ordinal.toString()} 组，图像 ${image.index + 1}`} />
-              : <p className="subtle">第 {row.ordinal.toString()} 组没有可展示的图像，请查看下方状态和错误信息。</p>}
-          </div>
-          <button className="icon-button experiment-image-arrow" type="button" title="下一个实验结果" aria-label="下一个实验结果"
-            disabled={currentPosition + 1 >= resultCount} onClick={() => move(1)}><ArrowRight size={22} aria-hidden="true" /></button>
-        </div>
-        <figcaption>
-          <span aria-live="polite" aria-atomic="true">对比 {currentPosition + 1} / {resultCount} · 第 {row.ordinal.toString()} 组
-            {image ? ` · 图像 ${image.index + 1}` : ' · 无图像'}</span>
-          {image && <a href={image.url} download={`style-experiment-${row.ordinal.toString()}-${image.filename}`} className="icon-button"
-            title={`下载第 ${row.ordinal.toString()} 组图像 ${image.index + 1}`} aria-label={`下载第 ${row.ordinal.toString()} 组图像 ${image.index + 1}`}>
-            <ArrowDownToLine size={17} aria-hidden="true" /></a>}
-        </figcaption>
-      </figure>
-      <p className="prompt-hint" id="experiment-navigation-help">使用左右箭头切换，聚焦图像区域后也可按键盘 ← / →。</p>
-      <div className="experiment-result-heading"><h3>第 {row.ordinal.toString()} 组</h3>
-        <span className={`status status-${row.job.status}`}>{jobStatus(row.job.status)}</span>
-        <span>请求种子 {row.job.parameters.seed ?? '随机'}</span>
-        <span>实际种子 {row.job.effective_seed}</span>
-      </div>
-      <ul className="experiment-result-weights" aria-label={`第 ${row.ordinal.toString()} 组权重`}>{row.weights.map(weight =>
-        <li key={weight.tagIndex}><span>{weight.tagIndex + 1}. {weight.label}</span><strong>{weight.weight}</strong></li>)}</ul>
-      <details className="result-parameters"><summary>本组生成参数</summary>
-        <p>画风：{row.job.parameters.style_prompt}</p>
-        <p>{row.job.parameters.model} · {row.job.parameters.width}×{row.job.parameters.height} · {row.job.parameters.sampler}</p>
-        <p>{row.job.parameters.steps} 步 · CFG {row.job.parameters.cfg_scale} · 每组 {row.job.parameters.sample_count} 张</p>
-      </details>
-      {row.job.error_code && <p className="alert" role="alert">{errorText(new ApiFailure(0, row.job.error_code, '本组生成失败。'))}</p>}
-      {row.imageError && <p className="alert" role="alert">{row.imageError}</p>}
-    </article>
-  </section>
 })

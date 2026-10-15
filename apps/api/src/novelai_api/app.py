@@ -8,6 +8,7 @@ from collections import deque
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import Cookie, Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
@@ -20,16 +21,27 @@ from .codex_advice import CodexAdviceRunner
 from .config import Settings
 from .db import Database
 from .generations import (
+    ExperimentConflict,
+    ExperimentDetail,
+    ExperimentPage,
     GenerationManager,
     GenerationNotConfigured,
     GenerationRequest,
     GenerationView,
     HistoryPage,
     ImageProvider,
-    ResultCache,
+    ResultStorageUnavailable,
+    ResultStore,
 )
 from .mcp_images import NovelAiMcpProvider
 from .security import SESSION_COOKIE, SESSION_LIFETIME_SECONDS
+from .style_experiments import (
+    ActiveRun,
+    RunConflict,
+    RunCreate,
+    RunState,
+    StyleExperimentService,
+)
 from .tags import SearchFailure, SearchRequest, SearchResults, TagSearch
 
 
@@ -95,7 +107,7 @@ def create_app(
     database: Database | None = None,
     *,
     image_provider: ImageProvider | None = None,
-    result_cache: ResultCache | None = None,
+    result_cache: ResultStore | None = None,
     tag_search: TagSearch | None = None,
     advice_runner: AdviceRunner | None = None,
 ) -> FastAPI:
@@ -105,6 +117,7 @@ def create_app(
     if image_provider is None and settings.novelai_mcp_token is not None:
         image_provider = NovelAiMcpProvider(settings.novelai_mcp_url, settings.novelai_mcp_token)
     manager = GenerationManager(database, image_provider, cache=result_cache)
+    experiments = StyleExperimentService(database, manager)
     tag_search = tag_search or TagSearch(
         settings.tag_search_url, settings.public_origin, settings.tag_search_key
     )
@@ -116,9 +129,11 @@ def create_app(
     async def lifespan(_app: FastAPI):
         if database.check_ready():
             manager.start()
+            experiments.start()
         try:
             yield
         finally:
+            await asyncio.to_thread(experiments.stop)
             await asyncio.to_thread(manager.stop)
             if isinstance(advice_runner, CodexAdviceRunner):
                 await advice_runner.close()
@@ -126,6 +141,7 @@ def create_app(
     app = FastAPI(title="NovelAI Workspace API", lifespan=lifespan)
     app.state.database = database
     app.state.generations = manager
+    app.state.experiments = experiments
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(
@@ -266,6 +282,7 @@ def create_app(
         responses={
             401: {"model": ApiError},
             403: {"model": ApiError},
+            409: {"model": ApiError},
             422: {"model": ApiError},
             429: {"model": ApiError},
             503: {"model": ApiError},
@@ -278,6 +295,10 @@ def create_app(
             job_id = manager.submit(user.id, payload)
         except GenerationNotConfigured:
             return error(503, "provider_unavailable", "Image generation is not configured")
+        except ResultStorageUnavailable:
+            return error(503, "result_storage_unavailable", "Image storage is unavailable")
+        except ExperimentConflict:
+            return error(409, "experiment_conflict", "Experiment group already exists or changed")
         if job_id is None:
             return error(429, "queue_full", "Generation queue is full", retryable=True)
         return GenerationAccepted(id=job_id, status="queued")
@@ -312,15 +333,108 @@ def create_app(
         job_id: str, user: Annotated[UserInfo, Depends(require_user)]
     ) -> GenerationView:
         job = own_job(user, job_id)
-        result = manager.cache.get(job_id, user.id) if job.status == "succeeded" else None
-        return GenerationView(
-            **job.model_dump(),
-            image_urls=[
-                f"/api/generation-results/{job_id}/images/{index}"
-                for index in range(len(result.images))
-            ]
-            if result else [],
-            result_expires_at=result.expires_at if result else None,
+        return manager.view(job, user.id)
+
+    @app.get(
+        "/api/style-experiments",
+        response_model=ExperimentPage,
+        responses={
+            401: {"model": ApiError}, 422: {"model": ApiError}, 503: {"model": ApiError},
+        },
+    )
+    def list_style_experiments(
+        user: Annotated[UserInfo, Depends(require_user)],
+        limit: int = Query(default=20, ge=1, le=100),
+        offset: int = Query(default=0, ge=0, le=9_007_199_254_740_991),
+    ) -> ExperimentPage:
+        return manager.store.experiments(user.id, limit=limit, offset=offset)
+
+    def own_run(user: UserInfo, run_id: str) -> RunState:
+        run = experiments.store.get(user.id, run_id)
+        if run is None:
+            raise HTTPException(
+                status_code=404,
+                detail=ApiError(code="not_found", message="Experiment run not found").model_dump(),
+            )
+        return run
+
+    @app.post(
+        "/api/style-experiment-runs",
+        status_code=202,
+        response_model=RunState,
+        responses={
+            401: {"model": ApiError}, 403: {"model": ApiError}, 409: {"model": ApiError},
+            422: {"model": ApiError}, 503: {"model": ApiError},
+        },
+    )
+    def create_style_run(
+        payload: RunCreate, user: Annotated[UserInfo, Depends(require_user)],
+    ) -> RunState | JSONResponse:
+        try:
+            return experiments.store.create(user.id, payload)
+        except RunConflict as exception:
+            return error(409, exception.code, "Experiment run conflicts with existing work")
+
+    @app.get(
+        "/api/style-experiment-runs/active",
+        response_model=ActiveRun,
+        responses={
+            401: {"model": ApiError}, 422: {"model": ApiError}, 503: {"model": ApiError},
+        },
+    )
+    def active_style_run(user: Annotated[UserInfo, Depends(require_user)]) -> ActiveRun:
+        return ActiveRun(run=experiments.store.active(user.id))
+
+    @app.get(
+        "/api/style-experiment-runs/{run_id}",
+        response_model=RunState,
+        responses={
+            401: {"model": ApiError}, 404: {"model": ApiError},
+            422: {"model": ApiError}, 503: {"model": ApiError},
+        },
+    )
+    def get_style_run(
+        run_id: UUID, user: Annotated[UserInfo, Depends(require_user)],
+    ) -> RunState:
+        return own_run(user, str(run_id))
+
+    @app.post(
+        "/api/style-experiment-runs/{run_id}/stop",
+        response_model=RunState,
+        responses={
+            401: {"model": ApiError}, 403: {"model": ApiError}, 404: {"model": ApiError},
+            422: {"model": ApiError}, 503: {"model": ApiError},
+        },
+    )
+    def stop_style_run(
+        run_id: UUID, user: Annotated[UserInfo, Depends(require_user)],
+    ) -> RunState:
+        run = experiments.store.stop(user.id, str(run_id))
+        return run if run is not None else own_run(user, str(run_id))
+
+    @app.get(
+        "/api/style-experiments/{experiment_id}",
+        response_model=ExperimentDetail,
+        responses={
+            401: {"model": ApiError}, 404: {"model": ApiError},
+            422: {"model": ApiError}, 503: {"model": ApiError},
+        },
+    )
+    def get_style_experiment(
+        experiment_id: UUID, user: Annotated[UserInfo, Depends(require_user)],
+        limit: int = Query(default=1, ge=1, le=100),
+        offset: int = Query(default=0, ge=0, le=9_007_199_254_740_991),
+    ) -> ExperimentDetail:
+        saved = manager.store.experiment(user.id, str(experiment_id), limit=limit, offset=offset)
+        if saved is None:
+            raise HTTPException(
+                status_code=404,
+                detail=ApiError(code="not_found", message="Experiment not found").model_dump(),
+            )
+        summary, items, next_offset = saved
+        return ExperimentDetail(
+            summary=summary, items=[manager.view(job, user.id) for job in items],
+            next_offset=next_offset,
         )
 
     @app.get(
@@ -338,14 +452,16 @@ def create_app(
         job_id: str, image_id: int, user: Annotated[UserInfo, Depends(require_user)]
     ) -> Response:
         job = own_job(user, job_id)
-        result = manager.cache.get(job_id, user.id) if job.status == "succeeded" else None
-        if result is None or image_id < 0 or image_id >= len(result.images):
+        image = (
+            manager.cache.image(job_id, user.id, image_id) if job.status == "succeeded" else None
+        )
+        if image is None:
             raise HTTPException(
                 status_code=404,
                 detail=ApiError(code="not_found", message="Image not found").model_dump(),
             )
         return Response(
-            content=result.images[image_id].data,
+            content=image.data,
             media_type="image/png",
             headers={
                 "Content-Disposition": (
@@ -380,6 +496,13 @@ def create_app(
                 status_code=409,
                 detail=ApiError(
                     code="job_active", message="Generation is still running"
+                ).model_dump(),
+            )
+        if outcome == "experiment_active":
+            raise HTTPException(
+                status_code=409,
+                detail=ApiError(
+                    code="experiment_run_active", message="Experiment run is still active",
                 ).model_dump(),
             )
         manager.cache.discard(job_id)

@@ -289,3 +289,53 @@ an API restart drops transient in-memory images. No schema migration is added
 by this feature. Credentials remain unset unless separately configured by the
 operator. Keep public page/assets/health and retained rollback targets in the
 release record if deployment is performed.
+
+## Follow-up Execution: Private Seven-Day Images (2026-10-15)
+
+Operator selected private seven-day server storage. Shared interface and
+boundary: image-retention-design.md. API implementer owns all API source,
+meaningful offline regressions and OpenAPI; web implementer owns browser
+API/types/stores/views/styles. Parent owns artifacts/specs/check/build/release.
+
+1. Implement private bounded persistent results, pre-paid capacity reservations,
+   expiry/periodic cleanup/deletion and owner-safe reuse of existing image URLs.
+2. Add validated workspace-only experiment metadata and paginated saved-group
+   APIs using existing settings_json; no SQLite migration. Preserve paid queue,
+   provider contract, distinct refusal and all history/native fields.
+3. Add frozen run metadata, ordinary historical-image viewing and independent
+   lazy saved-experiment list/viewer with session/race guards. No paid resume.
+4. Independent full-scope review and meaningful full offline backend quality
+   gate plus frontend lint/types/source review; no browser/helper automation.
+5. Sync contracts, build fresh env-free paired releases, commit, verified private
+   online backup, zero active jobs and API-first publication. Verify private
+   store modes/loaded schema/public hashes/health/configuration continuity;
+   record release/journal, retaining operator interaction acceptance.
+
+- [x] Implementation and independent combined quality gate: 356 offline backend
+  tests, Ruff/frozen/lock/OpenAPI, frontend lint/types/source checks all pass.
+  See check-retention-and-background.md. Retention and durable scheduling
+  publish together; current web build matches all 19 source/config/lock inputs.
+- [ ] Fresh build, matched commit/staging and verified API-first deployment.
+
+## Follow-up Execution: Background Style Experiments (2026-10-15)
+
+This expands the unshipped retention follow-up. durable-experiment-design.md
+owns the frozen shared API and supersedes earlier browser scheduling limits.
+
+1. API implementer extends retained-image work with migration3, compact exact
+   plans, durable run lifecycle/admission/recovery/Stop and fake regressions.
+2. Web implementer replaces the paid loop with creation/observation/reattachment
+   and explicit Stop, preserving draft, uncertainty and lazy saved comparison.
+3. Independently check the complete combined retention+scheduler change across
+   API/web/DB, full offline backend gate and frontend source/static checks.
+4. Sync specifications, fresh env-free build, matched scoped commit/staging,
+   reviewed backup+migration3+API-first release; verify schema/private storage,
+   exact public hashes/health and unchanged provider configuration.
+5. Record actual evidence and journal. Real paid/interactive acceptance remains
+   with the operator; broader task stays in progress.
+
+- [x] Combined implementation and independent full-scope quality gate, with
+  corrected cleanup ownership, scheduler fairness and prompt-trim bounds.
+  See check-retention-and-background.md and
+  retention-and-background-build-verification.md. No paid/browser calls.
+- [ ] Build, schema migration and verified production publication.

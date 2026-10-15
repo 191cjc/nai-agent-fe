@@ -1,0 +1,267 @@
+"""Source-preserving prompt tags and lazy exact-decimal Cartesian style plans."""
+
+import re
+from dataclasses import dataclass
+
+from pydantic import BaseModel, Field
+
+from .generations import ExperimentContext, ExperimentWeight, GenerationRequest
+
+NUMBER = re.compile(r"^[+-]?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)$")
+PREFIX = re.compile(r"[+-]?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)::")
+BRACKETS = {"(": ")", "[": "]", "{": "}"}
+SPACE = frozenset("\t\n\v\f\r \u00a0\u1680\u2028\u2029\u202f\u205f\u3000\ufeff")
+
+
+def _space(character: str) -> bool:
+    return character in SPACE or "\u2000" <= character <= "\u200a"
+
+
+def _trim(value: str) -> str:
+    start, end = 0, len(value)
+    while start < end and _space(value[start]):
+        start += 1
+    while end > start and _space(value[end - 1]):
+        end -= 1
+    return value[start:end]
+
+
+def decimal_parts(value: str) -> tuple[int, int]:
+    if not NUMBER.fullmatch(value):
+        raise ValueError("Weight must be an ordinary decimal")
+    negative = value.startswith("-")
+    whole, _, fraction = value.lstrip("+-").partition(".")
+    places = max(1, len(fraction))
+    units = int((whole or "0") + fraction.ljust(places, "0"))
+    return (-units if negative else units), places
+
+
+def format_decimal(units: int, places: int) -> str:
+    digits = str(abs(units)).rjust(places + 1, "0")
+    return f"{'-' if units < 0 else ''}{digits[:-places]}.{digits[-places:].rstrip('0') or '0'}"
+
+
+def _normalize(value: str) -> tuple[int, int]:
+    return decimal_parts(format_decimal(*decimal_parts(_trim(value))))
+
+
+def _escaped(source: str, index: int) -> bool:
+    previous = index - 1
+    while previous >= 0 and source[previous] == "\\":
+        previous -= 1
+    return (index - previous - 1) % 2 == 1
+
+
+@dataclass
+class _Numeric:
+    start: int
+    prefix_end: int
+    weight: str
+    end: int = -1
+    closed: bool = False
+
+
+@dataclass(frozen=True)
+class PromptTag:
+    start: int
+    end: int
+    source: str
+    text: str
+    weight: str | None
+    weight_end: int | None
+
+
+def parse_prompt_tags(source: str) -> list[PromptTag]:
+    """Port the browser grammar using Python offsets, selected by occurrence only."""
+    tags: list[PromptTag] = []
+    scopes: list[tuple[str, _Numeric | None]] = []
+    groups: list[_Numeric] = []
+    start = 0
+    unsafe = False
+    legacy = False
+
+    def finish(end: int) -> None:
+        nonlocal start, groups, unsafe, legacy
+        left, right = start, end
+        while left < right and _space(source[left]):
+            left += 1
+        while right > left and _space(source[right - 1]) and not _escaped(source, right - 1):
+            right -= 1
+        if left < right:
+            raw = source[left:right]
+            outer = next((group for group in groups
+                          if group.start == left and group.end == right and group.closed), None)
+            if (
+                not unsafe and not scopes and outer is not None
+                and _trim(source[outer.prefix_end:outer.end - 2])
+            ):
+                tags.append(PromptTag(
+                    left, right, raw, source[outer.prefix_end:outer.end - 2],
+                    format_decimal(*decimal_parts(outer.weight)), outer.prefix_end - 2,
+                ))
+            else:
+                trailing = raw.endswith(":") and not _escaped(source, right - 1)
+                tags.append(PromptTag(
+                    left, right, raw, raw,
+                    "1.0" if not unsafe and not scopes and not groups and not legacy
+                    and not trailing else None, None,
+                ))
+        start, groups, unsafe, legacy = end + 1, [], False, False
+
+    index = 0
+    while index < len(source):
+        character = source[index]
+        if character == "\\":
+            if index + 1 == len(source):
+                unsafe = True
+            index += 2
+            continue
+        prefix = PREFIX.match(source, index) if (
+            index == 0 or _space(source[index - 1]) or source[index - 1] in ",()[]{}:"
+        ) else None
+        if prefix is not None:
+            numeric = _Numeric(index, prefix.end(), prefix.group()[:-2])
+            groups.append(numeric)
+            scopes.append(("::", numeric))
+            index = prefix.end()
+            continue
+        if source.startswith("::", index):
+            if scopes and scopes[-1][0] == "::":
+                _close, numeric = scopes.pop()
+                if numeric is not None:
+                    numeric.end, numeric.closed = index + 2, True
+            else:
+                scopes.append(("::", None))
+                unsafe = True
+            index += 2
+            continue
+        if character in BRACKETS:
+            scopes.append((BRACKETS[character], None))
+            if character in "[{":
+                legacy = True
+        elif character in ")]}":
+            if scopes and scopes[-1][0] == character:
+                scopes.pop()
+            else:
+                unsafe = True
+        elif character in ",\n\r" and not scopes:
+            finish(index)
+        index += 1
+    finish(len(source))
+    return tags
+
+
+def set_tag_weight(source: str, tag: PromptTag, weight: str) -> str:
+    if tag.weight is None or source[tag.start:tag.end] != tag.source:
+        raise ValueError("Stale or unsupported style tag")
+    if weight == "1.0":
+        return (
+            source[:tag.start] + source[tag.weight_end + 2:tag.end - 2] + source[tag.end:]
+            if tag.weight_end is not None else source
+        )
+    if tag.weight_end is not None:
+        return source[:tag.start] + weight + source[tag.weight_end:]
+    return source[:tag.start] + weight + "::" + tag.source + "::" + source[tag.end:]
+
+
+class ExperimentRange(BaseModel):
+    tag_index: int = Field(ge=0, le=2999, strict=True)
+    min: str = Field(min_length=1, max_length=1000)
+    max: str = Field(min_length=1, max_length=1000)
+    step: str = Field(min_length=1, max_length=1000)
+
+
+@dataclass(frozen=True)
+class Dimension:
+    range: ExperimentRange
+    tag: PromptTag
+    count: int
+    min_units: int
+    step_units: int
+    places: int
+
+
+@dataclass(frozen=True)
+class StylePlan:
+    source: str
+    dimensions: tuple[Dimension, ...]
+    total: int
+    max_style_length: int
+
+    def combination(self, index: int) -> tuple[str, list[ExperimentWeight]]:
+        if not 0 <= index < self.total:
+            raise ValueError("Style combination out of range")
+        remaining, source = index, self.source
+        weights = []
+        for dimension in reversed(self.dimensions):
+            remaining, value_index = divmod(remaining, dimension.count)
+            weight = format_decimal(
+                dimension.min_units + value_index * dimension.step_units, dimension.places,
+            )
+            source = set_tag_weight(source, dimension.tag, weight)
+            weights.append(ExperimentWeight(
+                tag_index=dimension.range.tag_index, label=dimension.tag.text, weight=weight,
+            ))
+        return source, list(reversed(weights))
+
+
+def create_style_plan(parameters: GenerationRequest, ranges: list[ExperimentRange]) -> StylePlan:
+    if not 1 <= len(ranges) <= 1500:
+        raise ValueError("Select between one and 1500 style tags")
+    tags = parse_prompt_tags(parameters.style_prompt)
+    selected = set()
+    dimensions = []
+    for supplied in ranges:
+        if (
+            supplied.tag_index >= len(tags) or supplied.tag_index in selected
+            or tags[supplied.tag_index].weight is None
+        ):
+            raise ValueError("Invalid or unsupported style tag selection")
+        selected.add(supplied.tag_index)
+        tag = tags[supplied.tag_index]
+        values = [_normalize(value) for value in (supplied.min, supplied.max, supplied.step)]
+        count_places = max(places for _units, places in values)
+        minimum, maximum, step = [units * 10 ** (count_places - places)
+                                  for units, places in values]
+        if step <= 0 or minimum > maximum:
+            raise ValueError("Invalid style range")
+        places = max(values[0][1], values[2][1])
+        min_units = values[0][0] * 10 ** (places - values[0][1])
+        step_units = values[2][0] * 10 ** (places - values[2][1])
+        normalized = ExperimentRange(
+            tag_index=supplied.tag_index, min=format_decimal(min_units, places),
+            max=format_decimal(*values[1]), step=format_decimal(step_units, places),
+        )
+        dimensions.append(Dimension(
+            normalized, tag, (maximum - minimum) // step + 1, min_units, step_units, places,
+        ))
+    dimensions.sort(key=lambda dimension: dimension.tag.start)
+    total, maximum_length = 1, len(parameters.style_prompt)
+    for dimension in dimensions:
+        total *= dimension.count
+        if len(str(total)) > 1000:
+            raise ValueError("Experiment total exceeds metadata limit")
+        if dimension.count == 1 and dimension.range.min == "1.0":
+            maximum_length += len(dimension.tag.text) - len(dimension.tag.source)
+            continue
+        last = dimension.min_units + (dimension.count - 1) * dimension.step_units
+        largest = max(abs(dimension.min_units), abs(last))
+        integer_digits = len(str(largest // 10 ** dimension.places))
+        weight_length = integer_digits + 1 + dimension.places + (dimension.min_units < 0)
+        if weight_length > 100:
+            raise ValueError("Experiment weight exceeds metadata limit")
+        maximum_length += (
+            weight_length - (dimension.tag.weight_end - dimension.tag.start)
+            if dimension.tag.weight_end is not None else weight_length + 4
+        )
+    shared = parameters.positive_prompt.strip()
+    outer_space = len(parameters.style_prompt) - len(parameters.style_prompt.strip())
+    combined_length = maximum_length - outer_space + (len(shared) + 2 if shared else 0)
+    if maximum_length > 3000 or combined_length > 3000:
+        raise ValueError("Experiment prompt exceeds limit")
+    plan = StylePlan(parameters.style_prompt, tuple(dimensions), total, maximum_length)
+    # Validate the exact shared saved-metadata bounds before any accepted run.
+    _source, weights = plan.combination(0)
+    ExperimentContext(id="00000000-0000-0000-0000-000000000000", ordinal="1",
+                      total=str(total), weights=weights)
+    return plan

@@ -291,3 +291,60 @@ action/clothing categories remain design discussion only.
   policy, not a claimed upstream hard limit. Empty editor cards are omitted.
 - The previous clarification and the operator's native-character selection
   authorize this behavior. No remaining product choice blocks implementation.
+
+## Follow-up: Private Seven-Day Images (2026-10-15)
+
+The later durable-experiment follow-up below supersedes only this section's
+earlier no-background-scheduler/no-continuation restriction.
+
+The operator selected private server image storage for seven days, surviving
+refresh and API restart, to make style testing practical. Earlier exclusions
+on image persistence are superseded for this follow-up. Use
+`image-retention-design.md` as the owning cross-layer interface.
+
+- Save new successful ordinary and experiment images privately for seven days
+  from completion; serve only their authenticated owner. Expiration is durable
+  across restarts, with automatic cleanup and no early capacity eviction.
+- Preserve experiment identity, exact varied weights, ordinal/total, saved
+  requests and seeds. History can reopen one image at a time with left/right
+  comparison after refreshing or restarting, with lazy bounded retrieval.
+- Keep ordinary history viewing/download, reuse and latest-entry restoration.
+  Expired images retain reusable parameter/group metadata and a clear message.
+- No automatic paid continuation or retries, server-side batch scheduler,
+  public links, browser persistence, old-image recovery or unrelated features.
+- Preserve existing offline/static verification restrictions and publish a
+  matched API-first release under existing deployment authorization.
+
+Acceptance: new images and saved experiment order/weights/seed remain readable
+by the same owner after process/page restart; other owners get 404. At seven
+days images become unavailable and are cleaned while parameters remain. New
+paid work is refused safely if storage cannot reserve capacity. Closing,
+refreshing, historical viewing or service restart never submits paid work.
+
+## Follow-up: Background Style Experiments (2026-10-15)
+
+The operator requests that a failed group does not stop later combinations,
+closing the page does not stop execution, and the next visit reconnects to the
+same experiment. This supersedes earlier browser-only scheduler exclusions.
+
+- Explicit Start freezes one complete plan/settings/seed on the server.
+- Success or failure advances to the next combination automatically; never
+  automatically retry the same combination, including an uncertain result.
+- Only explicit Stop prevents later groups; the already accepted current group
+  may finish. Completion reports success/failure counts and errors.
+- Closing/reloading/logging out detaches the UI; server execution continues.
+  Re-entry attaches through read-only progress retrieval, without duplicating
+  paid requests or overwriting the user's draft. Retained images remain private
+  for seven days and accessible through lazy left/right historical comparison.
+- Restart recovers persisted progress and never replays an interrupted group.
+  Preserve ordinary generation safeguards and all native character/settings.
+- Keep existing static frontend/offline backend verification restrictions and
+  paired API-first publication authority. No credential changes or paid probes.
+
+Acceptance: a fake batch whose first/middle group fails still attempts each
+later combination once with the original seed/settings. Removing all browser
+observers does not change progress; re-entry shows the same run. Stop blocks
+new groups, restart reconciles the accepted group once, concurrent create does
+not duplicate a run, and another owner cannot see/control its data.
+
+Technical interface: durable-experiment-design.md; no unresolved product choices.

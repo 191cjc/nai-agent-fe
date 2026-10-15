@@ -5,12 +5,14 @@ import {
   FlaskConical, History, Image as ImageIcon, LogOut, Plus, RefreshCw, Search, Send, Settings2,
   Sparkles, Tags, Trash2, WandSparkles, X,
 } from 'lucide-react'
-import { ApiFailure, errorText, type GenerationRequest } from './api'
+import { ApiFailure, errorText } from './api'
 import type { GenerationDraft } from './store'
-import { AppStore, CHARACTER_POSITION_CENTER, MAX_CHARACTERS, NATIVE_CHARACTER_MODELS, supportsNativeCharacters } from './store'
+import { AppStore, MAX_CHARACTERS, NATIVE_CHARACTER_MODELS, supportsNativeCharacters } from './store'
 import { CharacterPositions } from './CharacterPositions'
 import { PromptEditor } from './PromptEditor'
-import { StyleExperimentConfig, StyleExperimentProgress, StyleExperimentResults } from './StyleExperiment'
+import { StyleExperimentConfig, StyleExperimentProgress } from './StyleExperiment'
+import { PromptSummary } from './PromptSummary'
+import { SavedExperimentList, SavedResultViewer } from './SavedResults'
 
 const SOURCE_URL = 'https://huggingface.co/spaces/SAkizuki/DanbooruSearch'
 const RESOLUTION_PRESETS = [
@@ -165,11 +167,13 @@ const Editor = observer(({ store, onOpenSettings }: { store: AppStore; onOpenSet
         </button>
         {!generation.job && !generation.activeId && <Alert text={generation.error} />}
         <button className="primary" type="submit" disabled={active}>
-          <WandSparkles size={17} aria-hidden="true" />{generation.experimentRunning ? '画风实验进行中' : generation.activeId ? '正在生成...' : generation.submitUncertain ? '待核对历史' : generation.busy ? '正在提交...' : '生成图像'}
+          <WandSparkles size={17} aria-hidden="true" />{generation.runs.creating ? '正在创建实验...' : generation.runs.pendingId ? '实验待核对'
+            : !generation.runs.initialized ? '待连接实验状态' : generation.experimentRunning ? '画风实验进行中'
+              : generation.activeId ? '正在生成...' : generation.submitUncertain ? '待核对历史' : generation.busy ? '正在提交...' : '生成图像'}
         </button>
       </div>
     </form>
-    <StyleExperimentProgress generation={generation} />
+    <StyleExperimentProgress generation={generation} saved={store.savedResults} />
   </section>
 })
 
@@ -257,22 +261,10 @@ function statusText(status: string): string {
   return { queued: '排队中', running: '生成中', succeeded: '已完成', failed: '失败' }[status] ?? status
 }
 
-function PromptSummary({ parameters }: { parameters: Pick<GenerationRequest, 'style_prompt' | 'positive_prompt' | 'character_prompts'> }) {
-  return <dl className="prompt-summary">
-    {parameters.style_prompt && <div><dt>画风</dt><dd>{parameters.style_prompt}</dd></div>}
-    {parameters.positive_prompt && <div><dt>公共</dt><dd>{parameters.positive_prompt}</dd></div>}
-    {(parameters.character_prompts ?? []).map((character, index) =>
-      <div key={index}><dt>人物 {index + 1}</dt><dd>{character.prompt}
-        <span className="character-saved-position">位置 X {(character.x ?? CHARACTER_POSITION_CENTER).toFixed(2)} · Y {(character.y ?? CHARACTER_POSITION_CENTER).toFixed(2)}</span>
-      </dd></div>)}
-  </dl>
-}
-
 const Result = observer(({ store }: { store: AppStore }) => {
   const generation = store.generation
   const job = generation.job
   if (generation.experimentRunning && !job && !generation.activeId) return null
-  if (job && generation.experiment?.results.some(result => result.job.id === job.id)) return null
   return <section className="result-section" aria-labelledby="result-title">
     <div className="section-heading">
       <div><span className="eyebrow">结果</span><h2 id="result-title">本次生成</h2></div>
@@ -296,7 +288,7 @@ const Result = observer(({ store }: { store: AppStore }) => {
         <p>{job.parameters.model} · {job.parameters.width}×{job.parameters.height} · {job.parameters.sampler}</p>
         <p>{job.parameters.steps} 步 · CFG {job.parameters.cfg_scale} · 实际种子 {job.effective_seed} · {job.parameters.sample_count} 张 · {job.parameters.quality ? '高质量' : '标准质量'}</p>
       </details>
-      {job.result_expires_at && <p className="subtle">服务端结果有效至 {new Date(job.result_expires_at * 1000).toLocaleString()}</p>}
+      {job.result_expires_at && <p className="subtle">图片私有保存 7 天，有效至 {new Date(job.result_expires_at * 1000).toLocaleString()}；刷新后可从历史记录重新查看。</p>}
       <Alert text={generation.imageError} />
       {(generation.error || generation.imageError) && <button className="secondary" type="button" onClick={() => void generation.refresh()}><RefreshCw size={15} /> 检查状态</button>}
       {generation.images.length > 0 && <div className="image-grid">{generation.images.map(image =>
@@ -366,12 +358,23 @@ const Advice = observer(({ store }: { store: AppStore }) => {
   </div>
 })
 
-const HistoryPanel = observer(({ store }: { store: AppStore }) => {
+type HistoryMode = 'generations' | 'experiments'
+
+const HistoryPanel = observer(({ store, onView, mode, onModeChange }: {
+  store: AppStore; onView: () => void; mode: HistoryMode; onModeChange: (mode: HistoryMode) => void
+}) => {
   const history = store.history
+  const activeExperimentId = store.styleRuns.running ? store.styleRuns.run?.id : null
   return <div className="tool-content">
-    <div className="history-toolbar"><span>已保存的参数</span>
+    <div className="history-mode" aria-label="历史记录分类">
+      <button className={mode === 'generations' ? 'active' : ''} type="button" aria-pressed={mode === 'generations'} onClick={() => onModeChange('generations')}>生成记录</button>
+      <button className={mode === 'experiments' ? 'active' : ''} type="button" aria-pressed={mode === 'experiments'} onClick={() => onModeChange('experiments')}>画风实验</button>
+    </div>
+    <div className="history-tab-content" hidden={mode !== 'generations'}>
+    <div className="history-toolbar"><span>已保存的生成记录</span>
       <button type="button" className="icon-button" title="刷新历史" aria-label="刷新历史"
         onClick={() => void history.load()} disabled={history.loading || history.deletingId !== null}><RefreshCw size={17} /></button></div>
+    <p className="prompt-hint">新图片私有保存 7 天，可查看和下载；已过期图片仍保留参数。删除记录也会删除它保存的图片。</p>
     <Alert text={history.error} />
     {history.loading && <p className="subtle" role="status">正在加载历史...</p>}
     {!history.loading && !history.error && history.items.length === 0 && <p className="subtle">暂无历史记录</p>}
@@ -383,13 +386,14 @@ const HistoryPanel = observer(({ store }: { store: AppStore }) => {
       <div className="history-meta">{item.parameters.sampler} · {item.parameters.steps} 步 · CFG {item.parameters.cfg_scale} · {item.parameters.sample_count} 张 · {item.parameters.quality ? '高质量' : '标准质量'}</div>
       {item.error_code && <p className="history-negative">{errorText(new ApiFailure(0, item.error_code, '生成失败，请检查服务状态。'))}</p>}
       <div className="history-actions">
+        {item.status === 'succeeded' && <button className="text-action" type="button" onClick={() => { void store.savedResults.openGeneration(item.id); onView() }}><ImageIcon size={15} /> 查看图片</button>}
         <button className="text-action" type="button" onClick={() => { store.generation.reuse(item); document.getElementById('editor-title')?.scrollIntoView({ behavior: 'smooth' }) }}><History size={15} /> 复用</button>
         {(item.status === 'queued' || item.status === 'running') && <button className="text-action" type="button"
           disabled={store.generation.experimentRunning || store.generation.operationLocked || store.generation.activeId !== null || store.generation.busy || store.generation.submitUncertain}
           onClick={() => { store.generation.resume(item.id); document.getElementById('result-title')?.scrollIntoView({ behavior: 'smooth' }) }}><RefreshCw size={15} /> 查看状态</button>}
-        <button className="icon-button danger" type="button" title={item.status === 'queued' || item.status === 'running' ? '任务完成后可删除' : '删除历史记录'} aria-label={`删除 ${new Date(item.created_at * 1000).toLocaleString()} 的历史记录`}
-          disabled={history.deletingId !== null || item.status === 'queued' || item.status === 'running'} onClick={() => {
-            if (window.confirm('确定删除这条参数记录？此操作无法撤销。')) void history.delete(item.id)
+        <button className="icon-button danger" type="button" title={activeExperimentId && item.parameters.experiment?.id === activeExperimentId ? '实验结束或停止后可删除' : item.status === 'queued' || item.status === 'running' ? '任务完成后可删除' : '删除历史记录'} aria-label={`删除 ${new Date(item.created_at * 1000).toLocaleString()} 的历史记录`}
+          disabled={history.deletingId !== null || item.status === 'queued' || item.status === 'running' || (!!activeExperimentId && item.parameters.experiment?.id === activeExperimentId)} onClick={() => {
+            if (window.confirm('确定删除这条记录及其保存的图片？此操作无法撤销。')) void history.delete(item.id)
           }}><Trash2 size={16} /></button>
       </div>
     </article>)}</div>
@@ -400,6 +404,8 @@ const HistoryPanel = observer(({ store }: { store: AppStore }) => {
       <button className="icon-button" type="button" title="下一页历史" aria-label="下一页历史" disabled={history.loading || history.deletingId !== null || history.nextOffset === null}
         onClick={() => { if (history.nextOffset !== null) void history.load(history.nextOffset) }}><ArrowRight size={18} /></button>
     </div>
+    </div>
+    <div className="history-tab-content" hidden={mode !== 'experiments'}><SavedExperimentList saved={store.savedResults} onView={onView} /></div>
   </div>
 })
 
@@ -412,6 +418,7 @@ const LEFT_PANELS = [
 type Panel = (typeof LEFT_PANELS)[number]['name']
 
 const Workspace = observer(({ store }: { store: AppStore }) => {
+  const [historyMode, setHistoryMode] = useState<HistoryMode>('generations')
   const [activePanel, setActivePanel] = useState<Panel | null>(() =>
     typeof window !== 'undefined' && window.matchMedia('(min-width: 901px)').matches ? 'settings' : null)
   useEffect(() => { void store.enterWorkspace() }, [store])
@@ -456,14 +463,14 @@ const Workspace = observer(({ store }: { store: AppStore }) => {
       <SettingsPanel store={store} hidden={activePanel !== 'settings'} onClose={closePanel} />
       {LEFT_PANELS.filter(panel => panel.name !== 'settings').map(({ name, id, label }) =>
         <SidePanel key={name} id={id} title={label} hidden={activePanel !== name} onClose={closePanel}>
-          {name === 'history' ? <HistoryPanel store={store} /> : name === 'tags' ? <TagSearch store={store} /> : <Advice store={store} />}
+          {name === 'history' ? <HistoryPanel store={store} onView={closePanel} mode={historyMode} onModeChange={setHistoryMode} /> : name === 'tags' ? <TagSearch store={store} /> : <Advice store={store} />}
         </SidePanel>)}
       <div className="main-column">
         <div className="main-scroll"><Editor store={store} onOpenSettings={() => openPanel('settings')} />
-          <StyleExperimentResults generation={store.generation} /><Result store={store} /></div>
+          <SavedResultViewer saved={store.savedResults} /><Result store={store} /></div>
         {store.generation.submitUncertain && <div className="uncertain-bar" role="alert">
           <span>提交结果未知，请核对历史记录。</span>
-          <button className="secondary" type="button" onClick={() => { openPanel('history'); void store.history.load(0) }}>查看历史</button>
+          <button className="secondary" type="button" onClick={() => { setHistoryMode('generations'); openPanel('history'); void store.history.load(0) }}>查看历史</button>
           <button className="secondary" type="button" onClick={() => store.generation.acknowledgeUncertain()}>核对后继续</button>
         </div>}
       </div>

@@ -1,7 +1,7 @@
 {"file": ".trellis/spec/frontend/workspace-contract.md", "reason": "Preserve auth, history refresh, panel state and the no-browser/no-frontend-test restriction."}
 {"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Run frozen offline backend regressions, Ruff and reviewed OpenAPI checks."}
 {"file": ".trellis/spec/backend/api-contract.md", "reason": "Extend public request/history additively without leaking provider internals."}
-{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Keep parameter-only private SQLite history compatible with old JSON and backups."}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Keep metadata-only private SQLite history compatible with old JSON and backups."}
 {"file": ".trellis/spec/backend/http-response-contract.md", "reason": "Preserve bounded MCP response handling and no paid retry behavior."}
 {"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Verify structured draft, API, stored JSON and provider round trip."}
 {"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Reuse prompt summaries and keep composition/validation in their owning layers."}
@@ -11,9 +11,15 @@
 {"file": ".trellis/tasks/10-14-native-character-prompts/research/prompt-weight-contract.md", "reason": "Review tag blur/manual-edit behavior, numeric weight serialization and non-destructive grouped-text handling."}
 {"file": ".trellis/tasks/10-14-native-character-prompts/style-experiment-design.md", "reason": "Review full style experiment scope, interfaces, state transitions, source spans and URL ownership."}
 {"file": ".trellis/tasks/10-14-native-character-prompts/research/style-experiment-contract.md", "reason": "Review existing generation seed/scheduler/history/auth constraints and no paid retry behavior."}
-{"file": ".trellis/spec/frontend/style-experiment-contract.md", "reason": "Executable exact enumeration, seed-lock, stop/error and transient comparison-result contracts."}
+{"file": ".trellis/spec/frontend/style-experiment-contract.md", "reason": "Executable exact enumeration, seed-lock, stop/error and live and persisted comparison-result contracts."}
 {"file": ".trellis/tasks/10-14-native-character-prompts/research/sampler-options.md", "reason": "Review source-backed sampler choices and lossless draft/history/manual transitions."}
 {"file": ".trellis/tasks/10-14-native-character-prompts/research/submission-rejection.md", "reason": "Verify exact refusal evidence without weakening unknown outcome/no-retry safeguards."}
 {"file": ".trellis/tasks/10-14-native-character-prompts/implement.md", "reason": "Single-image viewer review and web-only verification checklist"}
 {"file": ".trellis/tasks/10-14-native-character-prompts/design.md", "reason": "Review latest-history entry semantics and async edit/session guards"}
 {"file": ".trellis/tasks/10-14-native-character-prompts/character-position-design.md", "reason": "Review exact coordinate validation, dragging, history/snapshots and API-first rollout"}
+{"file": ".trellis/tasks/10-14-native-character-prompts/image-retention-design.md", "reason": "Verify approved seven-day private storage, pre-paid admission, owner isolation and persisted comparison lifecycle"}
+{"file": ".trellis/spec/backend/image-retention-contract.md", "reason": "Verify private disk results, bounded paid admission and persisted experiment API"}
+{"file": ".trellis/tasks/10-14-native-character-prompts/research/image-retention-contract.md", "reason": "Source anchors and verified SQLite JSON support, cancellation reservations and saved-viewer integration"}
+{"file": ".trellis/spec/backend/durable-experiment-contract.md", "reason": "Durable background run/seed/claim/Stop/restart and schema3 contract superseding browser-only sequence."}
+{"file": ".trellis/tasks/10-14-native-character-prompts/durable-experiment-design.md", "reason": "Frozen background experiment API, plan/seed/Stop/recovery and coordinated release contract."}
+{"file": ".trellis/tasks/10-14-native-character-prompts/research/durable-style-experiments.md", "reason": "Source-backed exact parser parity, atomic current/cursor settlement, deletion and no-retry analysis."}

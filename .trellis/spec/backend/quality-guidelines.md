@@ -76,7 +76,10 @@ tests. The current test modules own these boundaries:
 | Module | Assertion points |
 | --- | --- |
 | `tests/test_auth.py` | Token digests, cookie flags, revocation, origin checks, private DB/backup modes |
-| `tests/test_generations.py` | Owner isolation, seed resolution, pagination, deletion, bounded jobs, ephemeral results, restart/backup |
+| `tests/test_generations.py` | Owner isolation, seed resolution, pagination, deletion, bounded jobs, injected memory cache, restart/backup |
+| `tests/test_image_retention.py` | Private durable images, expiry, capacity reservations, owners and filesystem safety |
+| `tests/test_style_plan.py` | Exact tokenizer/decimal/Cartesian parity, neutral weights, Unicode and plan limits |
+| `tests/test_style_runs.py` | Durable claim/Stop/recovery, failed continuation, seed, idempotency, fairness and migration3 |
 | `tests/test_mcp_images.py` | Schema compatibility, PNG validation, safe errors and no retry of uncertain paid outcomes |
 | `tests/test_tags.py` | NSFW normalization, deadlines, decoded-size caps, concurrency and validated upstream `Retry-After` |
 | `tests/test_advice.py` | Explicit input only, structured output, observed tool rejection and child cleanup |

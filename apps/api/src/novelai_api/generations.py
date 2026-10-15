@@ -1,4 +1,6 @@
-"""Owner-scoped generation history and bounded in-process image results."""
+"""Owner-scoped generation history, experiment metadata and bounded image results."""
+
+from __future__ import annotations
 
 import json
 import secrets
@@ -8,8 +10,8 @@ import time
 from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Literal, Protocol, Self
-from uuid import uuid4
+from typing import Annotated, Literal, Protocol, Self
+from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -46,6 +48,41 @@ class CharacterPrompt(BaseModel):
         return value
 
 
+PositiveDecimal = Annotated[str, Field(min_length=1, max_length=1000, pattern=r"^[1-9][0-9]*$")]
+
+
+class ExperimentWeight(BaseModel):
+    tag_index: int = Field(ge=0, le=2999, strict=True)
+    label: str = Field(min_length=1, max_length=3000)
+    weight: str = Field(
+        min_length=1, max_length=100, pattern=r"^-?(0|[1-9][0-9]*)(\.[0-9]+)?$",
+    )
+
+    @field_validator("label")
+    @classmethod
+    def nonblank_label(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Weight label cannot be blank")
+        return value
+
+
+class ExperimentContext(BaseModel):
+    id: UUID
+    ordinal: PositiveDecimal
+    total: PositiveDecimal
+    weights: list[ExperimentWeight] = Field(min_length=1, max_length=1500)
+
+    @model_validator(mode="after")
+    def valid_context(self) -> Self:
+        if (len(self.ordinal), self.ordinal) > (len(self.total), self.total):
+            raise ValueError("Experiment ordinal exceeds total")
+        if len({weight.tag_index for weight in self.weights}) != len(self.weights):
+            raise ValueError("Duplicate experiment tag index")
+        if sum(len(weight.label) for weight in self.weights) > 3000:
+            raise ValueError("Experiment labels exceed budget")
+        return self
+
+
 class GenerationRequest(BaseModel):
     positive_prompt: str = Field(max_length=3000)
     style_prompt: str = Field(default="", max_length=3000)
@@ -60,6 +97,9 @@ class GenerationRequest(BaseModel):
     seed: int | None = Field(default=None, ge=1, le=4294967295)
     sample_count: int = Field(ge=1, le=8)
     quality: bool
+    experiment: ExperimentContext | None = Field(
+        default=None, exclude_if=lambda value: value is None,
+    )
 
     @field_validator("model", "sampler")
     @classmethod
@@ -123,29 +163,102 @@ class HistoryPage(BaseModel):
     next_offset: int | None
 
 
+class ExperimentSummary(BaseModel):
+    id: str
+    total: str
+    group_count: int
+    completed_count: int
+    image_count: int
+    created_at: int
+    updated_at: int
+
+
+class ExperimentPage(BaseModel):
+    items: list[ExperimentSummary]
+    next_offset: int | None
+
+
+class ExperimentDetail(BaseModel):
+    summary: ExperimentSummary
+    items: list[GenerationView]
+    next_offset: int | None
+
+
+class ExperimentConflict(Exception):
+    """The transaction refused duplicate or inconsistent run metadata."""
+
+
+# Metadata is validated before write, and checked again when reading old/private DBs.
+# Decimal strings stay strings: SQLite INTEGER/REAL cannot order arbitrary ordinals.
+EXPERIMENT_ROWS = """
+WITH experiment_rows AS (
+    SELECT *, json_extract(settings_json, '$.experiment.id') AS experiment_id,
+        json_extract(settings_json, '$.experiment.ordinal') AS ordinal,
+        json_extract(settings_json, '$.experiment.total') AS total
+    FROM generation_jobs
+    WHERE user_id = ? AND valid_experiment(settings_json) = 1
+)
+"""
+EXPERIMENT_SUMMARY = """
+SELECT experiment_id AS id, total, COUNT(*) AS group_count,
+    SUM(CASE WHEN status IN ('succeeded', 'failed') THEN 1 ELSE 0 END) AS completed_count,
+    SUM(image_count) AS image_count, MIN(created_at) AS created_at,
+    MAX(updated_at) AS updated_at
+FROM experiment_rows
+"""
+
+
+def _valid_experiment(settings_json: str) -> int:
+    try:
+        data = json.loads(settings_json)
+        ExperimentContext.model_validate(data.get("experiment"))
+    except (ValueError, TypeError, AttributeError):
+        return 0
+    return 1
+
+
+def _experiment_connection(connection: sqlite3.Connection) -> None:
+    connection.create_function("valid_experiment", 1, _valid_experiment, deterministic=True)
+
+
 class JobStore:
     def __init__(self, database: Database):
         self.database = database
 
     def create(self, user_id: str, parameters: GenerationRequest) -> str:
+        with self.database.connect(write=True) as connection:
+            return self.create_in_transaction(connection, user_id, parameters)
+
+    @staticmethod
+    def create_in_transaction(
+        connection: sqlite3.Connection, user_id: str, parameters: GenerationRequest,
+        *, run_claim: bool = False,
+    ) -> str:
         job_id = str(uuid4())
         now = int(time.time())
-        with self.database.connect(write=True) as connection:
-            connection.execute(
-                "INSERT INTO generation_jobs "
-                "(id, user_id, positive_prompt, negative_prompt, settings_json, effective_seed, "
-                "status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?)",
-                (
-                    job_id,
-                    user_id,
-                    parameters.positive_prompt,
-                    parameters.negative_prompt,
-                    parameters.model_dump_json(),
-                    parameters.seed,
-                    now,
-                    now,
-                ),
+        if parameters.experiment is not None:
+            _experiment_connection(connection)
+            context = parameters.experiment
+            server_run = connection.execute(
+                "SELECT 1 FROM style_experiment_runs WHERE user_id = ? AND id = ?",
+                (user_id, str(context.id)),
+            ).fetchone()
+            conflict = connection.execute(
+                EXPERIMENT_ROWS + "SELECT 1 FROM experiment_rows WHERE experiment_id = ? "
+                "AND (ordinal = ? OR total != ?) LIMIT 1",
+                (user_id, str(context.id), context.ordinal, context.total),
+            ).fetchone()
+            if conflict or (server_run and not run_claim):
+                raise ExperimentConflict("Conflicting experiment group")
+        connection.execute(
+            "INSERT INTO generation_jobs "
+            "(id, user_id, positive_prompt, negative_prompt, settings_json, effective_seed, "
+            "status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?)",
+            (
+                job_id, user_id, parameters.positive_prompt, parameters.negative_prompt,
+                parameters.model_dump_json(), parameters.seed, now, now,
             )
+        )
         return job_id
 
     def mark_interrupted(self) -> None:
@@ -195,16 +308,59 @@ class JobStore:
             next_offset=offset + limit if len(rows) > limit else None,
         )
 
+    def experiments(self, user_id: str, *, limit: int, offset: int) -> ExperimentPage:
+        with self.database.connect() as connection:
+            _experiment_connection(connection)
+            rows = connection.execute(
+                EXPERIMENT_ROWS + EXPERIMENT_SUMMARY +
+                " GROUP BY experiment_id, total ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?",
+                (user_id, limit + 1, offset),
+            ).fetchall()
+        return ExperimentPage(
+            items=[ExperimentSummary(**dict(row)) for row in rows[:limit]],
+            next_offset=offset + limit if len(rows) > limit else None,
+        )
+
+    def experiment(
+        self, user_id: str, experiment_id: str, *, limit: int, offset: int,
+    ) -> tuple[ExperimentSummary, list[HistoryItem], int | None] | None:
+        with self.database.connect() as connection:
+            _experiment_connection(connection)
+            summary = connection.execute(
+                EXPERIMENT_ROWS + EXPERIMENT_SUMMARY +
+                " WHERE experiment_id = ? GROUP BY experiment_id, total",
+                (user_id, experiment_id),
+            ).fetchone()
+            if summary is None:
+                return None
+            rows = connection.execute(
+                EXPERIMENT_ROWS + "SELECT * FROM experiment_rows WHERE experiment_id = ? "
+                "ORDER BY length(ordinal), ordinal, id LIMIT ? OFFSET ?",
+                (user_id, experiment_id, limit + 1, offset),
+            ).fetchall()
+        return (
+            ExperimentSummary(**dict(summary)), [self._item(row) for row in rows[:limit]],
+            offset + limit if len(rows) > limit else None,
+        )
+
     def delete(self, user_id: str, job_id: str) -> str | None:
         with self.database.connect(write=True) as connection:
             row = connection.execute(
-                "SELECT status FROM generation_jobs WHERE id = ? AND user_id = ?",
+                "SELECT status, settings_json FROM generation_jobs WHERE id = ? AND user_id = ?",
                 (job_id, user_id),
             ).fetchone()
             if row is None:
                 return None
             if row["status"] in ("queued", "running"):
                 return "active"
+            if _valid_experiment(row["settings_json"]):
+                context_id = json.loads(row["settings_json"])["experiment"]["id"]
+                active = connection.execute(
+                    "SELECT 1 FROM style_experiment_runs WHERE user_id = ? AND id = ? "
+                    "AND status IN ('running', 'stopping')", (user_id, context_id),
+                ).fetchone()
+                if active:
+                    return "experiment_active"
             connection.execute(
                 "DELETE FROM generation_jobs WHERE id = ? AND user_id = ?", (job_id, user_id)
             )
@@ -233,6 +389,44 @@ class CachedResult:
     size: int
 
 
+@dataclass(frozen=True)
+class ResultInfo:
+    image_count: int
+    expires_at: int
+
+
+def valid_images(images: Sequence[GeneratedImage]) -> bool:
+    return (
+        1 <= len(images) <= 8
+        and all(
+            isinstance(image, GeneratedImage)
+            and image.mime_type == "image/png"
+            and isinstance(image.data, bytes)
+            and image.data.startswith(PNG_SIGNATURE)
+            and 45 <= len(image.data) <= MAX_IMAGE_BYTES
+            and image.data[12:16] == b"IHDR"
+            and image.data.endswith(PNG_TRAILER)
+            for image in images
+        )
+        and sum(len(image.data) for image in images) <= MAX_RESULT_BYTES
+    )
+
+
+class ResultStorageUnavailable(Exception):
+    """Storage refused admission before seed/history/provider work."""
+
+
+class ResultStore(Protocol):
+    def start(self) -> None: ...
+    def stop(self) -> None: ...
+    def reserve(self, sample_count: int) -> str: ...
+    def release(self, reservation: str) -> None: ...
+    def put(self, job_id: str, user_id: str, images: Sequence[GeneratedImage]) -> bool: ...
+    def describe(self, job_id: str, user_id: str) -> ResultInfo | None: ...
+    def image(self, job_id: str, user_id: str, index: int) -> GeneratedImage | None: ...
+    def discard(self, job_id: str) -> None: ...
+
+
 class ResultCache:
     def __init__(self, *, clock: Callable[[], float] = time.monotonic):
         self._clock = clock
@@ -241,23 +435,9 @@ class ResultCache:
         self._lock = threading.Lock()
 
     def put(self, job_id: str, user_id: str, images: Sequence[GeneratedImage]) -> bool:
-        if len(images) == 0 or len(images) > 8:
-            return False
-        if any(
-            not isinstance(image, GeneratedImage)
-            or image.mime_type != "image/png"
-            or not isinstance(image.data, bytes)
-            or not image.data.startswith(PNG_SIGNATURE)
-            or len(image.data) < 45
-            or image.data[12:16] != b"IHDR"
-            or not image.data.endswith(PNG_TRAILER)
-            or len(image.data) > MAX_IMAGE_BYTES
-            for image in images
-        ):
+        if not valid_images(images):
             return False
         size = sum(len(image.data) for image in images)
-        if size > MAX_RESULT_BYTES:
-            return False
         with self._lock:
             self._prune()
             self._remove(job_id)
@@ -273,6 +453,26 @@ class ResultCache:
             )
             self._size += size
         return True
+
+    def start(self) -> None:
+        pass
+
+    def stop(self) -> None:
+        pass
+
+    def reserve(self, sample_count: int) -> str:
+        return str(uuid4())
+
+    def release(self, reservation: str) -> None:
+        pass
+
+    def describe(self, job_id: str, user_id: str) -> ResultInfo | None:
+        result = self.get(job_id, user_id)
+        return ResultInfo(len(result.images), result.expires_at) if result else None
+
+    def image(self, job_id: str, user_id: str, index: int) -> GeneratedImage | None:
+        result = self.get(job_id, user_id)
+        return result.images[index] if result and 0 <= index < len(result.images) else None
 
     def get(self, job_id: str, user_id: str) -> CachedResult | None:
         with self._lock:
@@ -299,22 +499,58 @@ class GenerationNotConfigured(RuntimeError):
     """No executor exists, so submission has performed no work."""
 
 
+class _Admission:
+    """One idempotent release for worker, cancelled future and enqueue failure."""
+
+    def __init__(self, release: Callable[[], None]):
+        self._release = release
+        self._lock = threading.Lock()
+        self._started = False
+        self._released = False
+
+    def begin(self) -> bool:
+        with self._lock:
+            if self._released:
+                return False
+            self._started = True
+            return True
+
+    @property
+    def live(self) -> bool:
+        with self._lock:
+            return not self._released
+
+    def finish(self, *, only_if_pending: bool = False) -> None:
+        with self._lock:
+            if self._released or (only_if_pending and self._started):
+                return
+            self._released = True
+            self._release()
+
+
 class GenerationManager:
     def __init__(
         self,
         database: Database,
         provider: ImageProvider | None,
         *,
-        cache: ResultCache | None = None,
+        cache: ResultStore | None = None,
     ):
+        from .image_results import DiskResultStore
+
         self.store = JobStore(database)
         self.provider = provider
-        self.cache = cache or ResultCache()
+        self.cache = cache if cache is not None else DiskResultStore(
+            database.path.parent / "generation-images",
+        )
         self._capacity = threading.BoundedSemaphore(3)
         self._executor: ThreadPoolExecutor | None = None
+        self._work_lock = threading.Lock()
+        self._working: dict[str, _Admission] = {}
 
     def start(self) -> None:
         self.store.mark_interrupted()
+        self.cache.start()
         if self.provider is not None:
             self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="nai-gen")
 
@@ -322,23 +558,77 @@ class GenerationManager:
         if self._executor is not None:
             self._executor.shutdown(wait=True, cancel_futures=True)
             self._executor = None
+        self.cache.stop()
 
-    def submit(self, user_id: str, request: GenerationRequest) -> str | None:
+    def view(self, job: HistoryItem, user_id: str) -> GenerationView:
+        result = self.cache.describe(job.id, user_id) if job.status == "succeeded" else None
+        return GenerationView(
+            **job.model_dump(),
+            image_urls=[f"/api/generation-results/{job.id}/images/{index}"
+                        for index in range(result.image_count)] if result else [],
+            result_expires_at=result.expires_at if result else None,
+        )
+
+    def is_inflight(self, job_id: str) -> bool:
+        with self._work_lock:
+            admission = self._working.get(job_id)
+        return admission is not None and admission.live
+
+    def _forget(self, job_id: str) -> None:
+        with self._work_lock:
+            self._working.pop(job_id, None)
+
+    def submit(
+        self, user_id: str, request: GenerationRequest,
+        *, create: Callable[[str, GenerationRequest], str | None] | None = None,
+    ) -> str | None:
         if self._executor is None:
             raise GenerationNotConfigured("Generation provider not configured")
         if not self._capacity.acquire(blocking=False):
             return None
         try:
-            seed = request.seed if request.seed is not None else secrets.randbelow(4294967295) + 1
-            parameters = request.model_copy(update={"seed": seed})
-            job_id = self.store.create(user_id, parameters)
-            self._executor.submit(self._run, job_id, user_id, parameters)
-            return job_id
+            reservation = self.cache.reserve(request.sample_count)
         except BaseException:
             self._capacity.release()
             raise
 
-    def _run(self, job_id: str, user_id: str, parameters: GenerationRequest) -> None:
+        def release() -> None:
+            self.cache.release(reservation)
+            self._capacity.release()
+
+        admission = _Admission(release)
+        job_id = None
+        try:
+            seed = request.seed if request.seed is not None else secrets.randbelow(4294967295) + 1
+            parameters = request.model_copy(update={"seed": seed})
+            with self._work_lock:
+                job_id = (create or self.store.create)(user_id, parameters)
+                if job_id is not None:
+                    self._working[job_id] = admission
+            if job_id is None:
+                admission.finish()
+                return None
+            future = self._executor.submit(self._run, job_id, user_id, parameters, admission)
+
+            def cancelled(finished) -> None:
+                if finished.cancelled():
+                    admission.finish(only_if_pending=True)
+                    self._forget(job_id)
+
+            future.add_done_callback(cancelled)
+            return job_id
+        except BaseException:
+            admission.finish(only_if_pending=True)
+            if job_id is not None and not admission.live:
+                self._forget(job_id)
+            raise
+
+    def _run(
+        self, job_id: str, user_id: str, parameters: GenerationRequest, admission: _Admission,
+    ) -> None:
+        if not admission.begin():
+            self._forget(job_id)
+            return
         try:
             if not self.store.mark_running(job_id):
                 return
@@ -355,8 +645,12 @@ class GenerationManager:
             except ProviderFailure as exception:
                 self.cache.discard(job_id)
                 self.store.finish(job_id, error_code=exception.code)
+            except ResultStorageUnavailable:
+                self.cache.discard(job_id)
+                self.store.finish(job_id, error_code="result_storage_error")
             except Exception:
                 self.cache.discard(job_id)
                 self.store.finish(job_id, error_code="upstream_error")
         finally:
-            self._capacity.release()
+            admission.finish()
+            self._forget(job_id)

@@ -1,8 +1,15 @@
 # Design: Native Character Prompt Editor
 
+> Follow-up precedence (2026-10-15): `durable-experiment-design.md` now owns
+> server scheduling, continuation, reattachment and schema3 migration. Earlier
+> browser-only/no-resume/no-migration exclusions below are historical for that
+> boundary. Private seven-day storage remains in scope.
+
 The later `character-position-design.md` supersedes the original centered
 coordinate mapping and positioning-UI exclusion below. Other original
-contracts remain in effect.
+contracts remain in effect. The approved `image-retention-design.md` additionally
+supersedes all original memory-only/image-persistence exclusions and adds
+private seven-day storage plus saved experiment comparisons.
 
 ## Change Boundary
 

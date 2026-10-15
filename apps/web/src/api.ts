@@ -9,6 +9,19 @@ export interface CharacterPrompt {
   y?: number
 }
 
+export interface ExperimentWeight {
+  tag_index: number
+  label: string
+  weight: string
+}
+
+export interface ExperimentContext {
+  id: string
+  ordinal: string
+  total: string
+  weights: ExperimentWeight[]
+}
+
 export interface GenerationRequest {
   positive_prompt: string
   style_prompt: string
@@ -23,6 +36,7 @@ export interface GenerationRequest {
   seed: number | null
   sample_count: number
   quality: boolean
+  experiment?: ExperimentContext | null
 }
 
 export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed'
@@ -46,6 +60,56 @@ export interface GenerationView extends HistoryItem {
 export interface HistoryPage {
   items: HistoryItem[]
   next_offset: number | null
+}
+
+export interface ExperimentSummary {
+  id: string
+  total: string
+  group_count: number
+  completed_count: number
+  image_count: number
+  created_at: number
+  updated_at: number
+}
+
+export interface ExperimentPage {
+  items: ExperimentSummary[]
+  next_offset: number | null
+}
+
+export interface ExperimentDetailPage {
+  summary: ExperimentSummary
+  items: GenerationView[]
+  next_offset: number | null
+}
+
+export interface ExperimentRunRange {
+  tag_index: number
+  min: string
+  max: string
+  step: string
+}
+
+export interface ExperimentRunDefinition {
+  id: string
+  parameters: GenerationRequest
+  ranges: ExperimentRunRange[]
+}
+
+export interface ExperimentRunState extends ExperimentRunDefinition {
+  status: 'running' | 'stopping' | 'stopped' | 'completed'
+  total: string
+  next_ordinal: string
+  processed_count: string
+  succeeded_count: string
+  failed_count: string
+  current_ordinal: string | null
+  current_job_id: string | null
+  seed: number
+  sample_count: number
+  created_at: number
+  updated_at: number
+  error_code: string | null
 }
 
 export interface GenerationAccepted {
@@ -84,6 +148,33 @@ function readErrorBody(value: unknown): Partial<ErrorBody> {
   }
 }
 
+function checkedRun(value: ExperimentRunState): ExperimentRunState {
+  const decimal = (field: unknown, positive = false, maxDigits = 1000) => typeof field === 'string' && field.length <= maxDigits
+    && (positive ? /^[1-9]\d*$/ : /^(0|[1-9]\d*)$/).test(field)
+  const parameters = value?.parameters
+  const valid = value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value.id)
+    && ['running', 'stopping', 'stopped', 'completed'].includes(value.status)
+    && decimal(value.total, true) && decimal(value.next_ordinal, true, 1001)
+    && decimal(value.processed_count) && decimal(value.succeeded_count) && decimal(value.failed_count)
+    && (value.current_ordinal === null || decimal(value.current_ordinal, true))
+    && (value.current_job_id === null || typeof value.current_job_id === 'string')
+    && Number.isInteger(value.seed) && value.seed >= 1 && value.seed <= 4294967295
+    && Number.isInteger(value.sample_count) && value.sample_count >= 1 && value.sample_count <= 8
+    && Number.isFinite(value.created_at) && Number.isFinite(value.updated_at)
+    && (value.error_code === null || typeof value.error_code === 'string')
+    && parameters && typeof parameters.style_prompt === 'string' && typeof parameters.positive_prompt === 'string'
+    && typeof parameters.negative_prompt === 'string' && typeof parameters.model === 'string' && typeof parameters.sampler === 'string'
+    && typeof parameters.quality === 'boolean' && Number.isFinite(parameters.cfg_scale)
+    && [parameters.width, parameters.height, parameters.steps, parameters.sample_count].every(Number.isInteger)
+    && (parameters.seed === null || Number.isInteger(parameters.seed))
+    && Array.isArray(parameters.character_prompts) && parameters.character_prompts.every(character => character && typeof character.prompt === 'string'
+      && (character.x === undefined || Number.isFinite(character.x)) && (character.y === undefined || Number.isFinite(character.y)))
+    && Array.isArray(value.ranges) && value.ranges.length > 0 && value.ranges.every(range => range && Number.isInteger(range.tag_index)
+      && typeof range.min === 'string' && typeof range.max === 'string' && typeof range.step === 'string')
+  if (!valid) throw new ApiFailure(0, 'invalid_response', '实验响应无效，请重新连接核对。')
+  return value
+}
+
 export class ApiFailure extends Error {
   constructor(
     readonly status: number,
@@ -113,6 +204,14 @@ export function errorText(error: unknown): string {
       rate_limited: '请求过于频繁，请稍后重试。',
       queue_full: '生成队列已满，请稍后重试。',
       provider_unavailable: '图像服务暂不可用，请联系管理员。',
+      result_storage_unavailable: '图片保存空间暂不可用，本次未提交生成，请稍后再试或联系管理员。',
+      result_storage_error: '图片保存失败，请检查历史记录；请勿自动重新生成。',
+      experiment_conflict: '这组画风实验已经提交或实验信息不一致，请先检查历史记录。',
+      experiment_run_active: '已有进行中的画风实验，请查看其进度或手动停止。',
+      experiment_run_conflict: '实验编号已被其他定义使用，请检查已保存的实验。',
+      experiment_run_unknown: '实验提交结果未知，请重新连接核对，不要重复开始。',
+      experiment_run_missing: '尚未找到这次实验，提交结果仍待确认；请检查历史后再次连接。',
+      experiment_active: '这条记录属于进行中的画风实验，请先停止实验或等待完成后删除。',
       provider_auth_error: '图像服务认证失败，请联系管理员。',
       provider_rate_limited: '图像服务限流，请稍后重试。',
       provider_error: '图像服务处理失败，请检查参数后重试。',
@@ -208,6 +307,37 @@ export class WorkspaceApi {
 
   history(offset: number, limit = 20): Promise<HistoryPage> {
     return this.request(`/api/generations?offset=${offset}&limit=${limit}`)
+  }
+
+  experiments(offset = 0, limit = 20, signal?: AbortSignal): Promise<ExperimentPage> {
+    return this.request(`/api/style-experiments?offset=${offset}&limit=${limit}`, { signal })
+  }
+
+  experiment(id: string, offset = 0, limit = 1, signal?: AbortSignal): Promise<ExperimentDetailPage> {
+    return this.request(`/api/style-experiments/${encodeURIComponent(id)}?offset=${offset}&limit=${limit}`, { signal })
+  }
+
+  async createExperimentRun(definition: ExperimentRunDefinition, signal?: AbortSignal): Promise<ExperimentRunState> {
+    const run = checkedRun(await this.request<ExperimentRunState>('/api/style-experiment-runs', { method: 'POST', body: JSON.stringify(definition), signal }))
+    if (run.id !== definition.id) throw new ApiFailure(0, 'invalid_response', '实验编号不匹配，请重新连接核对。')
+    return run
+  }
+
+  async activeExperimentRun(signal?: AbortSignal): Promise<{ run: ExperimentRunState | null }> {
+    const response = await this.request<{ run: ExperimentRunState | null }>('/api/style-experiment-runs/active', { signal })
+    return { run: response?.run === null ? null : checkedRun(response?.run) }
+  }
+
+  async experimentRun(id: string, signal?: AbortSignal): Promise<ExperimentRunState> {
+    const run = checkedRun(await this.request<ExperimentRunState>(`/api/style-experiment-runs/${encodeURIComponent(id)}`, { signal }))
+    if (run.id !== id) throw new ApiFailure(0, 'invalid_response', '实验编号不匹配，请重新连接核对。')
+    return run
+  }
+
+  async stopExperimentRun(id: string, signal?: AbortSignal): Promise<ExperimentRunState> {
+    const run = checkedRun(await this.request<ExperimentRunState>(`/api/style-experiment-runs/${encodeURIComponent(id)}/stop`, { method: 'POST', signal }))
+    if (run.id !== id) throw new ApiFailure(0, 'invalid_response', '实验编号不匹配，请重新连接核对。')
+    return run
   }
 
   deleteGeneration(id: string): Promise<void> {

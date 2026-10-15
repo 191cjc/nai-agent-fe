@@ -5,6 +5,7 @@ import json
 import zlib
 from gzip import compress as gzip_compress
 from pathlib import Path
+from uuid import uuid4
 
 import httpx
 import pytest
@@ -550,6 +551,28 @@ def test_flat_style_composition_retains_legacy_payload_and_editable_model(
     assert len(arguments) == 11
     assert "style_prompt" not in arguments
     assert "character_prompts" not in arguments
+
+
+@pytest.mark.parametrize("native", [False, True])
+def test_workspace_experiment_metadata_never_changes_provider_arguments(native: bool) -> None:
+    base = native_parameters() if native else PARAMETERS
+    parameters = GenerationRequest.model_validate({
+        **base.model_dump(),
+        "experiment": {
+            "id": str(uuid4()), "ordinal": "1", "total": "9" * 1000,
+            "weights": [{"tag_index": 0, "label": "artist:fixture", "weight": "1.0"}],
+        },
+    })
+    schema = {
+        **SCHEMA,
+        "properties": {**SCHEMA["properties"], "character_prompts": CHARACTER_SCHEMA},
+    } if native else SCHEMA
+    plain_transport, plain_calls = mock_mcp(schema=schema)
+    experiment_transport, experiment_calls = mock_mcp(schema=schema)
+    provider_for(plain_transport).generate(base)
+    provider_for(experiment_transport).generate(parameters)
+    assert experiment_calls[-1]["params"]["arguments"] == plain_calls[-1]["params"]["arguments"]
+    assert len(experiment_calls[-1]["params"]["arguments"]) == (12 if native else 11)
 
 
 @pytest.mark.parametrize(

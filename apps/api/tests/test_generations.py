@@ -88,7 +88,9 @@ def client_for(database: Database, provider=None, cache=None):
             Settings(database.path, "https://testserver"),
             database,
             image_provider=provider,
-            result_cache=cache,
+            # Explicit memory injection retains the original cache regressions.
+            # Default disk storage is exercised in test_image_retention.py.
+            result_cache=cache if cache is not None else ResultCache(),
         ),
         base_url="https://testserver",
     )
@@ -644,7 +646,9 @@ def test_executor_runtime_error_after_enqueue_keeps_history_and_unknown_outcome(
         login(client, database, "alice")
         manager = app.state.generations
 
-        def failing_submit(work, job_id: str, user_id: str, parameters: GenerationRequest):
+        def failing_submit(
+            work, job_id: str, user_id: str, parameters: GenerationRequest, admission,
+        ):
             # An executor can queue work before raising (for example on thread startup).
             queued.append((work, job_id, user_id, parameters))
             raise RuntimeError("Fixture executor failure after enqueue")

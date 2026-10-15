@@ -11,7 +11,7 @@ and review how the web app consumes the change.
 - `create_app(settings: Settings, database: Database | None = None, ...) -> FastAPI`
   creates the browser API; schema generation must not connect to a provider
   or create a SQLite database.
-- `GET /api/generations/{job_id}` returns saved parameters and transient
+- `GET /api/generations/{job_id}` returns saved parameters and seven-day
   owner-only image URLs. `POST /api/generations` returns `202` with a job ID.
 - `GenerationManager.submit(user_id, request) -> str | None` raises
   `GenerationNotConfigured` only at the initial missing-executor guard;
@@ -22,6 +22,15 @@ and review how the web app consumes the change.
   `limit` defaults to 20 and accepts 1-100. `offset` starts at 0 and accepts
   JavaScript-safe nonnegative integers so `next_offset` remains usable beyond
   10,000 records.
+- `GenerationRequest.experiment` optionally saves exact group metadata in
+  settings_json; /api/style-experiments list/detail pages expose it only to
+  its owner. Images use separate private seven-day files. See
+  [Image Retention](./image-retention-contract.md) for signatures/bounds,
+  exact refusal pairs, pagination and storage lifecycle.
+- `/api/style-experiment-runs` creates and observes server-owned background
+  runs; GET `/active`, GET `/{id}` and POST `/{id}/stop` are owner scoped.
+  See [Durable Experiments](./durable-experiment-contract.md) for exact shapes,
+  idempotency, failure continuation and migration3.
 - `POST /api/advice` has a typed suggestion response. A default runner is
   wired only when `NAI_CODEX_API_KEY` is configured; see
   [Codex Advice Runtime Contract](./codex-advice-contract.md).
@@ -62,6 +71,8 @@ and review how the web app consumes the change.
 | History `limit` outside 1-100 or unsafe `offset` | `422` with `ApiError` |
 | Missing image provider | `503 provider_unavailable` |
 | Other RuntimeError during history/executor submission | Generic server failure; acceptance remains unknown, never the explicit configuration refusal |
+| Insufficient private image storage before paid admission | 503/result_storage_unavailable, no seed/history/provider work |
+| Duplicate experiment ordinal or inconsistent total | 409/experiment_conflict before paid work |
 | Missing Codex runner | `503 advice_unavailable` |
 
 Where applicable, also document `429` rate/queue limits and `502`/`504`
@@ -74,7 +85,7 @@ does not. The JSON `ApiError` shape is unchanged.
 ## Good / Base / Bad Cases
 
 - Good: an authenticated owner polls a `202` job, receives parameter-only
-  history, and accesses an image only while it remains in memory.
+  history, and accesses a private retained image during its seven-day lifetime.
 - Base: schema generation with fake settings produces no SQLite file and
   no network activity.
 - Good: missing image executor causes generation POST to refuse with

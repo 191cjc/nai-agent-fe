@@ -29,6 +29,7 @@ def test_openapi_contract_matches_snapshot_without_database_or_provider_calls(
     serialized = json.dumps(schema, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
     assert not sqlite_path.exists()
+    assert not (tmp_path / "generation-images").exists()
     assert SNAPSHOT.read_text(encoding="utf-8") == serialized
     assert "contract.example" not in serialized
     assert "mcp.example" not in serialized
@@ -43,11 +44,17 @@ def test_openapi_contract_matches_snapshot_without_database_or_provider_calls(
         ("/api/auth/session", "post"): {401, 403, 422, 429, 503},
         ("/api/auth/session", "get"): {401, 422, 503},
         ("/api/auth/session", "delete"): {401, 403, 422, 503},
-        ("/api/generations", "post"): {401, 403, 422, 429, 503},
+        ("/api/generations", "post"): {401, 403, 409, 422, 429, 503},
         ("/api/generations", "get"): {401, 422, 503},
         ("/api/generations/{job_id}", "get"): {401, 404, 422, 503},
         ("/api/generations/{job_id}", "delete"): {401, 403, 404, 409, 422, 503},
         ("/api/generation-results/{job_id}/images/{image_id}", "get"): {401, 404, 422, 503},
+        ("/api/style-experiments", "get"): {401, 422, 503},
+        ("/api/style-experiments/{experiment_id}", "get"): {401, 404, 422, 503},
+        ("/api/style-experiment-runs", "post"): {401, 403, 409, 422, 503},
+        ("/api/style-experiment-runs/active", "get"): {401, 422, 503},
+        ("/api/style-experiment-runs/{run_id}", "get"): {401, 404, 422, 503},
+        ("/api/style-experiment-runs/{run_id}/stop", "post"): {401, 403, 404, 422, 503},
         ("/api/tags/search", "post"): {401, 403, 422, 429, 502, 503, 504},
         ("/api/advice", "post"): {401, 403, 422, 429, 502, 503, 504},
     }

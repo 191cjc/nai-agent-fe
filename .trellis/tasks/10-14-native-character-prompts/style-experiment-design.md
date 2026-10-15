@@ -1,5 +1,14 @@
 # Design: Style Experiment
 
+> Follow-up precedence (2026-10-15): `durable-experiment-design.md` now owns
+> server scheduling, continuation, reattachment and schema3 migration. Earlier
+> browser-only/no-resume/no-migration exclusions below are historical for that
+> boundary. Private seven-day storage remains in scope.
+
+The later approved `image-retention-design.md` supersedes this original
+browser-only grouping/image-retention scope. The paid scheduler stays browser
+owned; saved metadata and images can now be viewed after refresh/restart.
+
 ## Change Boundary
 
 The existing generation workspace can run only one draft request. Add lazy

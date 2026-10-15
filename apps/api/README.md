@@ -1,7 +1,7 @@
 # NovelAI workspace API
 
 This backend provides SQLite migrations, administrator token management,
-browser-cookie authentication, generation job/history APIs, temporary image
+browser-cookie authentication, generation job/history APIs, private retained image
 downloads, an authenticated DanbooruSearch tag-search adapter and a real
 NovelAI Streamable HTTP MCP adapter and an isolated Codex advice runner. The web
 app uses Vite HTTPS locally and host Nginx/systemd in production. The host
@@ -93,13 +93,15 @@ An authenticated `POST /api/generations` accepts a positive and negative
 prompt, model, width/height (multiples of 64), steps, CFG scale, sampler,
 optional seed, sample count and boolean quality toggle. `seed: null` chooses
 an explicit random seed before the provider call. `GET /api/generations/{id}`
-shows status and short-lived owner-only image URLs; `GET /api/generations`
+shows status and seven-day owner-only image URLs; `GET /api/generations`
 lists paginated **parameter-only** history with 1-100 records per request
 (20 by default) and no 10,000-record cutoff; offsets use the JavaScript-safe
 integer range. `DELETE /api/generations/{id}`
-deletes a finished record. Active jobs cannot be deleted. Images are only
-held in bounded process memory (currently ten-minute TTL) and disappear on
-restart, but prompts and parameters persist in SQLite until deleted.
+deletes a finished record and its image files. Active jobs cannot be deleted.
+New images use private seven-day disk storage in generation-images/ beside
+SQLite and survive restart; prompts, parameters and experiment metadata
+persist in SQLite until deleted. See the image-retention contract under
+.trellis/spec/backend/ for bounded capacity and pre-paid storage admission.
 For consistent backups of a live SQLite database, run the admin `backup`
 command to a new private path, never copy only the active database file while
 WAL is in use. Backup retention and restore drills belong to the deployment
@@ -116,8 +118,9 @@ at most 3000 characters, with a workspace limit of six characters.
 Character-bearing requests require a supported ordinary V4/V4.5/V5 model ID
 and the provider's object-array `character_prompts` capability. Unsupported
 requests fail before a paid call rather than combining or dropping characters.
-Characters use the service's default centered coordinates; automatic placement
-and manual position controls are not provided by this editor. Exact fields,
+Characters accept normalized x/y coordinates in 0.1–0.9, defaulting to
+0.5. The editor provides drag/keyboard positioning; automatic placement remains
+deferred. Exact fields,
 model IDs and compatibility rules are in
 `../../.trellis/spec/backend/native-character-contract.md`. The deployed
 schema confirms the argument exists; real image output has not been verified.
@@ -166,9 +169,26 @@ changes require an intentional contract review. API requests use same-origin
 optional port, never the UI path. Production browsers use `/novelai/api/*`
 on the selected `/novelai/` UI route. The proxy strips `/novelai` before
 forwarding to the unchanged backend `/api/*` routes, while the web client
-prefixes returned transient image paths for browser fetches.
+prefixes returned authenticated image paths for browser fetches.
 
 The schema describes the advice response type; actual availability depends on
 the explicit Codex key and installed pinned CLI. Model and sampler identifiers
 remain provisional until the operator verifies accepted values;
 do not ship fixed choice lists inferred from this snapshot.
+
+
+Saved style experiments attach optional experiment metadata to each ordinary
+generation request; this is never forwarded to NovelAI. GET
+/api/style-experiments lists owner-scoped saved groups, and GET
+/api/style-experiments/{id} pages GenerationView rows in exact ordinal order.
+Viewing history never restarts a paid batch. Metadata remains after image
+expiry; SQLite backups do not include separately stored PNG bytes.
+
+Durable style batches use schema3 (0003_style_experiments.sql) and
+/api/style-experiment-runs creation, /active observation, /{id} polling and
+/{id}/stop. They persist compact definitions, effective seed, cursor and counts,
+share the existing bounded generation executor, continue to the next distinct
+group after failures and survive browser/API restart without repeating an
+interrupted group. One active run per owner; logout detaches observation only.
+Run the explicit migration before readiness and keep this API after any web
+fallback. Restore drills must disable copied active runs and all providers.

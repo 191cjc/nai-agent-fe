@@ -1,5 +1,9 @@
 # Web Workspace Contract
 
+> Current scheduling authority: style-experiment-contract.md and the backend
+> durable-experiment-contract.md supersede earlier browser-loop/no-continuation
+> language. Reentry observes the same server run; logout never implicitly Stop.
+
 ## Scope / Trigger
 
 Use this contract when changing `apps/web/src/api.ts`, `store.ts`, `App.tsx`,
@@ -36,7 +40,8 @@ provider credentials, durable image storage, or backend authorization.
   `NAI_PUBLIC_ORIGIN` is the HTTPS scheme and host, with no path.
 - The browser stores neither access tokens nor generated images. Token text
   exists only in the login input until exchange; the Secure, HttpOnly cookie is
-  browser-managed. Parameter history has no historical image URLs.
+  browser-managed. History list rows have no raw storage paths; explicit
+  authenticated generation/experiment detail supplies retained image URLs.
 - On logout start, hide the workspace and stop generation polling immediately.
   A pending generation POST remains outcome-uncertain until the user checks
   history; a failed logout restores the editable draft, not an automatic paid
@@ -52,6 +57,24 @@ provider credentials, durable image storage, or backend authorization.
   older APIs caught generic RuntimeErrors under the same pair and cannot
   establish the pre-acceptance boundary. After publishing, retain that backend
   fix even when rolling the web back: open tabs can keep the new classification.
+- New exact definite-refusal pairs are 503/result_storage_unavailable and
+  409/experiment_conflict, under the image-retention backend contract. Neither
+  creates a paid job; show the specific error without automatic retry or an
+  unknown-result lock. Unknown statuses/transport failures keep the existing
+  conservative lock. Publish the matching API before this frontend.
+- New images remain privately available on the server for seven days. Browser
+  object URLs remain ephemeral and are never stored in Web Storage/IndexedDB.
+  Ordinary successful history has an explicit viewing action; automatic latest
+  entry restoration still restores parameters only.
+- Saved experiment browsing owns independent read-only state: paginated group
+  metadata and only the selected image Blob. Keep current image/metadata/
+  download aligned, last selection/session wins, and revoke only owned URLs on
+  replacement/close/reset/logout/401/disposal. Saved viewing never changes the
+  draft or generation/experiment operation, and never resumes paid work.
+  Left/right and viewer-focused keys traverse images then saved groups; failed
+  or expired rows have one metadata placeholder. Show original seven-day
+  retention and unavailable images accurately. Explicit history archive/list
+  actions fetch; ordinary sidebar switching still preserves mounted state.
 - Advice sends only the explicit advice input and never reads or mutates the
   generation draft. Tag selection inserts only the chosen canonical tag.
 - Style, shared text, global negative text and native character descriptions
@@ -199,9 +222,10 @@ provider credentials, durable image storage, or backend authorization.
 ## Good / Base / Bad Cases
 
 - Good: a production build under `/novelai/` fetches
-  `/novelai/api/generations` and a transient image through the same prefix.
+  `/novelai/api/generations` and a retained image through the same prefix.
 - Base: the local `/` build fetches `/api/generations`; history survives a
-  reload as parameters only while image object URLs do not.
+  reload from saved parameters while page object URLs do not persist; explicit
+  historical viewing fetches retained server images again.
 - Bad: direct browser requests to NovelAI, Codex, or DanbooruSearch; placing
   an access token in Web Storage; retrying an ambiguous paid submission.
 - Good: generation POST rejects with typed `503/provider_unavailable`; show
@@ -247,7 +271,7 @@ provider credentials, durable image storage, or backend authorization.
   stop without a successor POST. Health/readiness alone does not verify image
   provider configuration or successful image generation.
 - When this restriction is lifted, verify both base paths, logout during a
-  pending submission, `401` cleanup, and absence of image/token persistence
+  pending submission, `401` cleanup, and absence of browser image/token persistence
   with deterministic fake responses only, never paid providers.
 
 ## Wrong vs Correct

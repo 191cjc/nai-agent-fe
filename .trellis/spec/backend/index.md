@@ -23,6 +23,8 @@ templates and do not establish project conventions.
 | [Tag Provider Adapter Contract](./provider-adapter-contract.md) | Documented wire fields and offline normalization checks | In use |
 | [Bounded HTTP Response Contract](./http-response-contract.md) | Shared MCP/tag raw streaming, decoded caps and cooperative deadlines | In use |
 | [Browser API Contract](./api-contract.md) | OpenAPI snapshot, status responses, and secret-free browser boundary | In use |
+| [Durable Experiments](./durable-experiment-contract.md) | Server runs, failure continuation, Stop and restart recovery | In use |
+| [Private Image Retention](./image-retention-contract.md) | Seven-day private disk images, capacity admission and saved experiments | In use |
 | [Native Character Prompt Contract](./native-character-contract.md) | Structured style/shared/character prompts, native mapping and legacy history | In use |
 | [Codex Advice Runtime Contract](./codex-advice-contract.md) | AiQQ-equivalent restricted turns, error mapping and cleanup | In use |
 | [Host Deployment Contract](./deployment-contract.md) | Nginx/systemd routes, private storage, secrets and recovery | In use |

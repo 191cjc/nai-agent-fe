@@ -2,125 +2,108 @@
 
 ## Scope / Trigger
 
-Use when changing style experiment helpers, GenerationStore orchestration,
-comparison results or the style-heading experiment entry. Experiments are
-browser-local sequences of ordinary generation requests, not a new backend
-queue or persistent image archive.
+Use for exact weight previews, batch creation/observation/Stop, reattachment or
+saved comparisons. Experiments are server-owned durable runs. Browser close,
+refresh, logout and connection failure detach observation, not server work.
+See backend/durable-experiment-contract.md for the owning API/schema contract.
 
 ## Signatures
 
-- `createStyleExperimentPlan(source, ranges)` validates selected parsed style
-  occurrences and independent decimal min/max/step values; returns dimensions
-  and an exact `total: bigint` without allocating every combination.
-- `styleExperimentCombination(plan, index: bigint)` decodes a zero-based
-  mixed-radix ordinal into weighted style text plus labeled weights.
-- GenerationStore owns `experiment`, `experimentRunning`, `operationLocked`,
-  `startStyleExperiment(source, ranges)`, `stopStyleExperiment()` and
-  `clearStyleExperimentResults()`. Components never submit/poll directly.
+- createStyleExperimentPlan(source, ranges) validates occurrence-based decimal
+  ranges and computes exact total: bigint without allocating combinations.
+- styleExperimentCombination(plan, index: bigint) remains an exact renderer;
+  the browser must never use it to schedule paid per-group submissions.
+- WorkspaceApi wraps POST /api/style-experiment-runs, GET /active,
+  GET /{id} and POST /{id}/stop. Components delegate to stores.
+- SavedResultsStore owns paginated /api/style-experiments metadata and only
+  the selected authenticated PNG/Blob; its owner is independent of the run.
 
 ## Contracts
 
-- Count each axis as floor((max-min)/step)+1 using exact scaled integers.
-  Include max only when on the grid; source-order axes, last varies fastest.
-  Resolve duplicate tag texts by occurrence/span. Each combination starts
-  from the same captured source, replacing selected spans right to left.
-  Exact neutral weight 1 uses the shared setter's unwrapped body; keep the
-  selected occurrence metadata labeled 1.0. Ranges producing only neutral
-  weight must budget their actual compact output in length preflight, including
-  a one-value grid whose configured max is above 1 but below the next step.
-- Snapshot every validated generation setting, sample_count and native
-  character child including x/y at Start. Preserve coordinates through every
-  per-step requestFromDraft reconstruction; later marker edits cannot change
-  queued combinations. Preserve current draft style/seed. Show total
-  groups and total images before starting; never silently truncate the product.
-  Expose the frozen per-group count as `experiment.sampleCount`; running
-  progress must not recalculate expected image counts from an edited draft.
-- Reuse a supplied seed; for null seed, submit null once and latch the first
-  generation GET's effective_seed. Every subsequent request uses that seed.
-  This is request-level metadata, not a claimed per-image seed contract.
-- GenerationStore remains the sole active-operation owner through POST,
-  polling, terminal observation and image settlement. Ordinary generation,
-  history resume and another experiment must not interleave. Existing
-  accepted/first-terminal history notifications retain their meanings.
-  `operationLocked` stays true for accepted work whose GET failed until a
-  manual recheck settles it; result clearing cannot discard its owner context.
-- Fetch and archive a completed group's images before submitting its
-  successor. Move URL ownership to its row; internal advancement must not
-  revoke archived URLs. Explicit clear, logout/reset and disposal release
-  protected rows and all owned URLs. Prevent stale responses/continuations.
-  An explicit valid new Start replaces the old archive after all preflight
-  validation; disclose replacement in the UI. Ordinary submit and invalid
-  Start leave existing comparisons intact.
-- Stop prevents future POSTs while allowing an accepted step to settle.
-  POST/GET/job/image errors halt progression; no automatic paid retry. A
-  manual status recheck may settle an accepted job once, but cannot restart
-  a halted experiment. Preserve global uncertain-submit acknowledgement.
-- Comparison results render one image at a time in a stable, responsive
-  contain-sized area. Traverse archived rows in group order, then their
-  images in order. Empty/failed rows contribute one placeholder so metadata
-  and errors remain reachable. Show position, group/image identity, weights,
-  request/effective seed, task status, parameters and the current download.
-  Label positions as results, not image counts when placeholders exist.
-- Previous/next arrows sit beside the image area and are disabled at the
-  respective boundaries. Left/right keyboard events are handled only inside
-  the viewer, excluding editable controls; no global listener. Appending rows
-  retains the current selection. Clear/new experiment resets local selection.
-  Navigation reads the archive only: no request, draft change, scheduler
-  mutation or URL revocation. GenerationStore retains all URL ownership.
-  Refresh/closing the page stops future work; existing parameter history
-  remains durable, experiment grouping does not.
+- Exact scaled-integer counts: floor((max-min)/step)+1; source-order axes,
+  last varies fastest. Include max only on the grid. Select duplicate text by
+  occurrence; preserve unselected/unsupported syntax. Neutral 1.0 unwraps only
+  its outer numeric emphasis. Preview maximum rendered length conservatively,
+  including single neutral grids with off-grid maximum. No hidden truncation.
+- Start validates every setting/metadata bound, freezes source/ranges and the
+  native character coordinates/sample count, generates one UUID and issues one
+  create POST. The server derives all groups. Show total groups/images before
+  starting and use the server snapshot for running/reconnected displays.
+- Server chooses one seed once if blank; every group uses it even if the first
+  fails. Never infer a new seed from draft edits, image availability or GETs.
+- Authentication entry checks for an active run and attaches via GET without
+  changing the draft. Preserve separately guarded latest-history restoration.
+  An unresolved active check/creation or attached running/stopping state blocks
+  overlapping new ordinary/batch submissions locally. Backend also enforces
+  at most one active run per owner.
+- Failed groups advance automatically. Show processed/success/failure counts
+  and safe errors, including completion with failures. A disconnected poll is
+  an observation error, not a stopped run. Offer reconnect/retry read actions.
+- A lost create response reconciles only with known UUID GET; never auto resend
+  POST. An immediate GET404 cannot prove a still-pending POST was not accepted.
+  Preserve uncertainty until reconciled or explicitly acknowledged, with no
+  automatic paid retry. Keep ordinary generation's separate safeguards.
+- Explicit Stop POST prevents new server groups; accepted current group may
+  settle. Keep Stop reachable after reentry even when configuration is closed.
+  Lost Stop responses are not evidence of stopping; reconcile/read/show errors.
+- Reset/logout/session expiry/dispose abort observers, invalidate epochs and
+  revoke owned Blob URLs. They never call Stop. Stale create/poll/Stop responses
+  cannot attach to a later login or mutate another run. Failed logout must
+  leave the authenticated user able to reattach.
+- GenerationDraft and ordinary history reuse exclude experiment metadata.
+  Observation/saved viewing never mutates draft or a normal generation owner.
+- Use independent lazy comparison for server runs, while active and terminal.
+  Read bounded group metadata, load only current PNG; never accumulate entire
+  run Blobs. Metadata/parameters outlive seven-day images. Explicit refresh may
+  discover later groups; retain the selected group/image when possible.
+- Left/right order traverses group images then the next saved group. Failed,
+  empty and expired groups contribute a navigable placeholder with their
+  weights/seed/status/parameters. Show position, identity, expiry and current
+  download. Stable contain sizing; arrows disable at boundaries. Direction keys
+  act only inside the viewer and exclude editable controls, never globally.
+- Viewer selection/session races are guarded; replacement/close/logout/dispose
+  revoke only that viewer's URLs. Clearing comparison affects the page only,
+  not server records, server progress or image retention.
 
 ## Validation & Error Matrix
 
 | Condition | Behavior |
 | --- | --- |
-| No selected safe occurrence / stale source | Reject before POST; request current selection |
-| Duplicate selection / unknown or legacy syntax | Reject or disallow selection; preserve original text |
-| Empty/non-decimal input, step <= 0, min > max | Visible validation error; no POST |
-| max not on step grid | Use only grid points <= max; no extra endpoint |
-| Invalid generation/model/length | Reject before paid submission; no silent coercion |
-| Empty seed | First request null, later use first observed effective_seed |
-| First GET fails before seed known | Halt with accepted id; no second random POST |
-| Stop during POST/poll/images | Latch; accepted step may settle, successor blocked |
-| Job/image/transport failure | Preserve rows, halt remaining combinations |
-| Uncertain POST | Preserve existing global uncertainty lock; never auto resend |
-| Logout/disposal during a run | Invalidate owner token, stop futures, clear protected URLs/state |
-| First/last retained result | Disable previous/next respectively; do not wrap |
-| Failed/empty group | One navigable placeholder with its metadata/errors |
-| More archived rows arrive while browsing | Retain the selected group/image |
-| Clear/new experiment | Reset viewer position; store owns URL cleanup |
+| Stale/unsafe/duplicate selected occurrence | Reject before create; preserve original source |
+| Invalid decimal, step<=0, min>max or over-bound plan | Visible preflight error; no POST |
+| Valid explicit Start | One creation POST, then read-only polling |
+| First group fails with blank requested seed | Later groups use same server seed |
+| Group/provider/image display error | Record/show error; server continues later groups |
+| Lost create response | Known-id GET reconciliation; no automatic POST retry |
+| Poll failure | Visible disconnected state/reconnect; server continues |
+| Explicit Stop | Stopping/stopped from server; current accepted group may finish |
+| Reload/logout/dispose | Detach only; entry GET reconnects same active run |
+| Foreign/stale run/session response | Cannot change current user's state |
+| Failed/expired group | Navigable metadata placeholder |
+| Clear current comparison | Release local viewer URLs only |
 
 ## Good / Base / Bad Cases
 
-- Good: two three-value ranges generate nine distinct groups with fixed base
-  request and seed. Base: min=max produces one group. Negative/zero weights
-  follow the same exact decimal arithmetic as ordinary numeric weight edits.
-- Good: 0.8..1.1 by 0.2 gives 0.8 and 1.0, with no floating-point noise.
-- Good: two images in group 1 precede group 2's placeholder, then group 3's
-  images. Base: one image disables both arrows. Bad: an append selects the
-  newest image or a global direction-key listener interrupts prompt editing.
-- Bad: Cartesian diagonal only, random seed on every request, float loops,
-  starting the next POST from onTerminal before images load, or revoking an
-  archived group's images while advancing.
+- Good: 0.8..1.1 by 0.2 yields 0.8 and 1.0 exactly. Two three-value dimensions
+  produce nine combinations with one frozen request seed/settings snapshot.
+- Good: group 2 fails while the page is closed; entry attaches to group 7 and
+  history can compare earlier retained images with left/right arrows.
+- Base: one-value grid executes once; one saved image disables both arrows.
+- Bad: an effect resubmits paid groups after reconnect, or a late GET overrides
+  a new session/draft. Bad: navigation loads an entire experiment into memory.
 
 ## Verification Required
 
-Respect the retained operator restriction: no frontend automated tests or
-browser automation. Run ESLint/TypeScript, source-review the full lifecycle
-and range boundaries, and build explicit inputs in a fresh env-free stage.
-Review Stop during all phases, repeated terminal/status checks, logout with
-pending POST, source edits, image ownership and ordinary-generation guards.
-Review shrinking neutral replacements across multiple selected occurrences
-and near-limit neutral-only grids, including an off-grid configured maximum.
-No paid experiment may be executed as an implementation check.
-Source-review single/multi-image ordering, placeholder errors, selected
-metadata/download consistency, first/last arrows, viewer-only keyboard scope,
-append stability, reset/logout, contained responsive sizing and unchanged
-ordinary results. Distinguish static review from operator browser acceptance.
+Respect operator restriction: no frontend/helper automated tests or browser
+work. Use ESLint/TypeScript, full source review and a fresh explicit env-free
+build. Review entry/failed entry, creation ambiguity, active conflict, first
+failure/seed, Stop races, disconnected polls, current/terminal comparison,
+logout success/failure, stale session responses, draft/coordinate edits and
+URL cleanup. Backend uses meaningful fake-only scheduler/parser regressions.
+Real interaction/paid results remain a separate operator acceptance gate.
 
 ## Wrong vs Correct
 
-- Wrong: React effects start generation requests, selection is keyed by tag
-  text, or a failed request is automatically resent.
-- Correct: explicit Start invokes GenerationStore; immutable occurrence-based
-  plans drive one guarded submission at a time, stopping on ambiguity/failure.
+- Wrong: browser lifetime owns the paid loop or disconnection means stopped.
+- Correct: explicit Start creates a durable server run; browser reads progress,
+  compares saved images and sends Stop only when the user chooses it.
