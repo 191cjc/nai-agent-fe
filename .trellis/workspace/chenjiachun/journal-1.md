@@ -458,3 +458,26 @@ Added bounded draggable character positions across UI, API, provider and paramet
 ### Next Steps
 
 - Operator validates desktop/mobile drag, keyboard behavior and actual generated placement. Keep native-character task and broader acceptance gates in progress.
+
+
+## Session 13: Retained images and durable background style experiments
+<!-- trellis-session: v=2 fp=c5a4802df3b933aa -->
+
+**Date**: 2026-10-15
+**Task**: Retained images and durable background style experiments
+**Branch**: `feat/native-character-prompts`
+
+### Summary
+
+Implemented private seven-day disk images with bounded admission and lazy owner-only historical comparisons; migrated schema2 to3 for server-owned exact style batches, fixed seed, failed-group continuation, explicit Stop, reattachment and no duplicate paid retry after interruption. Independent full-scope check passed: 356 offline tests, Ruff/frozen/lock/OpenAPI, frontend ESLint/TypeScript and 19-input env-free build. Published paired release20261015T140424 after verified private online backup and zero-active checks; loaded API/public asset hashes, schema/integrity, private modes, auth guards, neighboring health and configuration continuity passed. No paid/browser/frontend/helper tests or credential/env/unit/Nginx changes. Broader task remains in_progress for operator/provider acceptance; no push or archive.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `326d8f9be3a899461b31027d8a7e177902a2ed8d` | feat: retain images and run style experiments in background |
+| `e150031` | docs: record retained images and background experiment deployment |
+
+### Status
+
+[OK] **Completed**
