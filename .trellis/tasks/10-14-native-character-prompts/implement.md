@@ -116,7 +116,10 @@ or configuration change is needed. Main owns specs and release records.
 - [x] Seven preset choices and lossless manual-entry behavior.
 - [x] Independent follow-up review, ESLint/TypeScript and fresh env-free
   production build; see `sampler-options-verification.md`.
-- [ ] Committed-input comparison, web-only publish and public verification.
+- [x] Work commit `8994c3d` matched staged inputs; web-only release
+  `20261015T075433` passed public page/asset hashes and health checks.
+  See `deployment-sampler-options-2026-10-15.md`. API pointer/PID unchanged;
+  interactive/provider acceptance remains pending.
 
 ## Deployment Considerations (Original Native Characters)
 
