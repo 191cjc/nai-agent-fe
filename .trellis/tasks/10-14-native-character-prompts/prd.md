@@ -348,3 +348,15 @@ new groups, restart reconciles the accepted group once, concurrent create does
 not duplicate a run, and another owner cannot see/control its data.
 
 Technical interface: durable-experiment-design.md; no unresolved product choices.
+
+## Follow-up: Faster Comparison Revisit (2026-10-15)
+
+The operator asks about browser image caching because arrow navigation reloads
+previously viewed images. Retain recently viewed successful images in a bounded
+in-page memory cache (32 entries/64 MiB of image bytes), so revisiting within
+capacity avoids downloading PNG bytes again. Preserve fresh authenticated group
+metadata, expiry, selected-image/download consistency and all run behavior.
+Close/replacement/logout/session expiry/disposal clears URLs and memory;
+refreshing the browser starts fresh. No persistent/public/HTTP disk cache or
+whole-experiment download. Source/static verification and web-only publication
+follow existing authority; viewer-cache-design.md owns the detailed boundary.

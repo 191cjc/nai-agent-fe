@@ -344,3 +344,18 @@ owns the frozen shared API and supersedes earlier browser scheduling limits.
   publication 20261015T140424. See deployment-retention-and-background-2026-10-15.md.
 - [ ] Operator real-provider/background execution and desktop/mobile interaction
   acceptance; broader task remains in progress.
+
+## Follow-up Execution: Viewer Memory Cache (2026-10-15)
+
+1. Implementer extends SavedResultsStore with viewer-owned path-keyed LRU,
+   32-image/64 MiB limits, expiry and precise URL lifecycle; no API changes.
+2. Independent static full affected-layer check and ESLint/TypeScript; no
+   frontend/helper/browser automated tests or paid calls.
+3. Sync specs, fresh env-free build, scoped commit and web-only publication;
+   verify public hashes/health/retained assets and unchanged API pointer/PID.
+4. Record evidence/journal; retain broader operator acceptance status.
+
+- [x] Implementation and independent full affected frontend quality gate.
+  See check-viewer-cache.md; fresh 19-input env-free build also passed, as
+  recorded in viewer-cache-build-verification.md.
+- [ ] Fresh build, commit and verified web-only deployment.

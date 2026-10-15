@@ -22,6 +22,7 @@ This directory contains guidelines for frontend development. Fill in each file w
 | [Type Safety](./type-safety.md) | Type patterns, validation | To fill |
 | [Web Workspace Contract](./workspace-contract.md) | Same-origin paths, auth state and retained-result viewing | In use |
 | [Style Experiment Contract](./style-experiment-contract.md) | Exact Cartesian weights, sequential runs, seeds and result ownership | In use |
+| [Viewer Cache Contract](./viewer-cache-contract.md) | Bounded in-page PNG reuse, expiry, metadata and URL lifecycle | In use |
 
 ---
 

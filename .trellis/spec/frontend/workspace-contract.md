@@ -67,9 +67,11 @@ provider credentials, durable image storage, or backend authorization.
   Ordinary successful history has an explicit viewing action; automatic latest
   entry restoration still restores parameters only.
 - Saved experiment browsing owns independent read-only state: paginated group
-  metadata and only the selected image Blob. Keep current image/metadata/
-  download aligned, last selection/session wins, and revoke only owned URLs on
-  replacement/close/reset/logout/401/disposal. Saved viewing never changes the
+  metadata and lazy images with a viewer-local LRU cache bounded to 32 PNGs and
+  64 MiB of Blob.size. Follow [Viewer Cache Contract](./viewer-cache-contract.md)
+  for current metadata/expiry checks and URL ownership. Keep current image/
+  metadata/download aligned, last selection/session wins, and clear owned URLs
+  on replacement/close/reset/logout/401/disposal. Saved viewing never changes the
   draft or generation/experiment operation, and never resumes paid work.
   Left/right and viewer-focused keys traverse images then saved groups; failed
   or expired rows have one metadata placeholder. Show original seven-day

@@ -15,8 +15,9 @@ See backend/durable-experiment-contract.md for the owning API/schema contract.
   the browser must never use it to schedule paid per-group submissions.
 - WorkspaceApi wraps POST /api/style-experiment-runs, GET /active,
   GET /{id} and POST /{id}/stop. Components delegate to stores.
-- SavedResultsStore owns paginated /api/style-experiments metadata and only
-  the selected authenticated PNG/Blob; its owner is independent of the run.
+- SavedResultsStore owns paginated /api/style-experiments metadata and lazy
+  authenticated PNGs, independently of the run. Follow viewer-cache-contract.md
+  for its 32-entry/64-MiB in-page cache and metadata/expiry/URL lifecycle.
 
 ## Contracts
 
@@ -53,8 +54,9 @@ See backend/durable-experiment-contract.md for the owning API/schema contract.
 - GenerationDraft and ordinary history reuse exclude experiment metadata.
   Observation/saved viewing never mutates draft or a normal generation owner.
 - Use independent lazy comparison for server runs, while active and terminal.
-  Read bounded group metadata, load only current PNG; never accumulate entire
-  run Blobs. Metadata/parameters outlive seven-day images. Explicit refresh may
+  Read bounded group metadata, load only the current PNG on a cache miss; never
+  prefetch or accumulate entire run Blobs. Metadata/parameters outlive seven-day
+  images; cached PNGs retain their original expiry. Explicit refresh may
   discover later groups; retain the selected group/image when possible.
 - Left/right order traverses group images then the next saved group. Failed,
   empty and expired groups contribute a navigable placeholder with their
