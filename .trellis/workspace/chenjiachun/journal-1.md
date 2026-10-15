@@ -420,3 +420,41 @@ Implemented guarded latest-history draft restoration and unified left tool drawe
 ### Next Steps
 
 - Operator interaction acceptance remains pending; user is considering intuitive per-character action/clothing controls as a design discussion, not yet implementation.
+
+
+## Session 12: Draggable character positions and paired release
+<!-- trellis-session: v=2 fp=0b8e0eb324f51bda -->
+
+**Date**: 2026-10-15
+**Task**: Draggable character positions and paired release
+**Branch**: `feat/native-character-prompts`
+
+### Summary
+
+Added bounded draggable character positions across UI, API, provider and parameter history; published matched API-first release 20261015T101355.
+
+### Main Changes
+
+- Added stable numbered mouse/touch markers, overlap selection, keyboard micro-adjustment and center reset; preserved positions through history entry/reuse and frozen experiments.
+- Added strict defaulted finite 0.1–0.9 coordinates, exact ordered MCP mapping and additive OpenAPI; synchronized executable contracts and release evidence.
+- Published paired API/web release 20261015T101355 after verified private online backup and zero-active-job checks; configuration unchanged and previous assets/releases retained.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `31cff3e` | feat: add draggable character positions |
+| `140bea2` | docs: record character position deployment |
+
+### Testing
+
+- [OK] Independent review: 249 offline backend tests, Ruff, frozen sync/lock checks, frontend ESLint/TypeScript and diff/context validation passed.
+- [OK] Fresh env-free build: all 15 web/19 API inputs matched committed source; running OpenAPI, public HTML/JS/CSS hashes, readiness and neighboring health passed. No frontend/browser automation or paid provider calls.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Operator validates desktop/mobile drag, keyboard behavior and actual generated placement. Keep native-character task and broader acceptance gates in progress.

@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 11
+- **Total Sessions**: 12
 - **Last Active**: 2026-10-15
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~422 | Active |
+| `journal-1.md` | ~460 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 12 | 2026-10-15 | Draggable character positions and paired release | `31cff3e`, `140bea2` | `feat/native-character-prompts` |
 | 11 | 2026-10-15 | Latest history restoration and left tool drawers | `5b48196`, `0a333ba` | `feat/native-character-prompts` |
 | 10 | 2026-10-15 | Style experiment image navigation | `1f9045d`, `545999b` | `feat/native-character-prompts` |
 | 9 | 2026-10-15 | Fix submission refusal and enable production images | `be99b7d`, `c020ab5`, `3ef513e` | `feat/native-character-prompts` |
