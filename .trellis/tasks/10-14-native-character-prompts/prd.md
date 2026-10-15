@@ -43,6 +43,15 @@ tab rather than consuming the positive editor's horizontal space.
   inspected provider does not offer automatic positioning through this tool.
 - Changes to advice inputs, authentication or historical image retention.
 
+Exception authorized on 2026-10-15: after the matched release and concrete
+enablement plan were prepared, the operator explicitly selected
+`授权接入现有配置并上线（推荐）`. This overrides the credential-change exclusion
+only for copying the existing private project's NAI_NOVELAI_MCP_URL and
+NAI_NOVELAI_MCP_TOKEN into the production operator environment, publishing the
+reviewed API/web fix and restarting the API. Preserve all unrelated settings,
+especially Codex advice. Only non-billable MCP discovery is authorized for
+verification; no image/advice request or automatic paid retry is authorized.
+
 ## Acceptance Criteria
 
 - [ ] Positive editing visibly distinguishes `画风`, `公共` and `人物`.
@@ -168,9 +177,9 @@ executor guard, with offline regressions proving other RuntimeErrors cannot
 claim pre-acceptance refusal. The safe frontend classification requires this
 backend correction first; the previous web-only publication plan is superseded.
 Prepare a matched API/web release and finish all offline/static checks.
-Production credential setup and the combined restart/switch remain a separate
-action requiring authorization; do not publish the new frontend against the
-old broad catch.
+The operator has now authorized production image configuration and the
+combined restart/switch under the narrow exception above. Do not publish the
+new frontend against the old broad catch.
 See `research/submission-rejection.md` for evidence and boundaries.
 
 ## Decisions and Provider Evidence (Original Native Characters)
