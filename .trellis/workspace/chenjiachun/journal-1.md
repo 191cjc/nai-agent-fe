@@ -308,3 +308,41 @@ Added seven source-backed sampler choices with lossless manual/history values; p
 ### Next Steps
 
 - Operator interaction/provider acceptance remains pending; no frontend/helper automated tests, browser automation or paid calls ran. Keep task in_progress.
+
+
+## Session 9: Fix submission refusal and enable production images
+<!-- trellis-session: v=2 fp=1dd75bbd85401b51 -->
+
+**Date**: 2026-10-15
+**Task**: Fix submission refusal and enable production images
+**Branch**: `feat/native-character-prompts`
+
+### Summary
+
+Diagnosed repeated 503 from an unconfigured NovelAI provider, corrected backend refusal typing and frontend uncertainty handling, and activated matched API/web release 20261015T082138 after explicit operator authorization.
+
+### Main Changes
+
+- Dedicated GenerationNotConfigured boundary preserves unknown outcomes for generic server/transport errors and stops experiments without retries.
+- Copied only existing NovelAI URL/token into private production configuration, preserved unrelated settings, backed up private state, and enabled the provider with API-first publication.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `be99b7d` | fix: distinguish unconfigured generation submissions |
+| `c020ab5` | docs: record image provider activation authorization |
+| `3ef513e` | docs: record production image provider activation |
+
+### Testing
+
+- [OK] 215 offline backend tests, Ruff, frozen dependency and lock checks; frontend ESLint/TypeScript and fresh env-free production build passed.
+- [OK] Non-billable MCP discovery/native schema, loaded process configuration, public page/resource hashes, readiness, AiQQ health, backup permissions and SQLite ownership passed; no paid or browser/frontend automated tests.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Operator tests real image output and desktop/mobile acceptance; keep the broader task active and retain the corrected API even when rolling back web.

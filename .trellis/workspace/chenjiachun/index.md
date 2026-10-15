@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 8
+- **Total Sessions**: 9
 - **Last Active**: 2026-10-15
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~310 | Active |
+| `journal-1.md` | ~348 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 9 | 2026-10-15 | Fix submission refusal and enable production images | `be99b7d`, `c020ab5`, `3ef513e` | `feat/native-character-prompts` |
 | 8 | 2026-10-15 | Sampler dropdown and web-only release | `8994c3d`, `e712005` | `feat/native-character-prompts` |
 | 7 | 2026-10-15 | Compact neutral weights and web-only release | `15f88d0`, `2c4f6b2` | `feat/native-character-prompts` |
 | 6 | 2026-10-14 | Style weight experiment and web-only release | `5e3795f`, `dff61be` | `feat/native-character-prompts` |
