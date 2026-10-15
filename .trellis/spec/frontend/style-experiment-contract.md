@@ -29,7 +29,9 @@ queue or persistent image archive.
   weight must budget their actual compact output in length preflight, including
   a one-value grid whose configured max is above 1 but below the next step.
 - Snapshot every validated generation setting, sample_count and native
-  character child at Start. Preserve current draft style/seed. Show total
+  character child including x/y at Start. Preserve coordinates through every
+  per-step requestFromDraft reconstruction; later marker edits cannot change
+  queued combinations. Preserve current draft style/seed. Show total
   groups and total images before starting; never silently truncate the product.
   Expose the frozen per-group count as `experiment.sampleCount`; running
   progress must not recalculate expected image counts from an edited draft.

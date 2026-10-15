@@ -16,3 +16,4 @@
 {"file": ".trellis/tasks/10-14-native-character-prompts/research/submission-rejection.md", "reason": "Observed 503 refusal before enqueue, narrow uncertainty classification and configuration boundary."}
 {"file": ".trellis/tasks/10-14-native-character-prompts/prd.md", "reason": "Follow-up single-image experiment navigation acceptance and boundaries"}
 {"file": ".trellis/tasks/10-14-native-character-prompts/design.md", "reason": "Latest-history entry initialization boundary and stale edit/session guards"}
+{"file": ".trellis/tasks/10-14-native-character-prompts/character-position-design.md", "reason": "Draggable character coordinate bounds, cross-layer mapping, lifecycle and rollout"}

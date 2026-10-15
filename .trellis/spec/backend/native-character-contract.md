@@ -11,7 +11,10 @@ remain separate through editing, persistence, reuse and provider submission.
 
 - `GenerationRequest` retains `positive_prompt` as shared scene text and adds
   `style_prompt: str = ''` and `character_prompts: list[CharacterPrompt] = []`.
-- `CharacterPrompt` contains `prompt: str`, a nonblank description.
+- `CharacterPrompt` contains nonblank `prompt: str` and strict finite
+  `x: float = 0.5`, `y: float = 0.5`, inclusive within `[0.1, 0.9]`.
+  Omission defaults independently; explicit null, booleans, numeric strings,
+  nonfinite numbers and out-of-range values fail validation.
 - `GenerationRequest.base_prompt` composes only style and shared scene text.
 - `POST /api/generations` accepts these additive fields; generation/history
   responses return them under `parameters`. Old saved settings_json supplies
@@ -33,8 +36,10 @@ remain separate through editing, persistence, reuse and provider submission.
   Preserve free-form model/sampler inputs for requests without characters.
 - The MCP base `prompt` is base_prompt, not a concatenation of characters.
   For each ordered character send
-  `{prompt, negative_prompt: '', x: 0.5, y: 0.5, enabled: true}` through the
+  `{prompt, negative_prompt: '', x, y, enabled: true}` through the
   optional `character_prompts` argument. Global negative_prompt is unchanged.
+  Forward each validated coordinate exactly and preserve order; the verified
+  wrapper bounds are 0.1–0.9, not 0–1.
 - Before a paid tool call, require tools/list to advertise an object-array
   character_prompts argument, including its deployed nullable anyOf form.
   Missing/incompatible support fails with unsupported_character_prompts;
@@ -53,9 +58,13 @@ remain separate through editing, persistence, reuse and provider submission.
   successful model availability or generated image quality.
 - Save the entire validated request in the existing private settings_json.
   No schema migration or image persistence is needed. Reuse restores style,
-  shared text and ordered characters; legacy flat text goes into shared.
+  shared text and ordered characters with positions; old native records with
+  omitted axes default to center. Legacy flat text goes into shared.
 - Native rollout is API first, then frontend. An old API ignores unknown
   fields, so a frontend-only release could silently discard characters.
+  Coordinate releases also require API-first order: the previous native API
+  ignores x/y and hardcodes center. Retain the coordinate API during web
+  fallback, since already-open new tabs may send positions.
 - API downgrade compatibility includes saved JSON, not only SQLite version.
   Style-only records can have positive_prompt='' and fail the old API's
   minimum-length validation when history is read. Prefer a forward fix or
@@ -73,6 +82,9 @@ remain separate through editing, persistence, reuse and provider submission.
 | Blank base, even with characters | Reject validation; characters do not supply shared base content |
 | Composed base over 3000 or more than six characters | Reject validation before provider execution |
 | Blank/oversized character description | Reject validation; do not silently alter sibling entries |
+| Omitted character axis in request or old native history | Default that axis to 0.5 |
+| Coordinate 0.1 or 0.9 | Accept inclusive boundary |
+| Null, bool, string, nonfinite or out-of-range axis | Reject validation before provider execution |
 | Native characters with legacy/unknown/inpaint model ID | Reject validation before a paid call |
 | Native list absent or not an object-array in provider schema | Job fails safely with unsupported_character_prompts; zero tools/call |
 | Provider credentials absent | Existing safe provider_unavailable behavior |
@@ -82,7 +94,8 @@ remain separate through editing, persistence, reuse and provider submission.
 
 - Good: style `watercolor`, shared `two people, garden`, and two character
   descriptions produce base `watercolor, two people, garden` and two ordered
-  MCP character objects. History/reuse retains all four original inputs.
+  MCP character objects. Distinct `(0.2, 0.4)` and `(0.8, 0.6)` positions
+  survive settings_json, history/reuse and provider submission.
 - Base: old history containing only `positive_prompt: 'blue hair'` restores
   `blue hair` in shared with empty style and no native characters.
 - Bad: join the two character prompts into base text, accept a legacy model
@@ -93,7 +106,9 @@ remain separate through editing, persistence, reuse and provider submission.
 
 - Offline generation tests validate base composition/bounds, native model
   restrictions, count/blank/length limits, legacy defaults, owner isolation,
-  and structured settings_json round trips through restart and backup/restore.
+  strict coordinate types/bounds and structured settings_json round trips
+  through restart and backup/restore, including old native JSON with omitted
+  coordinates and distinct noncenter ordered coordinates.
 - MCP tests assert the exact distinct ordered character objects, global
   negative prompt, original flat payload, and no paid call on missing or
   incompatible native schema. Tests use only MockTransport/fake providers.
@@ -112,5 +127,8 @@ remain separate through editing, persistence, reuse and provider submission.
   x, y and enabled; the provider owns downstream caption serialization.
 - Wrong: use array indices as persistent tag insertion targets or serialize
   client card IDs into the browser API.
-- Correct: keep stable draft-only IDs, serialize only prompt descriptions,
+- Correct: keep stable draft-only IDs, serialize prompt and x/y coordinates,
   and reset invalid targets to shared on removal/reuse/session reset.
+
+- Wrong: add draggable markers while leaving the adapter hardcoded to center.
+- Correct: preserve x/y across browser snapshots, validation, storage and MCP.

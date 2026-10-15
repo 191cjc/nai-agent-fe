@@ -321,3 +321,13 @@ unavailable while the older frontend cannot preserve style/character fields.
 Before downgrading the API, verify all saved requests against its old model,
 or deliberately restore a compatible snapshot with the recovery-point tradeoff
 above. See `../.trellis/spec/backend/native-character-contract.md`.
+
+Draggable character positions also require an API-first paired release. The
+previous native API ignores x/y and hardcodes all characters to center. The
+coordinate API defaults omitted axes to 0.5 and validates explicit finite
+numbers within 0.1–0.9, using existing settings_json without a migration.
+Verify the running OpenAPI coordinate fields before publishing the web. If
+reverting the web afterwards, retain this API so already-open pages keep
+their positions. Take the verified private online backup and check for active
+jobs before the restart; existing transient images are lost. No provider
+configuration change or paid generation is needed to deploy this addition.

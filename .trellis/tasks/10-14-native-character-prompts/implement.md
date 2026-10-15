@@ -250,6 +250,32 @@ No frontend/helper tests, browser automation or paid calls.
 - [x] Matching production build and verified web-only publication. Combined
   release `20261015T093934`; see `deployment-history-and-drawers-2026-10-15.md`.
 
+## Follow-up Execution: Draggable Character Positions (2026-10-15)
+
+Use character-position-design.md as the shared cross-layer interface. Backend
+implementer owns models/adapter/offline regressions/OpenAPI; frontend implementer
+owns browser types/store/position component/App/CSS. They preserve each other's
+work. Parent owns docs/specs, clean staging, integration and release.
+
+1. Implement additive bounded/defaulted coordinates and exact provider mapping;
+   add meaningful offline defaults/bounds/persistence/adapter regressions.
+2. Implement pointer/touch/keyboard marker control, overlap selection, reset,
+   stable identities and all reuse/snapshot/draft revision paths. Run lint/types.
+3. Independent combined review; full offline backend quality gate, reviewed
+   OpenAPI, frontend static/source checks. No browser/helper/paid tests.
+4. Update executable specs, clean env-free web build and matching immutable API
+   release. Commit scoped work, take verified private online backup and inspect
+   active jobs. Publish API-first, readiness then web under existing authority.
+5. Verify public page/assets/schema/readiness/neighboring health, loaded release,
+   retained assets and configuration continuity without exposing secrets.
+   Record release/journal; broader operator/provider acceptance remains open.
+
+- [x] Implementation and independent combined quality gate: 249 offline
+  backend tests, Ruff, frozen/lock checks and web ESLint/TypeScript pass.
+  See `check-character-positions.md`. Fresh env-free build and all 15 inputs
+  match reviewed source; see `character-positions-build-verification.md`.
+- [ ] Matching source/build inputs, private backup and API-first publication.
+
 ## Deployment Considerations (Original Native Characters)
 
 Publishing both layers requires API-first order and a verified private backup

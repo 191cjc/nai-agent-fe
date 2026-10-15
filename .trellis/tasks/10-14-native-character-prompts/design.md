@@ -1,5 +1,9 @@
 # Design: Native Character Prompt Editor
 
+The later `character-position-design.md` supersedes the original centered
+coordinate mapping and positioning-UI exclusion below. Other original
+contracts remain in effect.
+
 ## Change Boundary
 
 The existing editor stores a flat positive/negative pair and the MCP adapter

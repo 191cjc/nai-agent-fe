@@ -47,7 +47,10 @@ NATIVE_INPUT = {
     "model": "nai-diffusion-5-full",
     "style_prompt": " watercolor ",
     "positive_prompt": " garden, 2girls ",
-    "character_prompts": [{"prompt": " blue hair "}, {"prompt": "red hair, glasses"}],
+    "character_prompts": [
+        {"prompt": " blue hair ", "x": 0.1, "y": 0.9},
+        {"prompt": "red hair, glasses", "x": 0.73, "y": 0.27},
+    ],
     "seed": 77,
 }
 
@@ -148,7 +151,58 @@ def test_native_models_accept_workspace_character_limits(model: str) -> None:
     parameters = GenerationRequest.model_validate(
         {**NATIVE_INPUT, "model": model, "character_prompts": characters}
     )
-    assert parameters.model_dump()["character_prompts"] == characters
+    assert parameters.model_dump()["character_prompts"] == [
+        {**character, "x": 0.5, "y": 0.5} for character in characters
+    ]
+
+
+@pytest.mark.parametrize(
+    ("coordinates", "expected"),
+    [
+        ({}, {"x": 0.5, "y": 0.5}),
+        ({"x": 0.1}, {"x": 0.1, "y": 0.5}),
+        ({"y": 0.9}, {"x": 0.5, "y": 0.9}),
+        ({"x": 0.9, "y": 0.1}, {"x": 0.9, "y": 0.1}),
+        ({"x": 0.234, "y": 0.876}, {"x": 0.234, "y": 0.876}),
+    ],
+)
+def test_character_coordinates_default_independently_and_preserve_valid_numbers(
+    coordinates: dict, expected: dict,
+) -> None:
+    parameters = GenerationRequest.model_validate({
+        **NATIVE_INPUT, "character_prompts": [{"prompt": "person", **coordinates}],
+    })
+    assert parameters.model_dump()["character_prompts"] == [{"prompt": "person", **expected}]
+
+
+@pytest.mark.parametrize("axis", ["x", "y"])
+@pytest.mark.parametrize(
+    "coordinate",
+    [
+        None, True, False, "0.5", "NaN", [], {}, 0, 1, 0.099, 0.901,
+        float("nan"), float("inf"), float("-inf"),
+    ],
+)
+def test_invalid_character_coordinates_rejected_without_job_or_provider_work(
+    database: Database, axis: str, coordinate,
+) -> None:
+    provider = FakeProvider()
+    with client_for(database, provider) as client:
+        login(client, database, "alice")
+        parameters = {
+            **NATIVE_INPUT, "character_prompts": [{"prompt": "person", axis: coordinate}],
+        }
+        # Raw content also exercises nonstandard JSON NaN/Infinity if the parser accepts it.
+        response = client.post(
+            "/api/generations", content=json.dumps(parameters),
+            headers={**ORIGIN, "Content-Type": "application/json"},
+        )
+        assert response.status_code == 422
+        assert response.json() == {
+            "code": "validation_error", "message": "Invalid request", "retryable": False,
+        }
+        assert client.get("/api/generations").json()["items"] == []
+        assert provider.calls == []
 
 
 @pytest.mark.parametrize(
@@ -194,6 +248,10 @@ def test_structured_and_legacy_history_survive_restart_backup_and_reuse(
 ) -> None:
     provider = FakeProvider()
     legacy = {**INPUT, "positive_prompt": "  original flat prompt  ", "seed": 77}
+    old_native = {
+        **NATIVE_INPUT,
+        "character_prompts": [{"prompt": " blue hair "}, {"prompt": "red hair, glasses"}],
+    }
     with client_for(database, provider) as client:
         _token, alice_id, session = login(client, database, "alice")
         native_id = client.post(
@@ -201,16 +259,22 @@ def test_structured_and_legacy_history_survive_restart_backup_and_reuse(
         ).json()["id"]
         assert wait_finished(client, native_id)["parameters"] == NATIVE_INPUT
         assert provider.calls[0].model_dump() == NATIVE_INPUT
+        old_native_id = JobStore(database).create(alice_id, GenerationRequest(**old_native))
         legacy_id = JobStore(database).create(alice_id, GenerationRequest(**legacy))
-        # Simulate an actual pre-upgrade row with no structured fields in its saved JSON.
         with database.connect(write=True) as connection:
-            connection.execute(
+            persisted = connection.execute(
+                "SELECT settings_json FROM generation_jobs WHERE id = ?", (native_id,),
+            ).fetchone()
+            assert json.loads(persisted["settings_json"]) == NATIVE_INPUT
+            # Simulate saved JSON from before positions and before native characters.
+            connection.executemany(
                 "UPDATE generation_jobs SET settings_json = ?, status = 'succeeded' WHERE id = ?",
-                (json.dumps(legacy), legacy_id),
+                [(json.dumps(old_native), old_native_id), (json.dumps(legacy), legacy_id)],
             )
         login(client, database, "bob")
         assert client.get("/api/generations").json()["items"] == []
         assert client.get(f"/api/generations/{native_id}").status_code == 404
+        assert client.get(f"/api/generations/{old_native_id}").status_code == 404
         assert client.get(f"/api/generations/{legacy_id}").status_code == 404
         client.cookies.set(SESSION_COOKIE, session)
         target = database.path.parent / "structured-snapshot.sqlite3"
@@ -218,6 +282,12 @@ def test_structured_and_legacy_history_survive_restart_backup_and_reuse(
 
     expected = {
         native_id: NATIVE_INPUT,
+        old_native_id: {
+            **old_native,
+            "character_prompts": [
+                {**character, "x": 0.5, "y": 0.5} for character in old_native["character_prompts"]
+            ],
+        },
         legacy_id: {**legacy, "style_prompt": "", "character_prompts": []},
     }
     for stored_database in (database, Database(target)):
@@ -234,9 +304,9 @@ def test_structured_and_legacy_history_survive_restart_backup_and_reuse(
                 assert response.status_code == 202
                 reused = wait_finished(restored, response.json()["id"])
                 assert reused["parameters"] == parameters
-            assert [parameters.model_dump() for parameters in reusable_provider.calls] == [
-                NATIVE_INPUT, expected[legacy_id]
-            ]
+            assert [parameters.model_dump() for parameters in reusable_provider.calls] == list(
+                expected.values()
+            )
     assert target.stat().st_mode & 0o777 == 0o600
     assert PNG not in target.read_bytes()
 

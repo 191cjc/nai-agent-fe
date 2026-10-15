@@ -7,7 +7,8 @@ import {
 } from 'lucide-react'
 import { ApiFailure, errorText, type GenerationRequest } from './api'
 import type { GenerationDraft } from './store'
-import { AppStore, MAX_CHARACTERS, NATIVE_CHARACTER_MODELS, supportsNativeCharacters } from './store'
+import { AppStore, CHARACTER_POSITION_CENTER, MAX_CHARACTERS, NATIVE_CHARACTER_MODELS, supportsNativeCharacters } from './store'
+import { CharacterPositions } from './CharacterPositions'
 import { PromptEditor } from './PromptEditor'
 import { StyleExperimentConfig, StyleExperimentProgress, StyleExperimentResults } from './StyleExperiment'
 
@@ -133,7 +134,8 @@ const Editor = observer(({ store, onOpenSettings }: { store: AppStore; onOpenSet
                   if (id) requestAnimationFrame(() => document.getElementById(`character-prompt-${id}`)?.focus())
                 }}><Plus size={15} aria-hidden="true" /> 添加人物</button>
             </div>
-            <p className="prompt-hint">分别填写每个人物的特征，人物位置默认居中。留空的人物不会提交。</p>
+            <p className="prompt-hint">分别填写每个人物的特征，拖动下方编号调整位置。留空的人物不会提交。</p>
+            <CharacterPositions generation={generation} />
             <div className="character-list">{draft.character_prompts.map((character, index) => <div className="character-card" key={character.id}>
               <div className="character-card-heading"><label htmlFor={`character-prompt-${character.id}`}>人物 {index + 1}</label>
                 <button className="icon-button danger" type="button" title={`移除人物 ${index + 1}`} aria-label={`移除人物 ${index + 1}`}
@@ -260,7 +262,9 @@ function PromptSummary({ parameters }: { parameters: Pick<GenerationRequest, 'st
     {parameters.style_prompt && <div><dt>画风</dt><dd>{parameters.style_prompt}</dd></div>}
     {parameters.positive_prompt && <div><dt>公共</dt><dd>{parameters.positive_prompt}</dd></div>}
     {(parameters.character_prompts ?? []).map((character, index) =>
-      <div key={index}><dt>人物 {index + 1}</dt><dd>{character.prompt}</dd></div>)}
+      <div key={index}><dt>人物 {index + 1}</dt><dd>{character.prompt}
+        <span className="character-saved-position">位置 X {(character.x ?? CHARACTER_POSITION_CENTER).toFixed(2)} · Y {(character.y ?? CHARACTER_POSITION_CENTER).toFixed(2)}</span>
+      </dd></div>)}
   </dl>
 }
 

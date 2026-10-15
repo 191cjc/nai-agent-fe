@@ -38,9 +38,9 @@ tab rather than consuming the positive editor's horizontal space.
 ## Out of Scope
 
 - Paid image/advice probes or credential changes.
-- Image uploads, references, Vibe transfer and manual character-position
-  controls. Characters use the service's default centered coordinates; the
-  inspected provider does not offer automatic positioning through this tool.
+- Image uploads, references and Vibe transfer. Automatic character positioning
+  is not exposed by the inspected provider. Manual position dragging is now
+  included by the follow-up authorization below.
 - Changes to advice inputs, authentication or historical image retention.
 
 Exception authorized on 2026-10-15: after the matched release and concrete
@@ -249,6 +249,30 @@ the same left drawer behavior as Settings.
   existing generation/experiment/image behavior.
 - Scope App.tsx and styles.css; keep frontend/static-only validation and
   existing web publication authorization. No browser/helper tests or paid calls.
+
+## Follow-up: Draggable Character Positions
+
+On 2026-10-15 the operator chose to implement draggable character positioning
+first, following the position-preview recommendation. Tag disabling and
+action/clothing categories remain design discussion only.
+
+- Show a canvas-proportional position preview near the character editors,
+  with stable numbered markers for each character. Support mouse/touch drag,
+  keyboard adjustment and reset to center. Provide a way to select each
+  character when default centered markers overlap.
+- Keep each position with its character through edits/removal, submission,
+  parameter history, manual/automatic reuse and frozen style experiments.
+  New characters and old history default to x=y=0.5. Empty draft cards remain
+  omitted from generation. Positions guide character placement, not limb pose.
+- Validate finite numeric x/y in the provider-supported inclusive 0.1–0.9
+  range on both layers; clamp pointer movement to it. Preserve separate native
+  character prompts, model limits and all existing generation/no-retry guards.
+- Extend the API and adapter; deliver the backend before the new frontend so
+  position changes reach the provider. Keep existing provider configuration.
+  Follow existing private-backup and no-active-job restart precautions.
+- Source/static frontend checks only, meaningful offline backend regressions,
+  fresh env-free build and production verification. No frontend/helper/browser
+  tests, paid calls, credentials changes or image persistence.
 
 ## Decisions and Provider Evidence (Original Native Characters)
 

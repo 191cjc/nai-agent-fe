@@ -5,6 +5,8 @@ export interface UserInfo {
 
 export interface CharacterPrompt {
   prompt: string
+  x?: number
+  y?: number
 }
 
 export interface GenerationRequest {

@@ -494,6 +494,39 @@ def test_native_characters_keep_boundaries_order_and_centered_provider_defaults(
     }
 
 
+def test_native_character_coordinates_are_forwarded_exactly_in_order() -> None:
+    parameters = GenerationRequest.model_validate({
+        **native_parameters().model_dump(),
+        "character_prompts": [
+            {"prompt": "left character", "x": 0.1, "y": 0.9},
+            {"prompt": "right character", "x": 0.73, "y": 0.27},
+            {"prompt": "old centered character"},
+        ],
+    })
+    schema = {
+        **SCHEMA,
+        "properties": {**SCHEMA["properties"], "character_prompts": CHARACTER_SCHEMA},
+    }
+    transport, calls = mock_mcp(schema=schema)
+    provider_for(transport).generate(parameters)
+    paid_calls = [call for call in calls if call["method"] == "tools/call"]
+    assert len(paid_calls) == 1
+    assert paid_calls[0]["params"]["arguments"]["character_prompts"] == [
+        {
+            "prompt": "left character", "negative_prompt": "",
+            "x": 0.1, "y": 0.9, "enabled": True,
+        },
+        {
+            "prompt": "right character", "negative_prompt": "",
+            "x": 0.73, "y": 0.27, "enabled": True,
+        },
+        {
+            "prompt": "old centered character", "negative_prompt": "",
+            "x": 0.5, "y": 0.5, "enabled": True,
+        },
+    ]
+
+
 @pytest.mark.parametrize(
     ("style", "shared", "expected"),
     [

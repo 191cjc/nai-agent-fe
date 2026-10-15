@@ -235,8 +235,8 @@ class NovelAiMcpProvider:
                     {
                         "prompt": character.prompt,
                         "negative_prompt": "",
-                        "x": 0.5,
-                        "y": 0.5,
+                        "x": character.x,
+                        "y": character.y,
                         "enabled": True,
                     }
                     for character in parameters.character_prompts

@@ -98,6 +98,13 @@ def test_openapi_contract_matches_snapshot_without_database_or_provider_calls(
     required = schema["components"]["schemas"]["GenerationRequest"]["required"]
     assert "style_prompt" not in required
     assert "character_prompts" not in required
+    character_schema = schema["components"]["schemas"]["CharacterPrompt"]
+    assert character_schema["required"] == ["prompt"]
+    for coordinate in ("x", "y"):
+        assert character_schema["properties"][coordinate] == {
+            "default": 0.5, "minimum": 0.1, "maximum": 0.9,
+            "title": coordinate.upper(), "type": "number",
+        }
 
 
 def test_documented_errors_match_offline_validation_origin_and_ownership(tmp_path: Path) -> None:

@@ -18,6 +18,9 @@ import {
 } from './style-experiment'
 
 export const MAX_CHARACTERS = 6
+export const CHARACTER_POSITION_MIN = 0.1
+export const CHARACTER_POSITION_MAX = 0.9
+export const CHARACTER_POSITION_CENTER = 0.5
 export const NATIVE_CHARACTER_MODELS = [
   'nai-diffusion-4-full',
   'nai-diffusion-4-curated-preview',
@@ -30,6 +33,8 @@ export const NATIVE_CHARACTER_MODELS = [
 export interface CharacterDraft {
   id: string
   prompt: string
+  x: number
+  y: number
 }
 
 export type PositiveTagTarget = 'style_prompt' | 'positive_prompt' | `character:${string}`
@@ -46,8 +51,12 @@ export type GenerationDraft = Omit<GenerationRequest, 'width' | 'height' | 'step
 
 let characterSequence = 0
 
-function newCharacter(prompt = ''): CharacterDraft {
-  return { id: `character-${++characterSequence}`, prompt }
+function newCharacter(prompt = '', x = CHARACTER_POSITION_CENTER, y = CHARACTER_POSITION_CENTER): CharacterDraft {
+  return { id: `character-${++characterSequence}`, prompt, x, y }
+}
+
+function validCharacterPosition(value: number): boolean {
+  return Number.isFinite(value) && value >= CHARACTER_POSITION_MIN && value <= CHARACTER_POSITION_MAX
 }
 
 export function supportsNativeCharacters(model: string): boolean {
@@ -82,6 +91,9 @@ export function requestFromDraft(draft: GenerationDraft): GenerationRequest {
   if (draft.character_prompts.length > MAX_CHARACTERS) throw new Error(`最多添加 ${MAX_CHARACTERS} 个人物。`)
   const characters = draft.character_prompts.filter(character => character.prompt.trim())
   if (characters.some(character => character.prompt.length > 3000)) throw new Error('每个人物的提示词不能超过 3000 字符。')
+  if (characters.some(character => !validCharacterPosition(character.x) || !validCharacterPosition(character.y))) {
+    throw new Error('人物的 X / Y 坐标须为 0.1–0.9 之间的有效数值。')
+  }
   if (!draft.model.trim() || draft.model.length > 80) throw new Error('请输入模型 ID（最多 80 字符）。')
   if (characters.length && !supportsNativeCharacters(draft.model)) {
     throw new Error('当前模型不支持独立人物，请在生成设置中选择列表中的 V4 / V4.5 / V5 模型。')
@@ -92,7 +104,7 @@ export function requestFromDraft(draft: GenerationDraft): GenerationRequest {
   return {
     positive_prompt: draft.positive_prompt,
     style_prompt: draft.style_prompt,
-    character_prompts: characters.map(character => ({ prompt: character.prompt })),
+    character_prompts: characters.map(character => ({ prompt: character.prompt, x: character.x, y: character.y })),
     negative_prompt: draft.negative_prompt,
     model: draft.model.trim(),
     width: integer(draft.width, '宽度', 64, 2048, 64),
@@ -299,6 +311,16 @@ export class GenerationStore {
     }
   }
 
+  setCharacterPosition(id: string, x: number, y: number): void {
+    if (!validCharacterPosition(x) || !validCharacterPosition(y)) return
+    const character = this.draft.character_prompts.find(character => character.id === id)
+    if (character) {
+      this.draftVersion += 1
+      character.x = x
+      character.y = y
+    }
+  }
+
   removeCharacter(id: string): void {
     this.draftVersion += 1
     this.draft.character_prompts = this.draft.character_prompts.filter(character => character.id !== id)
@@ -331,7 +353,7 @@ export class GenerationStore {
       ...item.parameters,
       style_prompt: item.parameters.style_prompt ?? '',
       character_prompts: item.parameters.character_prompts?.length
-        ? item.parameters.character_prompts.map(character => newCharacter(character.prompt)) : [newCharacter()],
+        ? item.parameters.character_prompts.map(character => newCharacter(character.prompt, character.x, character.y)) : [newCharacter()],
       width: String(item.parameters.width), height: String(item.parameters.height),
       steps: String(item.parameters.steps), cfg_scale: String(item.parameters.cfg_scale),
       seed: String(item.effective_seed), sample_count: String(item.parameters.sample_count),
@@ -442,7 +464,10 @@ export class GenerationStore {
       const base = execution.parameters
       parameters = requestFromDraft({
         ...base, style_prompt: combination.stylePrompt,
-        character_prompts: base.character_prompts.map((character, child) => ({ ...character, id: `snapshot-${child}` })),
+        character_prompts: base.character_prompts.map((character, child) => ({
+          ...character, id: `snapshot-${child}`,
+          x: character.x ?? CHARACTER_POSITION_CENTER, y: character.y ?? CHARACTER_POSITION_CENTER,
+        })),
         width: String(base.width), height: String(base.height), steps: String(base.steps),
         cfg_scale: String(base.cfg_scale), seed: this.experiment.seed === null ? '' : String(this.experiment.seed),
         sample_count: String(base.sample_count),

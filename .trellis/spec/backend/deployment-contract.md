@@ -63,6 +63,11 @@ API process in production. Generated image bytes are transient.
   pre-upgrade snapshot after accepting newer-write loss. Native style-only
   records can fail an older API's positive-prompt validator despite the same
   SQLite version; see [Native Character Prompt Contract](./native-character-contract.md).
+- Coordinate upgrades are API-first too: the earlier native API ignores x/y
+  and hardcodes center. Verify the running additive OpenAPI before web
+  activation, keep the new API during web fallback for already-open tabs,
+  and preserve provider configuration. Back up privately and inspect active
+  jobs before restarting; this additive change needs no DB restore/migration.
 
 ## Validation & Error Matrix
 

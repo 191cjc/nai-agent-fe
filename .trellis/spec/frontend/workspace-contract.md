@@ -62,6 +62,20 @@ provider credentials, durable image storage, or backend authorization.
   targets must not move to another character when a sibling is removed.
   Removal of the targeted character, reuse and protected-state reset restore
   the shared target. Legacy history restores its flat positive text in shared.
+- Browser `CharacterPrompt` permits omitted x/y for legacy inputs; every
+  `CharacterDraft` owns numeric coordinates defaulting to 0.5. Submit positions
+  only for nonblank cards. Reuse preserves coordinates, defaults omitted axes
+  and creates fresh stable IDs. Position changes increment `draftVersion` to
+  invalidate pending automatic entry restoration.
+- `CharacterPositions` shows numbered markers in a responsive board matching
+  the generation aspect ratio, with a safe invalid-size fallback. Map x right
+  and y down over the full board, clamped to `[0.1, 0.9]` and two decimals.
+  Use pointer capture for mouse/touch, clean up up/cancel/lost capture and
+  ignore unrelated pointers/buttons. A removed/reused stable ID must never
+  transfer its drag to another card. Explicit selection makes overlapping
+  markers reachable. Distinguish empty cards, which stay draft-only.
+  Focused arrow keys adjust by 0.01; retain focus, Tab order and center reset.
+  Dragging never submits. Shared history/result summaries show saved positions.
 - The prompt editor's compact side tabs replace positive/negative panels in
   the same content area. Hidden negative content reserves no horizontal
   column; tab switching does not reset draft state. Keep visibility local to
@@ -130,7 +144,7 @@ provider credentials, durable image storage, or backend authorization.
 - Entry restoration must be separate from ordinary history refresh, deletion,
   pagination and generation completion. Use one-time entry state and stale
   response/session guards; a superseded load cannot supply the initial item.
-  Any intervening draft edit (including character/tag/weight changes), manual
+  Any intervening draft edit (including character/position/tag/weight changes), manual
   reuse or generation operation invalidates a pending automatic restore, even
   if the user subsequently returns the draft to the same values. Logout start,
   reset, session expiry and disposal invalidate the response. A failed logout
