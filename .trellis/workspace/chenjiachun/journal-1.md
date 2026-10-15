@@ -346,3 +346,40 @@ Diagnosed repeated 503 from an unconfigured NovelAI provider, corrected backend 
 ### Next Steps
 
 - Operator tests real image output and desktop/mobile acceptance; keep the broader task active and retain the corrected API even when rolling back web.
+
+
+## Session 10: Style experiment image navigation
+<!-- trellis-session: v=2 fp=26ed5f38e039684b -->
+
+**Date**: 2026-10-15
+**Task**: Style experiment image navigation
+**Branch**: `feat/native-character-prompts`
+
+### Summary
+
+Replaced the style-experiment gallery with a single-image viewer, independently checked and published web-only release 20261015T092041.
+
+### Main Changes
+
+- One contained image with side arrows and scoped left/right keys; metadata/downloads and failed groups stay reachable.
+- Preserve current selection on appended results; reset for new/cleared experiments. Store/API/URL ownership unchanged.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1f9045d` | feat: add arrow navigation to style experiments |
+| `545999b` | docs: record experiment viewer deployment |
+
+### Testing
+
+- [OK] Independent source review, ESLint/TypeScript, diff/context checks and fresh env-free production build passed; all 14 build inputs match reviewed and committed source.
+- [OK] Public HTML and JS/CSS hashes, readiness, neighboring health and retained assets passed. API release/PID unchanged; no frontend/helper/browser tests or paid calls.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Operator verifies desktop/mobile and keyboard comparisons with actual images; broader task remains active pending acceptance.
