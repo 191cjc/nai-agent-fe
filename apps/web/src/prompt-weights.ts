@@ -173,6 +173,11 @@ export function setPromptTagWeight(source: string, tag: PromptTag, weight: strin
   } catch {
     return null
   }
+  if (nextWeight === '1.0') {
+    return tag.weightRange
+      ? source.slice(0, tag.start) + source.slice(tag.weightRange.end + 2, tag.end - 2) + source.slice(tag.end)
+      : source
+  }
   if (tag.weightRange) {
     return source.slice(0, tag.weightRange.start) + nextWeight + source.slice(tag.weightRange.end)
   }

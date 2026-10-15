@@ -71,6 +71,30 @@ ESLint/TypeScript, fresh env-free build, committed-input comparison and public
 page/asset/health checks passed. See the follow-up verification and deployment
 notes. Operator interaction and actual-provider acceptance remain pending.
 
+## Follow-up Execution: Compact Neutral Weights (2026-10-15)
+
+The behavior gap belongs to shared `setPromptTagWeight`, not component
+rendering: an explicit neutral assignment should remove the selected outer
+numeric wrapper or preserve a plain source. The implement agent owns
+`prompt-weights.ts` and, if needed for neutral-only preflight length,
+`style-experiment.ts`. No parser, UI mode, API, state-machine, dependency or
+credential changes are needed. Parent owns requirements/spec/release records.
+
+1. Implement the neutral writer rule and neutral-only length accounting;
+   preserve exact body/source spans and all non-neutral numeric behavior.
+2. Independent full-scope check of this follow-up, especially nested/grouped
+   content, two-direction returns to 1, exact decimal equivalents, right-to-
+   left experiment replacement and near-limit neutral-only ranges. Run
+   ESLint/TypeScript; no frontend automated/browser tests or paid calls.
+3. Update executable specs, build fresh explicit env-free inputs, compare
+   committed source, publish web-only, verify public hashes/health, record
+   release/journal. Keep operator runtime/provider acceptance open.
+
+- [x] Neutral source writer and one-point experiment length accounting.
+- [x] Independent follow-up review, ESLint/TypeScript and clean env-free
+  production build; see `neutral-weight-verification.md`.
+- [ ] Committed-input comparison, web-only publication and public checks.
+
 ## Deployment Considerations (Original Native Characters)
 
 Publishing both layers requires API-first order and a verified private backup

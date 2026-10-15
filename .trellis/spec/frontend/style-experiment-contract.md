@@ -24,6 +24,10 @@ queue or persistent image archive.
   Include max only when on the grid; source-order axes, last varies fastest.
   Resolve duplicate tag texts by occurrence/span. Each combination starts
   from the same captured source, replacing selected spans right to left.
+  Exact neutral weight 1 uses the shared setter's unwrapped body; keep the
+  selected occurrence metadata labeled 1.0. Ranges producing only neutral
+  weight must budget their actual compact output in length preflight, including
+  a one-value grid whose configured max is above 1 but below the next step.
 - Snapshot every validated generation setting, sample_count and native
   character child at Start. Preserve current draft style/seed. Show total
   groups and total images before starting; never silently truncate the product.
@@ -87,6 +91,8 @@ browser automation. Run ESLint/TypeScript, source-review the full lifecycle
 and range boundaries, and build explicit inputs in a fresh env-free stage.
 Review Stop during all phases, repeated terminal/status checks, logout with
 pending POST, source edits, image ownership and ordinary-generation guards.
+Review shrinking neutral replacements across multiple selected occurrences
+and near-limit neutral-only grids, including an off-grid configured maximum.
 No paid experiment may be executed as an implementation check.
 
 ## Wrong vs Correct

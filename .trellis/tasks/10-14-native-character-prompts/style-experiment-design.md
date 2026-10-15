@@ -44,6 +44,10 @@ last varying fastest. Use source spans, never tag text identity, and replace
 right to left against the same captured source. Reuse exact decimal parse/
 format and an absolute-weight setter from prompt-weights rather than floats.
 Expose dimension labels/counts/min/max/step for the configuration preview.
+The 2026-10-15 neutral-weight follow-up makes an exact weight of 1 remove
+only the selected outer numeric wrapper, preserving its body and source
+siblings. Descending-span replacement remains valid when output shrinks.
+Neutral-only grids use their compact output in preflight length bounds.
 
 GenerationStore exposes:
 

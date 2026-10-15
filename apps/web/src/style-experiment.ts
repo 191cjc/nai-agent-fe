@@ -69,6 +69,12 @@ export function createStyleExperimentPlan(source: string, ranges: StyleExperimen
   let maxStyleLength = source.length
   for (const dimension of dimensions) {
     total *= dimension.count
+    // A single neutral grid point removes any outer numeric wrapper, even
+    // when the configured maximum is above 1 but is not reached by the step.
+    if (dimension.count === 1n && dimension.min === '1.0') {
+      maxStyleLength += dimension.tag.text.length - dimension.tag.source.length
+      continue
+    }
     const last = dimension.minUnits + (dimension.count - 1n) * dimension.stepUnits
     const absolute = (value: bigint) => value < 0n ? -value : value
     const largest = absolute(dimension.minUnits) > absolute(last) ? absolute(dimension.minUnits) : absolute(last)

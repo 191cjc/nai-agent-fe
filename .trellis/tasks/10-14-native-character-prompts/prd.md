@@ -120,6 +120,26 @@ from its first observed effective_seed, and every later request uses it.
 Stop/error/logout prevent a successor POST. Completed images remain labeled
 and downloadable without being revoked by advancing to the next group.
 
+## Follow-up: Compact Neutral Weights
+
+On 2026-10-15 the operator requested removing redundant numeric emphasis
+when an explicit weight adjustment returns to 1.0. For example,
+`1.1::artist:meion::` adjusted down becomes `artist:meion`, and 0.9 adjusted
+up has the same result. Default plain tags continue to display weight 1.0.
+
+- Apply the same rule in the shared absolute-weight writer so ordinary
+  prompt controls and style experiment combinations agree. Exact decimal
+  equivalents of 1 normalize to the same neutral behavior.
+- Remove only the selected outer numeric wrapper, retaining its exact body,
+  internal emphasis, whitespace, escapes, sibling text and delimiters.
+  Setting an already plain tag to 1 leaves its source unchanged.
+- Blur/manual editing alone does not rewrite drafts. Unknown or incomplete
+  expressions retain the existing conservative handling.
+- Neutral-only experimental ranges must not budget nonexistent wrappers in
+  preflight length checks; preserve lazy enumeration and source-span safety.
+- Retain all prior verification restrictions and publish a fresh web-only
+  release under existing authorization.
+
 ## Decisions and Provider Evidence (Original Native Characters)
 
 - A non-billable MCP initialization and tool listing on 2026-10-14 confirms

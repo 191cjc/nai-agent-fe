@@ -15,6 +15,9 @@ provider credentials, durable image storage, or backend authorization.
   `resetProtected()` clears them on logout or session expiry.
 - `GenerationStore(api, onSubmitted, onTerminal)` reports accepted submissions
   separately from the first terminal observation of the tracked job.
+- `setPromptTagWeight(source, tag, weight)` updates one validated source span;
+  an exact neutral weight removes only its outer numeric wrapper, while
+  assigning 1 to a plain tag preserves its source. Unsafe/stale tags return null.
 - `HistoryStore.refresh(): void` refreshes the current page, coalescing behind
   a pending `load(offset)` and following that latest requested offset.
 - `NAI_WEB_BASE_PATH` is a build-time, same-origin path ending in `/` (default
@@ -63,6 +66,12 @@ provider credentials, durable image storage, or backend authorization.
   Treat a plain unescaped trailing colon as original text: adding `::` would
   produce an ambiguous `:::` boundary. Escaped trailing/internal colons remain
   literal text.
+- On an explicit assignment or adjustment to exact weight 1, emit the
+  selected numeric group's body without its outer `1.0::...::` wrapper.
+  Preserve body whitespace, escapes, nested emphasis and surrounding source.
+  The shared absolute setter owns this rule for both prompt buttons and style
+  experiments. Plain 1.0 needs no wrapper; blur/manual view changes alone
+  still leave source unchanged. Other weights retain numeric serialization.
 - Derive prompt tags from current props so tag search, history reuse and
   character edits cannot diverge from the submitted prompt. Keep buttons
   outside enclosing labels, use `type="button"`, retain stable character IDs
@@ -106,6 +115,7 @@ provider credentials, durable image storage, or backend authorization.
 | Arrow/Home/End in tool tabs | Select and focus the same tab in displayed order, with arrow wraparound |
 | First observed succeeded/failed job | Refresh history independently of image availability/download errors |
 | Same terminal result checked again | No duplicate completion-triggered history refresh |
+| Weight becomes exactly 1 (including decimal equivalents) | Remove only selected outer numeric wrapper; plain source unchanged |
 | Completion during history loading/pagination | Coalesce one refresh after the latest request and retain its offset |
 | History refresh fails | Set history error; preserve generation result and submission certainty |
 | Logout/session expiry with pending refresh | Clear refresh intent and reject stale protected responses |
@@ -118,6 +128,10 @@ provider credentials, durable image storage, or backend authorization.
   reload as parameters only while image object URLs do not.
 - Bad: direct browser requests to NovelAI, Codex, or DanbooruSearch; placing
   an access token in Web Storage; retrying an ambiguous paid submission.
+- Good: lowering `1.1::artist:meion::` or raising `0.9::artist:meion::`
+  produces `artist:meion`, still displayed at weight 1.0. Base: assigning
+  1 to a plain tag leaves it untouched. Bad: blindly removing nested emphasis
+  or rewriting unrelated manually entered wrappers on blur.
 - Good: page 20 is loading when generation completes; its latest request
   settles, then one history refresh requests page 20 even if the first load
   failed. Base: an idle history view reloads its displayed page once.
@@ -134,6 +148,8 @@ provider credentials, durable image storage, or backend authorization.
   deduplication, resumed/expired-image results, pending pagination (success and
   failure), and logout invalidation through the owning source paths. Record
   that source review separately from interactive browser validation.
+- Source-review neutral adjustments from both directions and exact decimal
+  equivalents, nested/escaped body preservation and plain-tag no-op behavior.
 - When this restriction is lifted, verify both base paths, logout during a
   pending submission, `401` cleanup, and absence of image/token persistence
   with deterministic fake responses only, never paid providers.
