@@ -315,7 +315,9 @@ API/types/stores/views/styles. Parent owns artifacts/specs/check/build/release.
   tests, Ruff/frozen/lock/OpenAPI, frontend lint/types/source checks all pass.
   See check-retention-and-background.md. Retention and durable scheduling
   publish together; current web build matches all 19 source/config/lock inputs.
-- [ ] Fresh build, matched commit/staging and verified API-first deployment.
+- [x] Fresh build, commit 326d8f9 and verified paired API-first publication
+  20261015T140424 with private backup, schema3 migration, exact public hashes
+  and unchanged configuration. See deployment-retention-and-background-2026-10-15.md.
 
 ## Follow-up Execution: Background Style Experiments (2026-10-15)
 
@@ -338,4 +340,7 @@ owns the frozen shared API and supersedes earlier browser scheduling limits.
   corrected cleanup ownership, scheduler fairness and prompt-trim bounds.
   See check-retention-and-background.md and
   retention-and-background-build-verification.md. No paid/browser calls.
-- [ ] Build, schema migration and verified production publication.
+- [x] Build, private backup, schema2->3 migration and verified paired production
+  publication 20261015T140424. See deployment-retention-and-background-2026-10-15.md.
+- [ ] Operator real-provider/background execution and desktop/mobile interaction
+  acceptance; broader task remains in progress.
