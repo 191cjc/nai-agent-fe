@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 6
-- **Last Active**: 2026-10-14
+- **Total Sessions**: 7
+- **Last Active**: 2026-10-15
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~238 | Active |
+| `journal-1.md` | ~274 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 7 | 2026-10-15 | Compact neutral weights and web-only release | `15f88d0`, `2c4f6b2` | `feat/native-character-prompts` |
 | 6 | 2026-10-14 | Style weight experiment and web-only release | `5e3795f`, `dff61be` | `feat/native-character-prompts` |
 | 5 | 2026-10-14 | Prompt tags and weight controls deployed | `0d12ea3`, `9f9dc24` | `feat/native-character-prompts` |
 | 4 | 2026-10-14 | Native character prompt editor and production release | `93e146b`, `6ab708e` | `feat/native-character-prompts` |

@@ -236,3 +236,39 @@ Implemented occurrence-based exact Cartesian style-weight experiments with froze
 ### Next Steps
 
 - Operator desktop/mobile/keyboard and real-provider experiment acceptance; retain active task in_progress pending that acceptance.
+
+
+## Session 7: Compact neutral weights and web-only release
+<!-- trellis-session: v=2 fp=371c9720c1028c1f -->
+
+**Date**: 2026-10-15
+**Task**: Compact neutral weights and web-only release
+**Branch**: `feat/native-character-prompts`
+
+### Summary
+
+Exact neutral prompt weights now omit their outer numeric wrappers across all prompt controls and style experiments; published web-only release 20261015T073652.
+
+### Main Changes
+
+- Shared weight setter preserves exact inner text and surrounding source when returning to 1.0; neutral-only experimental ranges use compact output length.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `15f88d0` | fix(web): omit neutral prompt weight wrappers |
+| `2c4f6b2` | docs: record compact neutral weights release |
+
+### Testing
+
+- [OK] Independent follow-up source review, ESLint/TypeScript, context validation, diff check and fresh explicit-input env-free offline production build passed.
+- [OK] All 14 staged inputs matched reviewed and committed source. Public HTML and referenced assets matched SHA-256, health and prior asset checks passed; API pointer/PID unchanged.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Operator interaction/provider acceptance remains pending. No frontend/helper automated tests, browser automation or paid calls were run; keep broader task in_progress.
