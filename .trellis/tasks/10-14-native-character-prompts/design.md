@@ -99,6 +99,45 @@ saved request against the old model or restoring a compatible snapshot with
 explicit acceptance of newer-write loss. Never automatically restore the
 production DB merely to roll back this additive feature.
 
+## Follow-up Boundary: Latest History on Entry
+
+Workspace currently loads history page zero without restoring a draft. Add
+entry initialization in the existing AppStore/history orchestration, invoked
+by the workspace entry effect. Reuse GenerationStore.reuse for complete and
+legacy-compatible mapping rather than duplicate request-to-draft conversion.
+Backend history is already ordered by created_at DESC, id DESC, owner-scoped;
+the first item of page zero is the newest submission regardless of status.
+
+Track one-time entry intent separately from history refresh. Guard the
+asynchronous load with an entry/session epoch and a draft edit revision (or
+equally reliable edit guard); a superseded history response must never be
+mistaken for the initial page. Apply only while the same authenticated entry
+remains current and no edit/reuse or generation operation intervened. Cancel
+on logout start/reset/disposal, preserving the existing failed-logout draft
+contract. Reset initialization eligibility on a new protected session, not on
+ordinary history refresh or a failed logout/remount. Keep history errors and
+pagination/refresh coalescing behavior. No image/job restoration or paid call.
+Expected source files are store.ts and App.tsx only, with no UI redesign.
+
+## Follow-up Boundary: Left Tool Drawers
+
+App.tsx currently splits a settings side panel from bottom tool tabs/drawer.
+Replace those visibility states with one local active left panel: settings,
+history, tags, advice or closed. Put all four rail controls in that order.
+Keep the existing SettingsPanel mounted and reuse its left panel/header/
+scroll/overlay layout for tools. Keep tool contents mounted while hidden so
+switching does not reset their state or dispatch requests. Generation and
+tool state remain in existing stores. Preserve the independent workspace
+entry initialization effect added in the parallel history follow-up.
+
+Remove obsolete bottom drawer markup and associated CSS/keyboard-tab code.
+Use disclosure buttons with native Tab/Enter/Space operation, aria-expanded
+and aria-controls (not abandoned tab/tabpanel roles). Escape/close/backdrop
+hide the active panel and avoid leaving focus in hidden content. Desktop
+uses the settings column; mobile uses its existing anchored overlay and
+backdrop with bounded width/scroll. Update narrow tool layouts for this
+column, preserving ordinary/experiment images and prompt side tabs.
+
 ## Follow-up Boundary: Prompt Tags and Weights
 
 The remaining behavior gap lives in the prompt textarea rendering. Add a

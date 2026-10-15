@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { observer } from 'mobx-react-lite'
 import {
-  ArrowDownToLine, ArrowLeft, ArrowRight, Check, ChevronDown, ChevronUp, Clock3,
+  ArrowDownToLine, ArrowLeft, ArrowRight, Check,
   FlaskConical, History, Image as ImageIcon, LogOut, Plus, RefreshCw, Search, Send, Settings2,
   Sparkles, Tags, Trash2, WandSparkles, X,
 } from 'lucide-react'
@@ -171,6 +171,21 @@ const Editor = observer(({ store, onOpenSettings }: { store: AppStore; onOpenSet
   </section>
 })
 
+function SidePanel({ id, title, hidden, onClose, children }: {
+  id: string
+  title: string
+  hidden: boolean
+  onClose: () => void
+  children: ReactNode
+}) {
+  return <aside className="settings-panel" id={id} aria-label={title} hidden={hidden}>
+    <div className="settings-header"><h2>{title}</h2>
+      <button className="icon-button" type="button" title={`关闭${title}`} aria-label={`关闭${title}`} onClick={onClose}><X size={18} aria-hidden="true" /></button>
+    </div>
+    <div className="settings-scroll">{children}</div>
+  </aside>
+}
+
 const SettingsPanel = observer(({ store, hidden, onClose }: { store: AppStore; hidden: boolean; onClose: () => void }) => {
   const [manualSampler, setManualSampler] = useState(false)
   const generation = store.generation
@@ -180,11 +195,7 @@ const SettingsPanel = observer(({ store, hidden, onClose }: { store: AppStore; h
   const selectedSampler = SAMPLER_PRESETS.find(preset => preset.id === draft.sampler)
   const showManualSampler = manualSampler || (draft.sampler !== '' && !selectedSampler)
 
-  return <aside className="settings-panel" id="generation-settings" aria-label="生成设置" hidden={hidden}>
-    <div className="settings-header"><h2>生成设置</h2>
-      <button className="icon-button" type="button" title="关闭生成设置" aria-label="关闭生成设置" onClick={onClose}><X size={18} /></button>
-    </div>
-    <div className="settings-scroll">
+  return <SidePanel id="generation-settings" title="生成设置" hidden={hidden} onClose={onClose}>
       <section className="settings-section" aria-labelledby="model-settings-title">
         <h3 id="model-settings-title">模型与采样</h3>
         <label className="field"><span>模型 ID <span className="required">*</span></span>
@@ -237,8 +248,7 @@ const SettingsPanel = observer(({ store, hidden, onClose }: { store: AppStore; h
         <label className="quality-toggle"><input type="checkbox" checked={draft.quality}
           onChange={event => generation.setField('quality', event.target.checked)} /><span>高质量预设</span></label>
       </section>
-    </div>
-  </aside>
+  </SidePanel>
 })
 
 function statusText(status: string): string {
@@ -389,39 +399,41 @@ const HistoryPanel = observer(({ store }: { store: AppStore }) => {
   </div>
 })
 
-const TOOL_TABS = [['history', Clock3, '历史'], ['tags', Tags, '标签'], ['advice', Sparkles, '建议']] as const
-type Tool = (typeof TOOL_TABS)[number][0]
+const LEFT_PANELS = [
+  { name: 'settings', id: 'generation-settings', Icon: Settings2, label: '生成设置' },
+  { name: 'history', id: 'workspace-history', Icon: History, label: '历史记录' },
+  { name: 'tags', id: 'workspace-tags', Icon: Tags, label: '提示词查询' },
+  { name: 'advice', id: 'workspace-advice', Icon: Sparkles, label: 'AI 建议' },
+] as const
+type Panel = (typeof LEFT_PANELS)[number]['name']
 
 const Workspace = observer(({ store }: { store: AppStore }) => {
-  const [tool, setTool] = useState<Tool>('history')
-  const [drawerOpen, setDrawerOpen] = useState(true)
-  const [settingsOpen, setSettingsOpen] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 901px)').matches)
-  useEffect(() => { void store.history.load(0) }, [store])
-  useEffect(() => {
-    function closeSettings(event: globalThis.KeyboardEvent) {
-      if (event.key === 'Escape') setSettingsOpen(false)
+  const [activePanel, setActivePanel] = useState<Panel | null>(() =>
+    typeof window !== 'undefined' && window.matchMedia('(min-width: 901px)').matches ? 'settings' : null)
+  useEffect(() => { void store.enterWorkspace() }, [store])
+
+  function closePanel() {
+    if (activePanel === null) return
+    document.getElementById(`panel-toggle-${activePanel}`)?.focus()
+    setActivePanel(null)
+  }
+
+  function openPanel(name: Panel) {
+    const previous = LEFT_PANELS.find(panel => panel.name === activePanel)
+    if (previous && previous.name !== name && document.getElementById(previous.id)?.contains(document.activeElement)) {
+      document.getElementById(`panel-toggle-${name}`)?.focus()
     }
-    window.addEventListener('keydown', closeSettings)
-    return () => window.removeEventListener('keydown', closeSettings)
-  }, [])
-
-  function openTool(name: Tool) {
-    setTool(name)
-    setDrawerOpen(true)
+    setActivePanel(name)
   }
 
-  function onTabKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    const current = TOOL_TABS.findIndex(([name]) => name === tool)
-    const next = event.key === 'ArrowRight' ? (current + 1) % TOOL_TABS.length
-      : event.key === 'ArrowLeft' ? (current + TOOL_TABS.length - 1) % TOOL_TABS.length
-        : event.key === 'Home' ? 0 : event.key === 'End' ? TOOL_TABS.length - 1 : null
-    if (next === null) return
-    event.preventDefault()
-    openTool(TOOL_TABS[next][0])
-    event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus()
-  }
+  const activePanelLabel = LEFT_PANELS.find(panel => panel.name === activePanel)?.label
 
-  return <div className="app-shell">
+  return <div className="app-shell" onKeyDown={event => {
+    if (event.key === 'Escape' && !event.defaultPrevented && activePanel !== null) {
+      event.preventDefault()
+      closePanel()
+    }
+  }}>
     <header className="app-header"><div className="brand"><ImageIcon size={21} aria-hidden="true" /><span>NovelAI</span><span className="brand-sub">图像工作台</span></div>
       <div className="header-actions"><span className="user-label">{store.auth.user?.label}</span>
         <button className="icon-button" type="button" title="退出登录" aria-label="退出登录" disabled={store.auth.loggingOut}
@@ -430,41 +442,26 @@ const Workspace = observer(({ store }: { store: AppStore }) => {
     {store.auth.error && <div className="auth-alert"><Alert text={store.auth.error} /></div>}
     <main className="workspace-body">
       <nav className="side-rail" aria-label="工作台导航">
-        <button className={settingsOpen ? 'rail-button active' : 'rail-button'} type="button" title="生成设置" aria-label="生成设置"
-          aria-expanded={settingsOpen} aria-controls="generation-settings" onClick={() => setSettingsOpen(!settingsOpen)}><Settings2 size={21} /></button>
-        <span className="rail-divider" aria-hidden="true" />
-        <button className={drawerOpen && tool === 'tags' ? 'rail-button active' : 'rail-button'} type="button" title="标签搜索" aria-label="标签搜索"
-          onClick={() => openTool('tags')}><Tags size={20} /></button>
-        <button className={drawerOpen && tool === 'advice' ? 'rail-button active' : 'rail-button'} type="button" title="建议" aria-label="建议"
-          onClick={() => openTool('advice')}><Sparkles size={20} /></button>
-        <button className={drawerOpen && tool === 'history' ? 'rail-button active' : 'rail-button'} type="button" title="历史记录" aria-label="历史记录"
-          onClick={() => openTool('history')}><History size={20} /></button>
+        {LEFT_PANELS.map(({ name, id, Icon, label }) => <button key={name} id={`panel-toggle-${name}`}
+          className={activePanel === name ? 'rail-button active' : 'rail-button'} type="button" title={label} aria-label={label}
+          aria-expanded={activePanel === name} aria-controls={id} onClick={() => activePanel === name ? closePanel() : openPanel(name)}>
+          <Icon size={19} aria-hidden="true" /><span className="rail-label">{label}</span>
+        </button>)}
       </nav>
-      {settingsOpen && <button className="settings-scrim" type="button" aria-label="关闭生成设置" onClick={() => setSettingsOpen(false)} />}
-      <SettingsPanel store={store} hidden={!settingsOpen} onClose={() => setSettingsOpen(false)} />
+      {activePanel !== null && <button className="settings-scrim" type="button" aria-label={`关闭${activePanelLabel}`} onClick={closePanel} />}
+      <SettingsPanel store={store} hidden={activePanel !== 'settings'} onClose={closePanel} />
+      {LEFT_PANELS.filter(panel => panel.name !== 'settings').map(({ name, id, label }) =>
+        <SidePanel key={name} id={id} title={label} hidden={activePanel !== name} onClose={closePanel}>
+          {name === 'history' ? <HistoryPanel store={store} /> : name === 'tags' ? <TagSearch store={store} /> : <Advice store={store} />}
+        </SidePanel>)}
       <div className="main-column">
-        <div className="main-scroll"><Editor store={store} onOpenSettings={() => setSettingsOpen(true)} />
+        <div className="main-scroll"><Editor store={store} onOpenSettings={() => openPanel('settings')} />
           <StyleExperimentResults generation={store.generation} /><Result store={store} /></div>
         {store.generation.submitUncertain && <div className="uncertain-bar" role="alert">
           <span>提交结果未知，请核对历史记录。</span>
-          <button className="secondary" type="button" onClick={() => { openTool('history'); void store.history.load(0) }}>查看历史</button>
+          <button className="secondary" type="button" onClick={() => { openPanel('history'); void store.history.load(0) }}>查看历史</button>
           <button className="secondary" type="button" onClick={() => store.generation.acknowledgeUncertain()}>核对后继续</button>
         </div>}
-        <section className={drawerOpen ? 'workspace-drawer open' : 'workspace-drawer'} aria-label="工作台抽屉">
-          <div className="drawer-header">
-            <div className="tool-tabs" role="tablist" aria-label="工作台工具" onKeyDown={onTabKeyDown}>
-              {TOOL_TABS.map(([name, Icon, label]) =>
-                <button key={name} type="button" role="tab" aria-selected={tool === name} aria-controls="drawer-panel"
-                  tabIndex={tool === name ? 0 : -1} className={tool === name ? 'tool-tab active' : 'tool-tab'} onClick={() => openTool(name)}><Icon size={16} /><span>{label}</span></button>)}
-            </div>
-            <button className="icon-button drawer-toggle" type="button" title={drawerOpen ? '收起抽屉' : '展开抽屉'}
-              aria-label={drawerOpen ? '收起抽屉' : '展开抽屉'} aria-expanded={drawerOpen} aria-controls="drawer-panel"
-              onClick={() => setDrawerOpen(!drawerOpen)}>{drawerOpen ? <ChevronDown size={19} /> : <ChevronUp size={19} />}</button>
-          </div>
-          <div className="drawer-panel" id="drawer-panel" role="tabpanel" aria-label={tool === 'tags' ? '标签搜索' : tool === 'advice' ? '建议' : '历史'} hidden={!drawerOpen}>
-            {tool === 'tags' ? <TagSearch store={store} /> : tool === 'advice' ? <Advice store={store} /> : <HistoryPanel store={store} />}
-          </div>
-        </section>
       </div>
     </main>
   </div>

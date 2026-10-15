@@ -192,6 +192,60 @@ operator; the overall task stays active.
   pointer and PID remained unchanged. See
   `deployment-experiment-viewer-2026-10-15.md`. Interactive acceptance pending.
 
+## Follow-up Execution: Latest History on Entry (2026-10-15)
+
+Implementer owns store.ts and App.tsx: add one-time guarded entry restore,
+reuse the existing history-to-draft mapping, and keep request ownership in
+stores. The parent owns artifacts/specs/build/commit/web-only deployment.
+No changes to API/schema, auth protocol, generation scheduling, archive/URL
+ownership, styling, dependencies or browser persistence are required.
+
+1. Inspect initial history loading and auth/logout/reset/dispose transitions;
+   implement newest-item initialization with stale/edit/operation guards.
+2. Run ESLint/TypeScript. Independently source-review cookie restore/login,
+   empty/failed history, legacy/structured fields and effective seed,
+   superseded loads, edits/manual reuse, ordinary refresh/pagination,
+   generation start, failed/successful logout, session expiry and disposal.
+3. Update the workspace contract, fresh env-free build, compare reviewed
+   source/commit inputs, commit and publish web-only under existing authority.
+4. Verify public page/asset hashes, readiness, neighboring health, retained
+   assets and unchanged API pointer/PID; record release/journal.
+
+No frontend/helper tests, browser automation or paid calls. Broader task
+remains active for operator acceptance.
+
+- [x] Implementation and independent source/static checks. Review found no
+  defects; ESLint/TypeScript and diff/context checks passed. See
+  `check-history-and-drawers.md`. Combined fresh env-free build and all
+  14 source-input hashes passed; see `history-and-drawers-build-verification.md`.
+- [ ] Fresh build, matching source commit and verified web-only publication.
+
+## Follow-up Execution: Left Tool Drawers (2026-10-15)
+
+Sidebar implementer owns App.tsx and styles.css after the history implementer
+froze its one-line entry initialization effect. History implementer retains
+store.ts. Preserve each other's changes; parent owns all documentation/specs
+and shared release work. New scope is presentation and local panel state only.
+
+1. Replace bottom tool drawer with mutually exclusive left drawers matching
+   settings. Controls: settings, history, tags, advice. Preserve mounted
+   settings/tools and use disclosure button semantics and correct focus.
+2. Adapt panel content to the narrow column/mobile overlay, remove dead
+   bottom-drawer rules/imports and keep center results full-height.
+3. Independently check both follow-ups together: panel state/focus/mobile
+   sizing, no requests or resets on switching, explicit tool actions and
+   uncertain-history route, initial restore/race guards and image behavior.
+4. Run ESLint/TypeScript and fresh env-free build; sync specs, commit and
+   publish both changes together as a verified web-only release.
+
+No frontend/helper tests, browser automation or paid calls.
+
+- [x] Drawer implementation and combined independent source/static checks.
+  No source fixes were needed; the history initialization call, mounted tool
+  state, narrow layouts and disclosure/focus behavior passed source review.
+  See `check-history-and-drawers.md` and the combined build evidence.
+- [ ] Matching production build and verified web-only publication.
+
 ## Deployment Considerations (Original Native Characters)
 
 Publishing both layers requires API-first order and a verified private backup

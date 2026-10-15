@@ -20,6 +20,11 @@ provider credentials, durable image storage, or backend authorization.
   assigning 1 to a plain tag preserves its source. Unsafe/stale tags return null.
 - `HistoryStore.refresh(): void` refreshes the current page, coalescing behind
   a pending `load(offset)` and following that latest requested offset.
+- `AppStore.enterWorkspace(): Promise<void>` initializes once per authenticated
+  user-object entry. `GenerationStore.entryRestoreRevision` combines draft
+  edits and generation ownership epochs. `HistoryStore.load(offset)` returns
+  accepted `{epoch, items}` or null; `isCurrentLoad(result)` rejects any load
+  superseded after resolution. Entry restoration checks all three boundaries.
 - `NAI_WEB_BASE_PATH` is a build-time, same-origin path ending in `/` (default
   `/`; production `/novelai/`), validated in `apps/web/vite.config.ts`.
 
@@ -87,13 +92,22 @@ provider credentials, durable image storage, or backend authorization.
   character edits cannot diverge from the submitted prompt. Keep buttons
   outside enclosing labels, use `type="button"`, retain stable character IDs
   and use explicit per-field labels for keyboard/screen-reader access.
-- `Workspace` keeps `settingsOpen`, `drawerOpen` and the active tool tab as
-  component-local UI state. `SettingsPanel` edits the existing generation
-  draft; the bottom drawer renders history, tags or advice without a right
-  tool pane. Closing a panel must not reset its store or trigger a request.
-- `TOOL_TABS` in `App.tsx` owns the displayed history/tags/advice order and the
-  `Tool` type. Render tabs and compute arrow/Home/End selection from that same
-  declaration so the selected panel, roving `tabIndex` and DOM focus agree.
+- `Workspace` owns one component-local active left panel: settings, history,
+  tags, advice or closed. Rail order is Settings, History, Prompt Lookup, AI
+  Advice; all panels use the existing settings column on desktop and its
+  bounded left overlay/backdrop on narrow screens. No bottom tool drawer or
+  reserved bottom tool height remains. The main editor/results keep their
+  available vertical space. Explicit settings and uncertain-history actions
+  open their corresponding left panel.
+- Rail controls use disclosure-button semantics (native Tab/Enter/Space,
+  accessible names, aria-expanded/aria-controls), not tabs with a second
+  keyboard-only ordering. Clicking an active control, close, Escape or the
+  narrow-screen backdrop closes the panel; focus must not remain in hidden
+  content. Only the active panel is visible/interactive. Keep settings/tools
+  mounted while hidden so manual sampler mode, query/results/target, advice
+  input/output and history page survive switching. Closing/switching panels
+  never resets stores or submits/fetches; explicit tool actions retain their
+  existing behavior. Generation state remains in GenerationStore.
 - After its epoch check, `GenerationStore.refresh()` compares the previous
   job ID/status before replacing it. The first succeeded/failed observation
   invokes `onTerminal` before image retrieval, including a resumed job or
@@ -106,6 +120,24 @@ provider credentials, durable image storage, or backend authorization.
   follow-up load so a failure alone cannot cause another retry. `reset()`
   clears this intent and invalidates responses. Submission still loads page 0;
   terminal synchronization follows the user's current/requested page.
+- Authenticated workspace entry restores the newest history item's prompts
+  and generation settings once, through `GenerationStore.reuse`. Page zero is
+  already owner-scoped and ordered by created_at DESC, id DESC; do not filter
+  to successful jobs or substitute the last currently displayed page. Reuse
+  retains its effective-seed behavior, legacy defaults, native characters and
+  arbitrary historical sampler/resolution values. Empty history keeps defaults;
+  history-load errors stay visible without disabling the draft.
+- Entry restoration must be separate from ordinary history refresh, deletion,
+  pagination and generation completion. Use one-time entry state and stale
+  response/session guards; a superseded load cannot supply the initial item.
+  Any intervening draft edit (including character/tag/weight changes), manual
+  reuse or generation operation invalidates a pending automatic restore, even
+  if the user subsequently returns the draft to the same values. Logout start,
+  reset, session expiry and disposal invalidate the response. A failed logout
+  preserves the current draft and must not trigger another restore on remount.
+  React effect replay must not duplicate initialization. This flow restores
+  parameters only, without job resume, image retrieval, provider calls or
+  browser persistence.
 - Canvas size options in `SettingsPanel` update `draft.width` and
   `draft.height` together through `GenerationStore.setResolution()`. Small,
   standard and large portrait/square/landscape groups are client presets,
@@ -133,12 +165,19 @@ provider credentials, durable image storage, or backend authorization.
 | Generation POST rejects with exact 503/provider_unavailable | Show not-configured error, no unknown-result lock, no automatic retry |
 | History item still queued/running | Disable deletion; backend would return `409` |
 | Missing optional tag count/score | Omit the metadata; do not format `undefined` |
-| Arrow/Home/End in tool tabs | Select and focus the same tab in displayed order, with arrow wraparound |
+| Left rail activation / active control again | Open selected left panel / close it; only one visible |
+| Close/Escape/mobile backdrop | Hide drawer and avoid focus remaining in hidden content |
+| Tool switch/close | Preserve settings/query/advice/history state, with no request |
 | First observed succeeded/failed job | Refresh history independently of image availability/download errors |
 | Same terminal result checked again | No duplicate completion-triggered history refresh |
 | Weight becomes exactly 1 (including decimal equivalents) | Remove only selected outer numeric wrapper; plain source unchanged |
 | Sampler preset selected | Write the exact selected ID to the existing draft |
 | Manual sampler / unknown reused sampler | Preserve current value in an editable field; do not coerce to a preset |
+| Authenticated entry with history | Reuse newest item once, including effective seed and all structured/settings fields |
+| Empty/failed entry history | Keep defaults; expose existing history error when applicable |
+| Edit/manual reuse/operation before initial history settles | Skip late automatic restore |
+| History refresh/page change/failed-logout remount | Never automatically overwrite the draft |
+| Logout/reset/disposal/new session before history settles | Invalidate pending restoration |
 | Completion during history loading/pagination | Coalesce one refresh after the latest request and retain its offset |
 | History refresh fails | Set history error; preserve generation result and submission certainty |
 | Logout/session expiry with pending refresh | Clear refresh intent and reject stale protected responses |
@@ -172,7 +211,7 @@ provider credentials, durable image storage, or backend authorization.
   task. Review the source and API contract manually; do not claim unrun
   runtime, browser, lint, type-check, or build verification.
 - Existing lint/type-check and environment-free production builds are valid
-  static checks. Review keyboard selection/focus, terminal notification
+  static checks. Review left-panel disclosure/focus, terminal notification
   deduplication, resumed/expired-image results, pending pagination (success and
   failure), and logout invalidation through the owning source paths. Record
   that source review separately from interactive browser validation.
@@ -180,6 +219,15 @@ provider credentials, durable image storage, or backend authorization.
   equivalents, nested/escaped body preservation and plain-tag no-op behavior.
 - Source-review sampler names/IDs, blank/preset/manual transitions, history
   reuse and manual typing of a known ID without hiding or resetting the input.
+- Source-review initial cookie restore/login, React effect replay, newest-row
+  selection, empty/failed history, complete and legacy reuse, edits reverted to
+  the original value, character/tag/weight mutations, manual reuse, operations
+  that settle before history, superseded/coalesced loads, pagination, failed
+  logout/remount, session invalidation and disposal. No paid initialization.
+- Source-review side-panel order/toggle/close/Escape/backdrop, desktop/mobile
+  bounds and scroll, mounted-hidden content preservation, narrow forms/cards,
+  uncertain-history entry and unchanged center/experiment results. Ensure
+  hidden tools cannot receive focus and panel switches issue no requests.
 - Source-review exact pre-acceptance refusal versus generic/unknown 5xx,
   network failure and mismatched status/code; normal and experiment errors
   stop without a successor POST. Health/readiness alone does not verify image
@@ -194,10 +242,11 @@ provider credentials, durable image storage, or backend authorization.
   image URL returned by the API.
 - Correct: route requests through `WorkspaceApi`; validate backend image paths
   and prefix them with the Vite base path before fetching.
-- Wrong: maintain a second keyboard-only tool order or trigger history updates
-  from result rendering/image-download success.
-- Correct: share `TOOL_TABS` and notify from the epoch-checked job observation;
-  use `history.refresh()` for pagination-aware completion synchronization.
+- Wrong: leave obsolete bottom tabs or independently open settings/tools;
+  trigger history updates from panel switching/result rendering/downloads.
+- Correct: one local active left panel with native disclosure buttons; notify
+  from epoch-checked job observation and use `history.refresh()` for
+  pagination-aware completion synchronization.
 - Wrong: classify every 5xx as unknown, or globally translate every
   `provider_unavailable` into an unsubmitted job.
 - Correct: recognize only the exact typed generation-POST refusal and retain

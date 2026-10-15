@@ -207,6 +207,49 @@ current group's weights, seed, status, parameters and image download.
   fresh env-free build and web-only publication follow existing authorization.
   No frontend/helper/browser tests, paid calls or credential changes.
 
+## Follow-up: Restore Latest History on Entry
+
+On 2026-10-15 the operator requested restoring the latest history item's
+prompts and settings automatically each time they enter the workspace.
+
+- On authenticated page entry or login, load the newest saved history item
+  and apply the existing reuse semantics: style/shared/negative prompts,
+  independent characters and all generation settings, including effective
+  seed. Preserve legacy flat history and arbitrary sampler/resolution values.
+- No history leaves the fresh defaults. History failures remain visible and
+  leave the draft usable. Do not generate, resume jobs, fetch images or retry
+  paid work as part of restoration.
+- Restore once per authenticated entry. Ordinary history refresh/pagination,
+  generation completion and a failed logout must not reapply history.
+  A late response must not overwrite user edits, manual reuse, new operations,
+  logout/reset/disposal or a different authenticated session.
+- Frontend-only scope, existing web publication authorization and static
+  validation restrictions apply: no frontend/helper automated tests, browser
+  automation, paid calls, credential or API changes.
+
+## Follow-up: Left Tool Drawers
+
+On 2026-10-15 the operator requested moving history, prompt lookup and AI
+advice out of the bottom drawer, below Settings in the left navigation, with
+the same left drawer behavior as Settings.
+
+- Show left controls in order: Settings, History, Prompt Lookup, AI Advice.
+  Use visible/accessible names `生成设置`, `历史记录`, `提示词查询`, `AI 建议`.
+  Each tool opens the left drawer area; only one panel is open at a time.
+  Clicking the active control again, its close button or Escape closes it.
+- Match the existing settings panel's desktop width and narrow-screen left
+  overlay/backdrop behavior. Remove the bottom tool drawer and its reserved
+  height so editor/results can use the available main area.
+- Switching/closing panels preserves draft, settings manual-entry state,
+  history page, tag query/results/target and advice input/output. It does not
+  issue tool requests. Explicit search/advice/history actions keep their
+  existing behavior; uncertain-submit history action opens the left history.
+- Keep accessible names, expanded/control relationships, keyboard focus and
+  hidden-panel behavior. Preserve latest-history entry restoration and all
+  existing generation/experiment/image behavior.
+- Scope App.tsx and styles.css; keep frontend/static-only validation and
+  existing web publication authorization. No browser/helper tests or paid calls.
+
 ## Decisions and Provider Evidence (Original Native Characters)
 
 - A non-billable MCP initialization and tool listing on 2026-10-14 confirms

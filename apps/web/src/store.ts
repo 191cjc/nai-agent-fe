@@ -241,6 +241,7 @@ export class GenerationStore {
   private epoch = 0
   private runVersion = 0
   private operationVersion = 0
+  private draftVersion = 0
   private execution: ExperimentExecution | null = null
   private operation: GenerationOperation | null = null
 
@@ -253,12 +254,19 @@ export class GenerationStore {
   }
 
   setField<Key extends keyof GenerationDraft>(key: Key, value: GenerationDraft[Key]): void {
+    this.draftVersion += 1
     this.draft[key] = value
   }
 
   setResolution(width: string, height: string): void {
+    this.draftVersion += 1
     this.draft.width = width
     this.draft.height = height
+  }
+
+  /** Edits and generation ownership changes invalidate pending entry restoration. */
+  get entryRestoreRevision(): string {
+    return `${this.draftVersion}:${this.epoch}:${this.operationVersion}`
   }
 
   get positiveTagTargets(): { value: PositiveTagTarget; label: string }[] {
@@ -277,6 +285,7 @@ export class GenerationStore {
 
   addCharacter(): string | null {
     if (this.draft.character_prompts.length >= MAX_CHARACTERS) return null
+    this.draftVersion += 1
     const character = newCharacter()
     this.draft.character_prompts.push(character)
     return character.id
@@ -284,15 +293,20 @@ export class GenerationStore {
 
   setCharacterPrompt(id: string, prompt: string): void {
     const character = this.draft.character_prompts.find(character => character.id === id)
-    if (character) character.prompt = prompt
+    if (character) {
+      this.draftVersion += 1
+      character.prompt = prompt
+    }
   }
 
   removeCharacter(id: string): void {
+    this.draftVersion += 1
     this.draft.character_prompts = this.draft.character_prompts.filter(character => character.id !== id)
     if (this.positiveTagTarget === `character:${id}`) this.positiveTagTarget = 'positive_prompt'
   }
 
   insertTag(tag: string, target: 'positive' | 'negative'): void {
+    this.draftVersion += 1
     const append = (value: string) => {
       const current = value.trim()
       return current ? `${current.replace(/,\s*$/, '')}, ${tag}` : tag
@@ -312,6 +326,7 @@ export class GenerationStore {
   }
 
   reuse(item: HistoryItem): void {
+    this.draftVersion += 1
     this.draft = {
       ...item.parameters,
       style_prompt: item.parameters.style_prompt ?? '',
@@ -635,6 +650,7 @@ export class GenerationStore {
   reset(): void {
     this.clearResult()
     this.clearExperimentArchive()
+    this.draftVersion += 1
     this.draft = emptyDraft()
     this.positiveTagTarget = 'positive_prompt'
     this.busy = false
@@ -660,6 +676,11 @@ export class GenerationStore {
   }
 }
 
+interface HistoryLoadResult {
+  epoch: number
+  items: HistoryItem[]
+}
+
 export class HistoryStore {
   items: HistoryItem[] = []
   offset = 0
@@ -675,19 +696,21 @@ export class HistoryStore {
     makeAutoObservable(this, undefined, { autoBind: true })
   }
 
-  async load(offset = this.offset): Promise<void> {
+  async load(offset = this.offset): Promise<HistoryLoadResult | null> {
     const epoch = ++this.epoch
     this.loading = true
     this.error = ''
+    let result: HistoryLoadResult | null = null
     try {
       const page = await this.api.history(offset)
-      if (epoch !== this.epoch) return
+      if (epoch !== this.epoch) return null
       runInAction(() => {
         this.items = page.items
         this.offset = offset
         this.nextOffset = page.next_offset
         this.loading = false
       })
+      result = { epoch, items: page.items }
     } catch (error) {
       if (epoch === this.epoch) runInAction(() => { this.loading = false; this.error = errorText(error) })
     } finally {
@@ -697,6 +720,11 @@ export class HistoryStore {
         void this.load(offset)
       }
     }
+    return result && this.isCurrentLoad(result) ? result : null
+  }
+
+  isCurrentLoad(result: HistoryLoadResult): boolean {
+    return result.epoch === this.epoch
   }
 
   refresh(): void {
@@ -858,10 +886,15 @@ export class AppStore {
   readonly history: HistoryStore
   readonly tags: TagStore
   readonly advice: AdviceStore
+  private workspaceUser: UserInfo | null = null
+  private workspaceEntryVersion = 0
 
   constructor(fetcher: typeof fetch = fetch) {
     this.api = new WorkspaceApi(fetcher, () => this.auth.expire())
-    this.auth = new AuthStore(this.api, () => this.resetProtected(), () => this.generation.suspendForLogout())
+    this.auth = new AuthStore(this.api, () => this.resetProtected(), () => {
+      this.workspaceEntryVersion += 1
+      this.generation.suspendForLogout()
+    })
     this.history = new HistoryStore(this.api)
     this.generation = new GenerationStore(
       this.api,
@@ -872,7 +905,25 @@ export class AppStore {
     this.advice = new AdviceStore(this.api)
   }
 
+  async enterWorkspace(): Promise<void> {
+    const user = this.auth.user
+    if (this.auth.status !== 'ready' || this.auth.loggingOut || !user || this.workspaceUser === user) return
+    // A failed logout or StrictMode effect replay retains this authenticated entry.
+    this.workspaceUser = user
+    const entryVersion = ++this.workspaceEntryVersion
+    const draftRevision = this.generation.entryRestoreRevision
+    const page = await this.history.load(0)
+    if (!page || entryVersion !== this.workspaceEntryVersion
+      || this.auth.status !== 'ready' || this.auth.loggingOut || this.auth.user !== user
+      || draftRevision !== this.generation.entryRestoreRevision || !this.history.isCurrentLoad(page)
+      || this.generation.operationLocked || this.generation.busy || this.generation.activeId
+      || this.generation.checking || this.generation.submitUncertain) return
+    if (page.items[0]) this.generation.reuse(page.items[0])
+  }
+
   resetProtected(): void {
+    this.workspaceEntryVersion += 1
+    this.workspaceUser = null
     this.generation.reset()
     this.history.reset()
     this.tags.reset()
@@ -880,6 +931,7 @@ export class AppStore {
   }
 
   dispose(): void {
+    this.workspaceEntryVersion += 1
     this.generation.clearResult()
     this.generation.clearStyleExperimentResults()
     this.tags.reset()
