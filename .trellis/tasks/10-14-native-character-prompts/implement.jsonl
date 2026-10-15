@@ -14,3 +14,4 @@
 {"file": ".trellis/spec/frontend/style-experiment-contract.md", "reason": "Exact Cartesian weights, operation ownership, frozen seeds and transient comparison result lifecycle."}
 {"file": ".trellis/tasks/10-14-native-character-prompts/research/sampler-options.md", "reason": "Pinned sampler IDs, visible select/manual-entry behavior and free-form API compatibility."}
 {"file": ".trellis/tasks/10-14-native-character-prompts/research/submission-rejection.md", "reason": "Observed 503 refusal before enqueue, narrow uncertainty classification and configuration boundary."}
+{"file": ".trellis/tasks/10-14-native-character-prompts/prd.md", "reason": "Follow-up single-image experiment navigation acceptance and boundaries"}

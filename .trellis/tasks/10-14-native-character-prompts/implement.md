@@ -159,6 +159,36 @@ Parent owns artifacts/specs/staging. See `research/submission-rejection.md`.
   Real paid output remains an explicit operator action; broader acceptance
   remains pending.
 
+## Follow-up Execution: Experiment Image Navigation (2026-10-15)
+
+The behavior gap is the paginated multi-group gallery in
+StyleExperimentResults. The implementer owns only StyleExperiment.tsx and
+its scoped styles.css rules: replace it with one stable image/empty-group
+viewer, side arrows and scoped keyboard navigation. Keep metadata/downloads
+bound to the selected row/image, traverse group order then image order,
+preserve selection on append and reset it for a new/cleared experiment.
+No store, API, scheduler, draft, URL ownership or ordinary-results changes.
+The parent owns artifacts, specs, clean staging, commit and web publication.
+
+1. Implement the viewer and responsive styles; run ESLint/TypeScript.
+2. Independent check reviews all changed source plus store lifecycle paths,
+   first/last boundaries, one/multiple images, failed/empty groups, metadata,
+   downloads, keyboard scope, append stability and reset/logout behavior.
+3. Sync the viewer contract and create a fresh env-free production build;
+   confirm its source hashes match reviewed files and the work commit.
+4. Publish only the web under existing authorization. Verify public HTML and
+   asset hashes, health, retained assets and unchanged API pointer/PID.
+
+No frontend/helper automated tests, browser automation, paid calls or
+credential changes are permitted. Interactive acceptance remains with the
+operator; the overall task stays active.
+
+- [x] Implementation and independent source/static review. ESLint/TypeScript
+  passed without source fixes; see `check-experiment-viewer.md`.
+  Fresh env-free build and all 14 source-input hashes passed; see
+  `experiment-viewer-build-verification.md`.
+- [ ] Fresh env-free build, source/commit match and web-only publication.
+
 ## Deployment Considerations (Original Native Characters)
 
 Publishing both layers requires API-first order and a verified private backup

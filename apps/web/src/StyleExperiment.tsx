@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { observer } from 'mobx-react-lite'
 import { ArrowDownToLine, ArrowLeft, ArrowRight, FlaskConical, Square, Trash2 } from 'lucide-react'
 import { ApiFailure, errorText } from './api'
@@ -19,7 +19,6 @@ interface RunConfiguration {
 }
 
 const SOURCE_CHANGED = '画风已修改，已清除所选词条，请重新选择。'
-const RESULTS_PER_PAGE = 6
 
 function sampleCount(value: string): bigint | null {
   if (!/^\d+$/.test(value)) return null
@@ -160,25 +159,69 @@ export const StyleExperimentProgress = observer(({ generation }: { generation: G
 })
 
 export const StyleExperimentResults = observer(({ generation }: { generation: GenerationStore }) => {
-  const [page, setPage] = useState(0)
+  const [position, setPosition] = useState(0)
+  const viewerRef = useRef<HTMLDivElement>(null)
   const experiment = generation.experiment
-  useEffect(() => { setPage(0) }, [experiment])
+  useEffect(() => { setPosition(0) }, [experiment])
   if (!experiment || !experiment.results.length) return null
-  const pageCount = Math.ceil(experiment.results.length / RESULTS_PER_PAGE)
-  const currentPage = Math.min(page, pageCount - 1)
-  const rows = experiment.results.slice(currentPage * RESULTS_PER_PAGE, (currentPage + 1) * RESULTS_PER_PAGE)
+  const resultCount = experiment.results.reduce((count, row) => count + Math.max(1, row.images.length), 0)
+  const imageCount = experiment.results.reduce((count, row) => count + row.images.length, 0)
+  const currentPosition = Math.min(position, resultCount - 1)
+  let row = experiment.results[0]
+  let imagePosition = currentPosition
+  for (const result of experiment.results) {
+    const count = Math.max(1, result.images.length)
+    if (imagePosition < count) {
+      row = result
+      break
+    }
+    imagePosition -= count
+  }
+  const image = row.images[imagePosition]
+
+  function move(direction: -1 | 1) {
+    setPosition(Math.max(0, Math.min(currentPosition + direction, resultCount - 1)))
+    viewerRef.current?.focus({ preventScroll: true })
+  }
+
   return <section className="experiment-results" aria-labelledby="experiment-results-title">
     <div className="section-heading">
       <div><span className="eyebrow">画风实验</span><h2 id="experiment-results-title">权重组合对比</h2></div>
       <button className="text-action" type="button" disabled={generation.experimentRunning || generation.operationLocked || generation.activeId !== null || generation.busy}
         onClick={() => generation.clearStyleExperimentResults()}><Trash2 size={14} aria-hidden="true" /> 清除对比结果</button>
     </div>
-    <p className="subtle">已保留 {experiment.results.length} 组。图像仅在当前页面内存中可用，请及时下载。</p>
-    <div className="experiment-result-list">{rows.map(row => <article className="experiment-result-card" key={row.job.id}>
+    <p className="subtle">已保留 {experiment.results.length} 组 · {imageCount} 张图像。图像仅在当前页面内存中可用，请及时下载。</p>
+    <article className="experiment-result-card">
+      <figure className="experiment-image-item">
+        <div className="experiment-image-viewer" role="group" aria-label="画风实验图像切换" aria-describedby="experiment-navigation-help"
+          tabIndex={0} ref={viewerRef} onKeyDown={event => {
+            if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
+            if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+            event.preventDefault()
+            move(event.key === 'ArrowLeft' ? -1 : 1)
+          }}>
+          <button className="icon-button experiment-image-arrow" type="button" title="上一个实验结果" aria-label="上一个实验结果"
+            disabled={currentPosition === 0} onClick={() => move(-1)}><ArrowLeft size={22} aria-hidden="true" /></button>
+          <div className="experiment-image-frame">
+            {image ? <img key={image.url} src={image.url} alt={`画风实验第 ${row.ordinal.toString()} 组，图像 ${image.index + 1}`} />
+              : <p className="subtle">第 {row.ordinal.toString()} 组没有可展示的图像，请查看下方状态和错误信息。</p>}
+          </div>
+          <button className="icon-button experiment-image-arrow" type="button" title="下一个实验结果" aria-label="下一个实验结果"
+            disabled={currentPosition + 1 >= resultCount} onClick={() => move(1)}><ArrowRight size={22} aria-hidden="true" /></button>
+        </div>
+        <figcaption>
+          <span aria-live="polite" aria-atomic="true">对比 {currentPosition + 1} / {resultCount} · 第 {row.ordinal.toString()} 组
+            {image ? ` · 图像 ${image.index + 1}` : ' · 无图像'}</span>
+          {image && <a href={image.url} download={`style-experiment-${row.ordinal.toString()}-${image.filename}`} className="icon-button"
+            title={`下载第 ${row.ordinal.toString()} 组图像 ${image.index + 1}`} aria-label={`下载第 ${row.ordinal.toString()} 组图像 ${image.index + 1}`}>
+            <ArrowDownToLine size={17} aria-hidden="true" /></a>}
+        </figcaption>
+      </figure>
+      <p className="prompt-hint" id="experiment-navigation-help">使用左右箭头切换，聚焦图像区域后也可按键盘 ← / →。</p>
       <div className="experiment-result-heading"><h3>第 {row.ordinal.toString()} 组</h3>
         <span className={`status status-${row.job.status}`}>{jobStatus(row.job.status)}</span>
         <span>请求种子 {row.job.parameters.seed ?? '随机'}</span>
-        {row.job.parameters.seed === null && <span>实际种子 {row.job.effective_seed}</span>}
+        <span>实际种子 {row.job.effective_seed}</span>
       </div>
       <ul className="experiment-result-weights" aria-label={`第 ${row.ordinal.toString()} 组权重`}>{row.weights.map(weight =>
         <li key={weight.tagIndex}><span>{weight.tagIndex + 1}. {weight.label}</span><strong>{weight.weight}</strong></li>)}</ul>
@@ -189,21 +232,6 @@ export const StyleExperimentResults = observer(({ generation }: { generation: Ge
       </details>
       {row.job.error_code && <p className="alert" role="alert">{errorText(new ApiFailure(0, row.job.error_code, '本组生成失败。'))}</p>}
       {row.imageError && <p className="alert" role="alert">{row.imageError}</p>}
-      {row.images.length ? <div className="image-grid">{row.images.map(image => <figure className="image-item" key={image.url}>
-        <img src={image.url} loading="lazy" alt={`画风实验第 ${row.ordinal.toString()} 组，图像 ${image.index + 1}`} />
-        <figcaption><span>第 {row.ordinal.toString()} 组 · 图像 {image.index + 1}</span>
-          <a href={image.url} download={`style-experiment-${row.ordinal.toString()}-${image.filename}`} className="icon-button"
-            title={`下载第 ${row.ordinal.toString()} 组图像 ${image.index + 1}`} aria-label={`下载第 ${row.ordinal.toString()} 组图像 ${image.index + 1}`}>
-            <ArrowDownToLine size={17} aria-hidden="true" /></a>
-        </figcaption>
-      </figure>)}</div> : <p className="subtle">本组没有可展示的图像。</p>}
-    </article>)}</div>
-    <nav className="pager" aria-label="画风实验结果分页">
-      <button className="icon-button" type="button" title="上一页实验结果" aria-label="上一页实验结果" disabled={currentPage === 0}
-        onClick={() => setPage(currentPage - 1)}><ArrowLeft size={18} aria-hidden="true" /></button>
-      <span>第 {currentPage + 1} / {pageCount} 页 · 共 {experiment.results.length} 组</span>
-      <button className="icon-button" type="button" title="下一页实验结果" aria-label="下一页实验结果" disabled={currentPage + 1 >= pageCount}
-        onClick={() => setPage(currentPage + 1)}><ArrowRight size={18} aria-hidden="true" /></button>
-    </nav>
+    </article>
   </section>
 })

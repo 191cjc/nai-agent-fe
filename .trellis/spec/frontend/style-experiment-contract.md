@@ -53,10 +53,20 @@ queue or persistent image archive.
   POST/GET/job/image errors halt progression; no automatic paid retry. A
   manual status recheck may settle an accepted job once, but cannot restart
   a halted experiment. Preserve global uncertain-submit acknowledgement.
-- Comparison rows show ordinal, changed weights, request seed, task status,
-  image availability and downloads. Paginate rendered rows while retaining
-  produced results in memory. Refresh/closing the page stops future work;
-  existing parameter history remains durable, experiment grouping does not.
+- Comparison results render one image at a time in a stable, responsive
+  contain-sized area. Traverse archived rows in group order, then their
+  images in order. Empty/failed rows contribute one placeholder so metadata
+  and errors remain reachable. Show position, group/image identity, weights,
+  request/effective seed, task status, parameters and the current download.
+  Label positions as results, not image counts when placeholders exist.
+- Previous/next arrows sit beside the image area and are disabled at the
+  respective boundaries. Left/right keyboard events are handled only inside
+  the viewer, excluding editable controls; no global listener. Appending rows
+  retains the current selection. Clear/new experiment resets local selection.
+  Navigation reads the archive only: no request, draft change, scheduler
+  mutation or URL revocation. GenerationStore retains all URL ownership.
+  Refresh/closing the page stops future work; existing parameter history
+  remains durable, experiment grouping does not.
 
 ## Validation & Error Matrix
 
@@ -73,6 +83,10 @@ queue or persistent image archive.
 | Job/image/transport failure | Preserve rows, halt remaining combinations |
 | Uncertain POST | Preserve existing global uncertainty lock; never auto resend |
 | Logout/disposal during a run | Invalidate owner token, stop futures, clear protected URLs/state |
+| First/last retained result | Disable previous/next respectively; do not wrap |
+| Failed/empty group | One navigable placeholder with its metadata/errors |
+| More archived rows arrive while browsing | Retain the selected group/image |
+| Clear/new experiment | Reset viewer position; store owns URL cleanup |
 
 ## Good / Base / Bad Cases
 
@@ -80,6 +94,9 @@ queue or persistent image archive.
   request and seed. Base: min=max produces one group. Negative/zero weights
   follow the same exact decimal arithmetic as ordinary numeric weight edits.
 - Good: 0.8..1.1 by 0.2 gives 0.8 and 1.0, with no floating-point noise.
+- Good: two images in group 1 precede group 2's placeholder, then group 3's
+  images. Base: one image disables both arrows. Bad: an append selects the
+  newest image or a global direction-key listener interrupts prompt editing.
 - Bad: Cartesian diagonal only, random seed on every request, float loops,
   starting the next POST from onTerminal before images load, or revoking an
   archived group's images while advancing.
@@ -94,6 +111,10 @@ pending POST, source edits, image ownership and ordinary-generation guards.
 Review shrinking neutral replacements across multiple selected occurrences
 and near-limit neutral-only grids, including an off-grid configured maximum.
 No paid experiment may be executed as an implementation check.
+Source-review single/multi-image ordering, placeholder errors, selected
+metadata/download consistency, first/last arrows, viewer-only keyboard scope,
+append stability, reset/logout, contained responsive sizing and unchanged
+ordinary results. Distinguish static review from operator browser acceptance.
 
 ## Wrong vs Correct
 

@@ -119,12 +119,17 @@ Start. Provide per-occurrence decimal controls, count preview, start, Stop,
 progress/seed and a concise current-page lifetime note. During a run controls
 refer to its snapshot even if the draft is edited.
 
-Render a separate paged comparison gallery labeled with ordinal, all varied
-weights, request seed, job status and download links. Hide the ordinary result
+Render a separate single-image comparison viewer labeled with ordinal, all
+varied weights, request/effective seed, job status and the current download.
+Side arrows traverse group order then image order without wrapping; empty
+groups retain navigable placeholders. Keep a stable contain-sized image area,
+scope direction keys to the viewer, retain selection on append and reset it
+when clearing or starting a new run. Navigation reads existing archived rows
+without changing store/request/URL ownership. Hide the ordinary result
 view for an archived experiment job to avoid falsely saying moved images
 expired; show ordinary results normally for subsequent independent jobs.
 Display current batch status/Stop outside the collapsible configuration too.
-Keep all produced results in memory until clear; count preview, pagination
+Keep all produced results in memory until clear; count preview, navigation
 and Stop allow managing large runs without truncating requested combinations.
 Starting a new experiment explicitly replaces the previous archive only after
 all preflight validation succeeds; disclose this in the configuration panel.

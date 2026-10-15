@@ -114,9 +114,10 @@ seed. See `style-experiment-design.md` for the execution contract and
   polling error or missing images; preserve prior results and existing
   uncertainty/history checks. Never automatically re-POST a failed step.
 - Enumerate lazily without allocating the whole product or silently dropping
-  combinations. Page the result display; retain produced images in current
-  browser memory until explicit clear/logout/disposal. Reload stops further
-  work; individual task parameters still use existing durable history.
+  combinations. Show one result image with left/right navigation; retain
+  produced images in current browser memory until explicit clear/logout/disposal.
+  Reload stops further work; individual task parameters still use existing
+  durable history.
   Starting a valid new experiment explicitly replaces the prior comparison;
   disclose this before Start, and preserve prior results if validation fails.
 - Verify through source review, lint/type-check, an env-free build and public
@@ -181,6 +182,30 @@ The operator has now authorized production image configuration and the
 combined restart/switch under the narrow exception above. Do not publish the
 new frontend against the old broad catch.
 See `research/submission-rejection.md` for evidence and boundaries.
+
+## Follow-up: Experiment Image Navigation
+
+On 2026-10-15 the operator requested left/right arrow navigation of retained
+style-experiment images instead of displaying the whole comparison grid.
+Replace the paginated group/image grid with a single-image viewer. Navigate
+in generation group order, then image order within each group. Retain the
+current group's weights, seed, status, parameters and image download.
+
+- Place accessible previous/next arrow buttons on the viewer's sides, show
+  the current position and disable the corresponding arrow at each end.
+  Left/right keyboard navigation is scoped to the viewer, never a global
+  handler that interferes with prompt editing.
+- Keep a stable image area with contain sizing to compare without layout
+  jumps or cropping. Render one image at a time on desktop and mobile.
+- Appended results do not move the selected image. Clear/new experiment
+  resets browsing; protected-state cleanup retains existing URL ownership.
+  Failed/empty groups remain reachable with their metadata and errors, using
+  a placeholder entry rather than silently dropping them.
+- Navigation reads the existing archive only; it must not fetch, generate,
+  retry, mutate the draft, clear archived URLs or change experiment execution.
+  Scope is StyleExperiment.tsx and its CSS only. Source review, lint/types,
+  fresh env-free build and web-only publication follow existing authorization.
+  No frontend/helper/browser tests, paid calls or credential changes.
 
 ## Decisions and Provider Evidence (Original Native Characters)
 
