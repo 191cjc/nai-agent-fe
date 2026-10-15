@@ -187,7 +187,10 @@ operator; the overall task stays active.
   passed without source fixes; see `check-experiment-viewer.md`.
   Fresh env-free build and all 14 source-input hashes passed; see
   `experiment-viewer-build-verification.md`.
-- [ ] Fresh env-free build, source/commit match and web-only publication.
+- [x] Fresh env-free build, source/commit match and web-only publication.
+  Release `20261015T092041` passed public page/assets/health checks; API
+  pointer and PID remained unchanged. See
+  `deployment-experiment-viewer-2026-10-15.md`. Interactive acceptance pending.
 
 ## Deployment Considerations (Original Native Characters)
 
