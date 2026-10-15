@@ -274,7 +274,12 @@ work. Parent owns docs/specs, clean staging, integration and release.
   backend tests, Ruff, frozen/lock checks and web ESLint/TypeScript pass.
   See `check-character-positions.md`. Fresh env-free build and all 15 inputs
   match reviewed source; see `character-positions-build-verification.md`.
-- [ ] Matching source/build inputs, private backup and API-first publication.
+- [x] Matching source/build inputs, verified private online backup and
+  API-first publication `20261015T101355`; running OpenAPI/readiness, public
+  HTML/assets, retained assets, neighboring health and configuration continuity
+  passed. See `deployment-character-positions-2026-10-15.md`.
+- [ ] Operator desktop/mobile drag, keyboard and real-provider placement
+  acceptance; broader task remains in progress.
 
 ## Deployment Considerations (Original Native Characters)
 
