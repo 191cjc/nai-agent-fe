@@ -218,7 +218,10 @@ remains active for operator acceptance.
   defects; ESLint/TypeScript and diff/context checks passed. See
   `check-history-and-drawers.md`. Combined fresh env-free build and all
   14 source-input hashes passed; see `history-and-drawers-build-verification.md`.
-- [ ] Fresh build, matching source commit and verified web-only publication.
+- [x] Fresh build, matching source commit and verified web-only publication.
+  Combined release `20261015T093934` passed public page/asset hashes, health
+  and retained-asset checks; API pointer/PID unchanged. See
+  `deployment-history-and-drawers-2026-10-15.md`. Operator acceptance pending.
 
 ## Follow-up Execution: Left Tool Drawers (2026-10-15)
 
@@ -244,7 +247,8 @@ No frontend/helper tests, browser automation or paid calls.
   No source fixes were needed; the history initialization call, mounted tool
   state, narrow layouts and disclosure/focus behavior passed source review.
   See `check-history-and-drawers.md` and the combined build evidence.
-- [ ] Matching production build and verified web-only publication.
+- [x] Matching production build and verified web-only publication. Combined
+  release `20261015T093934`; see `deployment-history-and-drawers-2026-10-15.md`.
 
 ## Deployment Considerations (Original Native Characters)
 
