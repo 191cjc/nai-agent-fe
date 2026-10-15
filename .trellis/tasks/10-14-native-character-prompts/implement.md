@@ -358,4 +358,6 @@ owns the frozen shared API and supersedes earlier browser scheduling limits.
 - [x] Implementation and independent full affected frontend quality gate.
   See check-viewer-cache.md; fresh 19-input env-free build also passed, as
   recorded in viewer-cache-build-verification.md.
-- [ ] Fresh build, commit and verified web-only deployment.
+- [x] Fresh build, commit b30250c and verified web-only release 20261015T145554;
+  exact public hashes/health/retained old assets pass, API pointer/PID unchanged.
+  See deployment-viewer-cache-2026-10-15.md. Operator interaction remains open.
