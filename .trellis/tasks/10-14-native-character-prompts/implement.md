@@ -98,6 +98,26 @@ credential changes are needed. Parent owns requirements/spec/release records.
   See `deployment-neutral-weights-2026-10-15.md`; operator acceptance remains
   open and the API pointer/PID are unchanged.
 
+## Follow-up Execution: Sampler Choices (2026-10-15)
+
+The gap lives in SettingsPanel's sampler control in App.tsx. Implementer owns
+App.tsx only: add the verified seven-choice list and controlled dropdown with
+explicit manual entry, preserving the draft string and existing styles.
+See `research/sampler-options.md`. No store/default/API/provider/dependency
+or configuration change is needed. Main owns specs and release records.
+
+1. Implement the selector/manual transitions and lossless historical values;
+   run ESLint/TypeScript without frontend/helper/browser automation.
+2. Independent follow-up review of all source changes and SettingsPanel,
+   history reuse and frozen experiment callers; fix concrete local issues.
+3. Sync specs, fresh explicit env-free build, commit, web-only publish and
+   public hash/health checks; keep provider/operator acceptance open.
+
+- [x] Seven preset choices and lossless manual-entry behavior.
+- [x] Independent follow-up review, ESLint/TypeScript and fresh env-free
+  production build; see `sampler-options-verification.md`.
+- [ ] Committed-input comparison, web-only publish and public verification.
+
 ## Deployment Considerations (Original Native Characters)
 
 Publishing both layers requires API-first order and a verified private backup

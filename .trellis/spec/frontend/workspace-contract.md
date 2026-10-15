@@ -101,6 +101,15 @@ provider credentials, durable image storage, or backend authorization.
   not a confirmed upstream V5 enum or pricing guarantee. A reused history pair
   outside the current UI presets remains selected as a read-only history value
   until the user chooses a preset; do not coerce it on reuse.
+- Sampler settings use a visible select with the seven IDs from the pinned
+  provider enum recorded in the active task's `research/sampler-options.md`.
+  Display a readable name and exact ID for each preset, with an explicit
+  manual-entry option. Keep `draft.sampler` the sole submitted string; manual
+  mode is local UI state. Selecting manual preserves the current value, typing
+  a preset ID manually must not collapse its input, and unknown historical
+  values remain editable without coercion. A fresh empty draft still requires
+  selection; no automatic sampler default or model-compatibility matrix is
+  introduced. Choices do not narrow the free-form browser/API contract.
 
 ## Validation & Error Matrix
 
@@ -116,6 +125,8 @@ provider credentials, durable image storage, or backend authorization.
 | First observed succeeded/failed job | Refresh history independently of image availability/download errors |
 | Same terminal result checked again | No duplicate completion-triggered history refresh |
 | Weight becomes exactly 1 (including decimal equivalents) | Remove only selected outer numeric wrapper; plain source unchanged |
+| Sampler preset selected | Write the exact selected ID to the existing draft |
+| Manual sampler / unknown reused sampler | Preserve current value in an editable field; do not coerce to a preset |
 | Completion during history loading/pagination | Coalesce one refresh after the latest request and retain its offset |
 | History refresh fails | Set history error; preserve generation result and submission certainty |
 | Logout/session expiry with pending refresh | Clear refresh intent and reject stale protected responses |
@@ -150,6 +161,8 @@ provider credentials, durable image storage, or backend authorization.
   that source review separately from interactive browser validation.
 - Source-review neutral adjustments from both directions and exact decimal
   equivalents, nested/escaped body preservation and plain-tag no-op behavior.
+- Source-review sampler names/IDs, blank/preset/manual transitions, history
+  reuse and manual typing of a known ID without hiding or resetting the input.
 - When this restriction is lifted, verify both base paths, logout during a
   pending submission, `401` cleanup, and absence of image/token persistence
   with deterministic fake responses only, never paid providers.

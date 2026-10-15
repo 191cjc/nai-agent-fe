@@ -140,6 +140,18 @@ up has the same result. Default plain tags continue to display weight 1.0.
 - Retain all prior verification restrictions and publish a fresh web-only
   release under existing authorization.
 
+## Follow-up: Sampler Choices
+
+On 2026-10-15 the operator reported that sampler ID has no options. Provide
+a visible dropdown of the seven pinned-source sampler names and IDs, with
+an explicit manual-ID option. Keep arbitrary historical/custom values and
+the current draft as the source of truth; selecting manual entry must not
+discard its current value. Do not invent a model-specific compatibility
+matrix or change the initial blank sampler into an automatic choice.
+Static choices supplement the existing string contract. Preserve normal
+generation, history reuse and frozen experiment settings. Publish web-only
+under the retained authorization and verification restrictions.
+
 ## Decisions and Provider Evidence (Original Native Characters)
 
 - A non-billable MCP initialization and tool listing on 2026-10-14 confirms

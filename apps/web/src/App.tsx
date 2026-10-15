@@ -24,6 +24,15 @@ const RESOLUTION_PRESETS = [
   { id: 'large-landscape', tier: '大图', label: '横图', width: '1536', height: '1024' },
 ] as const
 const RESOLUTION_TIERS = ['小图', '标准', '大图'] as const
+const SAMPLER_PRESETS = [
+  { id: 'k_euler', label: 'Euler' },
+  { id: 'k_euler_ancestral', label: 'Euler Ancestral' },
+  { id: 'k_dpmpp_2s_ancestral', label: 'DPM++ 2S Ancestral' },
+  { id: 'k_dpmpp_2m', label: 'DPM++ 2M' },
+  { id: 'k_dpmpp_2m_sde', label: 'DPM++ 2M SDE' },
+  { id: 'k_dpmpp_sde', label: 'DPM++ SDE' },
+  { id: 'ddim_v3', label: 'DDIM' },
+] as const
 const PROMPT_TABS = [['positive', '正向'], ['negative', '负面']] as const
 type PromptPanel = (typeof PROMPT_TABS)[number][0]
 
@@ -163,10 +172,13 @@ const Editor = observer(({ store, onOpenSettings }: { store: AppStore; onOpenSet
 })
 
 const SettingsPanel = observer(({ store, hidden, onClose }: { store: AppStore; hidden: boolean; onClose: () => void }) => {
+  const [manualSampler, setManualSampler] = useState(false)
   const generation = store.generation
   const draft = generation.draft
   const setNumeric = (name: keyof GenerationDraft, value: string) => generation.setField(name, value)
   const selectedResolution = RESOLUTION_PRESETS.find(preset => preset.width === draft.width && preset.height === draft.height)
+  const selectedSampler = SAMPLER_PRESETS.find(preset => preset.id === draft.sampler)
+  const showManualSampler = manualSampler || (draft.sampler !== '' && !selectedSampler)
 
   return <aside className="settings-panel" id="generation-settings" aria-label="生成设置" hidden={hidden}>
     <div className="settings-header"><h2>生成设置</h2>
@@ -182,9 +194,22 @@ const SettingsPanel = observer(({ store, hidden, onClose }: { store: AppStore; h
         <p className="prompt-hint">独立人物支持列表中的 V4 / V4.5 / V5 模型。</p>
         {draft.character_prompts.some(character => character.prompt.trim()) && draft.model.trim() && !supportsNativeCharacters(draft.model)
           && <p className="model-hint" role="status">当前模型不支持独立人物，请选择列表中的模型。</p>}
-        <label className="field"><span>采样器 ID <span className="required">*</span></span>
+        <label className="field"><span>采样器 <span className="required">*</span></span>
+          <select value={showManualSampler ? 'manual' : draft.sampler} onChange={event => {
+            const value = event.target.value
+            setManualSampler(value === 'manual')
+            if (value !== 'manual') generation.setField('sampler', value)
+          }}>
+            <option value="" disabled>请选择采样器</option>
+            {SAMPLER_PRESETS.map(preset => <option key={preset.id} value={preset.id}>{preset.label} · {preset.id}</option>)}
+            <option value="manual">手动输入 ID</option>
+          </select></label>
+        {showManualSampler && <label className="field"><span>手动采样器 ID <span className="required">*</span></span>
           <input value={draft.sampler} maxLength={80} autoComplete="off" placeholder="输入采样器 ID"
-            onChange={event => generation.setField('sampler', event.target.value)} /></label>
+            onChange={event => {
+              setManualSampler(true)
+              generation.setField('sampler', event.target.value)
+            }} /></label>}
       </section>
       <section className="settings-section" aria-labelledby="canvas-settings-title">
         <h3 id="canvas-settings-title">画布</h3>

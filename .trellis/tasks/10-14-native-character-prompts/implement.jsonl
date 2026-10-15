@@ -12,3 +12,4 @@
 {"file": ".trellis/tasks/10-14-native-character-prompts/style-experiment-design.md", "reason": "Shared exact helper/UI/store interfaces and sequential immutable experiment contract."}
 {"file": ".trellis/tasks/10-14-native-character-prompts/research/style-experiment-contract.md", "reason": "Existing generation seeds, scheduler, image ownership, no-retry and auth race evidence."}
 {"file": ".trellis/spec/frontend/style-experiment-contract.md", "reason": "Exact Cartesian weights, operation ownership, frozen seeds and transient comparison result lifecycle."}
+{"file": ".trellis/tasks/10-14-native-character-prompts/research/sampler-options.md", "reason": "Pinned sampler IDs, visible select/manual-entry behavior and free-form API compatibility."}
