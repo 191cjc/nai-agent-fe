@@ -383,3 +383,40 @@ Replaced the style-experiment gallery with a single-image viewer, independently 
 ### Next Steps
 
 - Operator verifies desktop/mobile and keyboard comparisons with actual images; broader task remains active pending acceptance.
+
+
+## Session 11: Latest history restoration and left tool drawers
+<!-- trellis-session: v=2 fp=98243116c4c04f14 -->
+
+**Date**: 2026-10-15
+**Task**: Latest history restoration and left tool drawers
+**Branch**: `feat/native-character-prompts`
+
+### Summary
+
+Implemented guarded latest-history draft restoration and unified left tool drawers; independently checked and published web-only release 20261015T093934.
+
+### Main Changes
+
+- Restore newest history prompts/native characters/settings/effective seed once per authenticated entry; late responses cannot overwrite edits or newer operations/sessions.
+- Settings/history/prompt lookup/AI advice now share left drawers with preserved mounted state, close/focus/mobile behavior; bottom drawer removed.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5b48196` | feat: restore latest settings and move tools into sidebar |
+| `0a333ba` | docs: record workspace entry and sidebar deployment |
+
+### Testing
+
+- [OK] Independent combined source review, ESLint/TypeScript, context/diff checks and fresh env-free production build passed; all 14 source inputs match reviewed commit.
+- [OK] Public HTML and JS/CSS hashes, readiness, neighboring health and retained assets passed. API pointer/PID unchanged; no frontend/helper/browser tests or paid calls.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Operator interaction acceptance remains pending; user is considering intuitive per-character action/clothing controls as a design discussion, not yet implementation.
