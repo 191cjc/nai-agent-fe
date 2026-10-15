@@ -93,7 +93,10 @@ credential changes are needed. Parent owns requirements/spec/release records.
 - [x] Neutral source writer and one-point experiment length accounting.
 - [x] Independent follow-up review, ESLint/TypeScript and clean env-free
   production build; see `neutral-weight-verification.md`.
-- [ ] Committed-input comparison, web-only publication and public checks.
+- [x] Work commit `15f88d0` matched staged inputs; web-only release
+  `20261015T073652` passed public page/asset hashes and health checks.
+  See `deployment-neutral-weights-2026-10-15.md`; operator acceptance remains
+  open and the API pointer/PID are unchanged.
 
 ## Deployment Considerations (Original Native Characters)
 
