@@ -6,6 +6,7 @@ import sqlite3
 import threading
 import time
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -16,6 +17,8 @@ from novelai_api.config import Settings
 from novelai_api.db import Database
 from novelai_api.generations import (
     GeneratedImage,
+    GenerationManager,
+    GenerationNotConfigured,
     GenerationRequest,
     JobStore,
     ResultCache,
@@ -496,6 +499,99 @@ def test_disabled_provider_and_invalid_request_do_not_persist(database: Database
         )
         assert invalid.status_code == 422
         assert client.get("/api/generations").json()["items"] == []
+
+
+def test_missing_executor_refuses_before_submission_side_effects(
+    database: Database, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider = FakeProvider()
+    manager = GenerationManager(database, provider)
+    request = GenerationRequest(**INPUT)
+    capacity = Mock(wraps=manager._capacity)
+    create = Mock(wraps=manager.store.create)
+    random_seed = Mock(return_value=76)
+    run = Mock(wraps=manager._run)
+    monkeypatch.setattr(manager, "_capacity", capacity)
+    monkeypatch.setattr(manager.store, "create", create)
+    monkeypatch.setattr(manager, "_run", run)
+    monkeypatch.setattr("novelai_api.generations.secrets.randbelow", random_seed)
+
+    with pytest.raises(GenerationNotConfigured):
+        manager.submit("not-used", request)
+
+    capacity.acquire.assert_not_called()
+    random_seed.assert_not_called()
+    create.assert_not_called()
+    run.assert_not_called()
+    assert request.seed is None
+    assert manager.store.list("not-used", limit=20, offset=0).items == []
+    assert provider.calls == []
+
+
+@pytest.mark.parametrize("persist_first", [False, True])
+def test_history_runtime_error_is_not_a_provider_configuration_refusal(
+    database: Database, monkeypatch: pytest.MonkeyPatch, persist_first: bool,
+) -> None:
+    provider = FakeProvider()
+    app = create_app(
+        Settings(database.path, "https://testserver"), database, image_provider=provider,
+    )
+    with TestClient(app, base_url="https://testserver", raise_server_exceptions=False) as client:
+        login(client, database, "alice")
+        manager = app.state.generations
+        create = manager.store.create
+        enqueue = Mock(wraps=manager._executor.submit)
+
+        def failing_create(user_id: str, parameters: GenerationRequest) -> str:
+            if persist_first:
+                create(user_id, parameters)
+            raise RuntimeError("Fixture history failure")
+
+        monkeypatch.setattr(manager.store, "create", failing_create)
+        monkeypatch.setattr(manager._executor, "submit", enqueue)
+        response = client.post("/api/generations", json={**INPUT, "seed": 77}, headers=ORIGIN)
+
+        assert response.status_code == 500
+        assert response.text == "Internal Server Error"
+        history = client.get("/api/generations").json()["items"]
+        assert len(history) == int(persist_first)
+        if persist_first:
+            assert history[0]["effective_seed"] == 77
+            assert history[0]["status"] == "queued"
+        enqueue.assert_not_called()
+        assert provider.calls == []
+
+
+def test_executor_runtime_error_after_enqueue_keeps_history_and_unknown_outcome(
+    database: Database, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider = FakeProvider()
+    app = create_app(
+        Settings(database.path, "https://testserver"), database, image_provider=provider,
+    )
+    queued = []
+    with TestClient(app, base_url="https://testserver", raise_server_exceptions=False) as client:
+        login(client, database, "alice")
+        manager = app.state.generations
+
+        def failing_submit(work, job_id: str, user_id: str, parameters: GenerationRequest):
+            # An executor can queue work before raising (for example on thread startup).
+            queued.append((work, job_id, user_id, parameters))
+            raise RuntimeError("Fixture executor failure after enqueue")
+
+        monkeypatch.setattr(manager._executor, "submit", failing_submit)
+        response = client.post("/api/generations", json={**INPUT, "seed": 77}, headers=ORIGIN)
+
+        assert response.status_code == 500
+        assert response.text == "Internal Server Error"
+        assert len(queued) == 1
+        history = client.get("/api/generations").json()["items"]
+        assert len(history) == 1
+        assert history[0]["id"] == queued[0][1]
+        assert history[0]["effective_seed"] == 77
+        assert history[0]["parameters"] == queued[0][3].model_dump()
+        assert history[0]["status"] == "queued"
+        assert provider.calls == []
 
 
 def test_restart_marks_queued_job_unknown_without_retry(database: Database) -> None:

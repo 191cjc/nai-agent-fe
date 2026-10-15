@@ -36,6 +36,17 @@ provider credentials, durable image storage, or backend authorization.
   A pending generation POST remains outcome-uncertain until the user checks
   history; a failed logout restores the editable draft, not an automatic paid
   retry. On logout success or `401`, clear protected state and object URLs.
+- In the generation POST catch, the exact typed rejection HTTP 503 with
+  `code=provider_unavailable` means no job was accepted under the backend
+  contract. Show the not-configured error and leave submitUncertain false.
+  Transport errors, unknown 5xx, proxy/non-JSON failures and other status/code
+  pairs retain the conservative unknown-outcome lock. Never automatically
+  resend either case. Terminal job/provider failures use their existing
+  separate meanings and must not be reclassified by this POST-only rule.
+  Roll out the backend's dedicated refusal exception before this frontend;
+  older APIs caught generic RuntimeErrors under the same pair and cannot
+  establish the pre-acceptance boundary. After publishing, retain that backend
+  fix even when rolling the web back: open tabs can keep the new classification.
 - Advice sends only the explicit advice input and never reads or mutates the
   generation draft. Tag selection inserts only the chosen canonical tag.
 - Style, shared text, global negative text and native character descriptions
@@ -119,6 +130,7 @@ provider credentials, durable image storage, or backend authorization.
 | `401` for active session | Clear protected state and show token entry |
 | Failed logout request | Show error, preserve draft, permit retry |
 | Generation submission with uncertain result | Block another POST until user acknowledges after checking history |
+| Generation POST rejects with exact 503/provider_unavailable | Show not-configured error, no unknown-result lock, no automatic retry |
 | History item still queued/running | Disable deletion; backend would return `409` |
 | Missing optional tag count/score | Omit the metadata; do not format `undefined` |
 | Arrow/Home/End in tool tabs | Select and focus the same tab in displayed order, with arrow wraparound |
@@ -139,6 +151,11 @@ provider credentials, durable image storage, or backend authorization.
   reload as parameters only while image object URLs do not.
 - Bad: direct browser requests to NovelAI, Codex, or DanbooruSearch; placing
   an access token in Web Storage; retrying an ambiguous paid submission.
+- Good: generation POST rejects with typed `503/provider_unavailable`; show
+  the not-configured message without an acknowledgement lock or retry.
+  Base: ordinary 4xx keeps its existing specific error. Bad: treating
+  `503/request_error`, `502/provider_unavailable` or a network failure as
+  proof that no paid job was accepted.
 - Good: lowering `1.1::artist:meion::` or raising `0.9::artist:meion::`
   produces `artist:meion`, still displayed at weight 1.0. Base: assigning
   1 to a plain tag leaves it untouched. Bad: blindly removing nested emphasis
@@ -163,6 +180,10 @@ provider credentials, durable image storage, or backend authorization.
   equivalents, nested/escaped body preservation and plain-tag no-op behavior.
 - Source-review sampler names/IDs, blank/preset/manual transitions, history
   reuse and manual typing of a known ID without hiding or resetting the input.
+- Source-review exact pre-acceptance refusal versus generic/unknown 5xx,
+  network failure and mismatched status/code; normal and experiment errors
+  stop without a successor POST. Health/readiness alone does not verify image
+  provider configuration or successful image generation.
 - When this restriction is lifted, verify both base paths, logout during a
   pending submission, `401` cleanup, and absence of image/token persistence
   with deterministic fake responses only, never paid providers.
@@ -177,3 +198,7 @@ provider credentials, durable image storage, or backend authorization.
   from result rendering/image-download success.
 - Correct: share `TOOL_TABS` and notify from the epoch-checked job observation;
   use `history.refresh()` for pagination-aware completion synchronization.
+- Wrong: classify every 5xx as unknown, or globally translate every
+  `provider_unavailable` into an unsubmitted job.
+- Correct: recognize only the exact typed generation-POST refusal and retain
+  uncertainty for other 5xx; accepted-job errors keep their existing meaning.

@@ -152,6 +152,27 @@ Static choices supplement the existing string contract. Preserve normal
 generation, history reuse and frozen experiment settings. Publish web-only
 under the retained authorization and verification restrictions.
 
+## Follow-up: Definite Submission Refusal
+
+On 2026-10-15 the operator repeatedly received the unknown-submission message.
+Logs/source identify HTTP 503 before enqueue while the production image
+provider is unconfigured. Handle the exact generation-POST pair
+503/provider_unavailable as a definite rejection, show that image generation
+is not configured, and do not set the unknown-result acknowledgement lock.
+Unknown transport/5xx outcomes retain the existing protection. Neither case
+automatically retries a paid POST, and experiments halt rather than advance.
+Independent review found that the route's broad RuntimeError catch also
+maps executor submission failures after history creation to this same pair.
+Narrow it to a dedicated not-configured exception raised only at the initial
+executor guard, with offline regressions proving other RuntimeErrors cannot
+claim pre-acceptance refusal. The safe frontend classification requires this
+backend correction first; the previous web-only publication plan is superseded.
+Prepare a matched API/web release and finish all offline/static checks.
+Production credential setup and the combined restart/switch remain a separate
+action requiring authorization; do not publish the new frontend against the
+old broad catch.
+See `research/submission-rejection.md` for evidence and boundaries.
+
 ## Decisions and Provider Evidence (Original Native Characters)
 
 - A non-billable MCP initialization and tool listing on 2026-10-14 confirms

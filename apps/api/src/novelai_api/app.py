@@ -21,6 +21,7 @@ from .config import Settings
 from .db import Database
 from .generations import (
     GenerationManager,
+    GenerationNotConfigured,
     GenerationRequest,
     GenerationView,
     HistoryPage,
@@ -275,7 +276,7 @@ def create_app(
     ) -> GenerationAccepted | JSONResponse:
         try:
             job_id = manager.submit(user.id, payload)
-        except RuntimeError:
+        except GenerationNotConfigured:
             return error(503, "provider_unavailable", "Image generation is not configured")
         if job_id is None:
             return error(429, "queue_full", "Generation queue is full", retryable=True)

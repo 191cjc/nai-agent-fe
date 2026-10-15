@@ -293,6 +293,10 @@ class ResultCache:
                 self._remove(job_id)
 
 
+class GenerationNotConfigured(RuntimeError):
+    """No executor exists, so submission has performed no work."""
+
+
 class GenerationManager:
     def __init__(
         self,
@@ -319,7 +323,7 @@ class GenerationManager:
 
     def submit(self, user_id: str, request: GenerationRequest) -> str | None:
         if self._executor is None:
-            raise RuntimeError("Generation provider not configured")
+            raise GenerationNotConfigured("Generation provider not configured")
         if not self._capacity.acquire(blocking=False):
             return None
         try:

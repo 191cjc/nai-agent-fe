@@ -121,6 +121,40 @@ or configuration change is needed. Main owns specs and release records.
   See `deployment-sampler-options-2026-10-15.md`. API pointer/PID unchanged;
   interactive/provider acceptance remains pending.
 
+## Follow-up Execution: Definite Submission Refusal (2026-10-15)
+
+The behavior gap spans the backend refusal boundary and GenerationStore's
+sole paid submission catch. The initial frontend implementer owns store.ts.
+Independent review confirmed app.py catches every RuntimeError, including
+executor submission failures after history creation. A backend follow-up
+implementer owns generations.py, app.py and tests/test_generations.py: add a
+dedicated exception only at the initial missing-executor guard and narrow the
+route catch. Generic RuntimeErrors must remain generic unknown 5xx. Do not
+change queue algorithms, retries, provider error mappings or dependencies.
+Parent owns artifacts/specs/staging. See `research/submission-rejection.md`.
+
+1. Implement the narrow classification and specific not-configured message;
+   run ESLint/TypeScript, no frontend/helper/browser/paid tests.
+2. Independent review all follow-up source changes and normal/experiment,
+   uncertainty/acknowledgement and stale/logout paths. No paid requests.
+3. Run full offline backend suite, Ruff and frozen/lock consistency, plus
+   regressions for true missing executor and RuntimeErrors before/after history
+   creation. Recheck both layers independently, including rollout ordering.
+4. Sync specs, clean env-free web build, commit and prepare matching immutable
+   API/web release inputs. Do not publish this web against the old broad catch.
+   Combined production switch/configuration/restart requires authorization;
+   prepare the concrete enablement/rollback plan first.
+
+- [x] Narrow frontend classification and backend dedicated exception, with
+  four offline boundary regressions; no automatic retries.
+- [x] Full-scope independent check passed: 215 backend tests, Ruff,
+  frozen/lock consistency, frontend ESLint/TypeScript and clean build.
+  See `check-submission-refusal.md`,
+  `backend-submission-refusal-verification.md` and
+  `submission-refusal-build-verification.md`.
+- [ ] Activate the matched releases and configure the image provider after
+  authorization; real paid output remains an explicit operator action.
+
 ## Deployment Considerations (Original Native Characters)
 
 Publishing both layers requires API-first order and a verified private backup

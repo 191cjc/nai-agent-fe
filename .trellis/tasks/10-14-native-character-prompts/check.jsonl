@@ -13,3 +13,4 @@
 {"file": ".trellis/tasks/10-14-native-character-prompts/research/style-experiment-contract.md", "reason": "Review existing generation seed/scheduler/history/auth constraints and no paid retry behavior."}
 {"file": ".trellis/spec/frontend/style-experiment-contract.md", "reason": "Executable exact enumeration, seed-lock, stop/error and transient comparison-result contracts."}
 {"file": ".trellis/tasks/10-14-native-character-prompts/research/sampler-options.md", "reason": "Review source-backed sampler choices and lossless draft/history/manual transitions."}
+{"file": ".trellis/tasks/10-14-native-character-prompts/research/submission-rejection.md", "reason": "Verify exact refusal evidence without weakening unknown outcome/no-retry safeguards."}

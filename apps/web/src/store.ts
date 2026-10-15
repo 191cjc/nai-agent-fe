@@ -454,10 +454,14 @@ export class GenerationStore {
       if (epoch === this.epoch && this.operation?.token === token) runInAction(() => {
         this.busy = false
         this.operation = null
-        this.submitUncertain = !(error instanceof ApiFailure) || error.status >= 500
-        this.error = this.submitUncertain
-          ? '提交结果未知。请先检查历史记录，再决定是否重新提交。'
-          : errorText(error)
+        // This exact POST refusal occurs before history creation or enqueue.
+        const providerUnconfigured = error instanceof ApiFailure && error.status === 503 && error.code === 'provider_unavailable'
+        this.submitUncertain = !(error instanceof ApiFailure) || (error.status >= 500 && !providerUnconfigured)
+        this.error = providerUnconfigured
+          ? '图像生成服务尚未配置，暂时无法生图，请联系管理员。'
+          : this.submitUncertain
+            ? '提交结果未知。请先检查历史记录，再决定是否重新提交。'
+            : errorText(error)
         if (runToken !== null) this.haltExperiment(this.error)
         if (runToken !== null) this.execution = null
       })

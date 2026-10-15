@@ -13,6 +13,11 @@ and review how the web app consumes the change.
   or create a SQLite database.
 - `GET /api/generations/{job_id}` returns saved parameters and transient
   owner-only image URLs. `POST /api/generations` returns `202` with a job ID.
+- `GenerationManager.submit(user_id, request) -> str | None` raises
+  `GenerationNotConfigured` only at the initial missing-executor guard;
+  the route catches this type, not its general RuntimeError base class.
+- `GET /api/health/ready` checks database readiness; it does not assert image
+  provider configuration, upstream credentials or successful paid output.
 - `GET /api/generations?limit=&offset=` returns parameter-only history;
   `limit` defaults to 20 and accepts 1-100. `offset` starts at 0 and accepts
   JavaScript-safe nonnegative integers so `next_offset` remains usable beyond
@@ -34,6 +39,17 @@ and review how the web app consumes the change.
   requests additionally validate the verified native model subset; see
   [Native Character Prompt Contract](./native-character-contract.md) for
   additive style/character fields, history defaults and API-first rollout.
+- POST `/api/generations` returning the explicit pair
+  `503/provider_unavailable` is a refusal before seed assignment, history
+  creation, enqueue and provider invocation. Browser submission handling may
+  safely distinguish that exact response from unknown transport/5xx outcomes.
+  Enforce this with a dedicated not-configured exception at the initial
+  missing-executor guard, caught specifically by the route. Never catch all
+  RuntimeErrors here: history creation/executor submission may fail after
+  persistence or queue insertion. Keep terminal job errors and other routes'
+  provider errors separate. Deploy this backend correction before a frontend
+  that treats the pair as definite refusal; retain it after a web rollback
+  because already-open tabs may keep the new classification.
 
 ## Validation & Error Matrix
 
@@ -45,6 +61,7 @@ and review how the web app consumes the change.
 | Invalid request body or query | `422` with `ApiError` |
 | History `limit` outside 1-100 or unsafe `offset` | `422` with `ApiError` |
 | Missing image provider | `503 provider_unavailable` |
+| Other RuntimeError during history/executor submission | Generic server failure; acceptance remains unknown, never the explicit configuration refusal |
 | Missing Codex runner | `503 advice_unavailable` |
 
 Where applicable, also document `429` rate/queue limits and `502`/`504`
@@ -60,6 +77,9 @@ does not. The JSON `ApiError` shape is unchanged.
   history, and accesses an image only while it remains in memory.
 - Base: schema generation with fake settings produces no SQLite file and
   no network activity.
+- Good: missing image executor causes generation POST to refuse with
+  `503/provider_unavailable` before any seed, history or provider work. Base:
+  database readiness may still return `200/status=ok` with no executor.
 - Bad: a foreign user receives another user's job data or a configured
   MCP/Codex secret appears in `/openapi.json` or a test snapshot.
 
@@ -70,6 +90,10 @@ does not. The JSON `ApiError` shape is unchanged.
   credential URL/env value leaks.
 - Keep integration tests on disposable SQLite and fake providers; automatic
   tests must not call paid services.
+- Generation regressions must distinguish missing executor (503 with no
+  seed/history/enqueue/provider work) from generic RuntimeError in history
+  creation or executor submission (unknown server failure, never the explicit
+  refusal). Preserve any already-created history for user review.
 
 ## Wrong vs Correct
 
@@ -77,3 +101,7 @@ does not. The JSON `ApiError` shape is unchanged.
   from its OpenAPI response model.
 - Correct: annotate reachable error codes with `ApiError`; advice availability
   requires configured credentials and the pinned CLI, not merely a schema.
+- Wrong: infer successful image generation from readiness, or equate an
+  accepted job's terminal provider error with POST refusal.
+- Correct: check provider configuration separately; preserve the refusal's
+  pre-acceptance boundary when changing submit or enqueue behavior.
