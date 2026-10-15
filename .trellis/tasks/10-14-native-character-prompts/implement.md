@@ -152,8 +152,12 @@ Parent owns artifacts/specs/staging. See `research/submission-rejection.md`.
   See `check-submission-refusal.md`,
   `backend-submission-refusal-verification.md` and
   `submission-refusal-build-verification.md`.
-- [ ] Activate the matched releases and configure the image provider after
-  authorization; real paid output remains an explicit operator action.
+- [x] After explicit authorization, activated matched release `20261015T082138`,
+  configured the NovelAI provider and restarted the API. Non-billable MCP
+  discovery, loaded configuration, private backups/permissions, public hashes
+  and health passed. See `deployment-submission-refusal-2026-10-15.md`.
+  Real paid output remains an explicit operator action; broader acceptance
+  remains pending.
 
 ## Deployment Considerations (Original Native Characters)
 

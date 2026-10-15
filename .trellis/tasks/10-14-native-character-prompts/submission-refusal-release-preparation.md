@@ -1,6 +1,7 @@
 # Prepared Release: Submission Refusal
 
-Status: **staged, not activated**. Production provider configuration and the
+Historical preparation status: **staged, not activated**. Subsequent authorized
+activation is recorded in `deployment-submission-refusal-2026-10-15.md`. Production provider configuration and the
 combined switch/restart await explicit authorization. No secret was read.
 
 - Work commit: `be99b7d023b6c01516ebae1105f48eaf6a7aea3c`.

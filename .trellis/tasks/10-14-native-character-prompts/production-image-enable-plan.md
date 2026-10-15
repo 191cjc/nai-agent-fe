@@ -1,6 +1,7 @@
 # Reviewable Plan: Enable Production Image Provider
 
-Status: authorized, execution pending. On 2026-10-15 the operator explicitly
+Status: executed successfully on 2026-10-15; see
+`deployment-submission-refusal-2026-10-15.md`. The operator explicitly
 selected `授权接入现有配置并上线（推荐）` after preparation and review. This
 supersedes the earlier web-only boundary for the exact two-key image-provider
 change and matched release/restart below. No secret was read in preparation.
@@ -58,7 +59,7 @@ success; real generation remains an explicit operator action.
 
 Work commit `be99b7d023b6c01516ebae1105f48eaf6a7aea3c` has passed the combined gate.
 API `/srv/novelai/releases/20261015T082138` and web
-`/srv/www/novelai/releases/20261015T082138` are installed but inactive.
+`/srv/www/novelai/releases/20261015T082138` were staged inactive, then activated after authorization.
 See `submission-refusal-release-preparation.md` for source/artifact hashes and
 checks. Revalidate active pointers, process state and staged hashes immediately
 before activation; do not assume the current baseline persisted.
