@@ -272,3 +272,39 @@ Exact neutral prompt weights now omit their outer numeric wrappers across all pr
 ### Next Steps
 
 - Operator interaction/provider acceptance remains pending. No frontend/helper automated tests, browser automation or paid calls were run; keep broader task in_progress.
+
+
+## Session 8: Sampler dropdown and web-only release
+<!-- trellis-session: v=2 fp=8d148fb183b9bdd4 -->
+
+**Date**: 2026-10-15
+**Task**: Sampler dropdown and web-only release
+**Branch**: `feat/native-character-prompts`
+
+### Summary
+
+Added seven source-backed sampler choices with lossless manual/history values; published web-only release 20261015T075433.
+
+### Main Changes
+
+- SettingsPanel now provides an actual sampler select with names/IDs and explicit manual entry while retaining the controlled draft and initial blank value.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8994c3d` | feat(web): add sampler selection options |
+| `e712005` | docs: record sampler selection production release |
+
+### Testing
+
+- [OK] Independent source review, ESLint/TypeScript, context validation, diff check and fresh explicit-input env-free offline production build passed.
+- [OK] All 14 inputs matched reviewed/committed source. Public page/assets matched SHA-256; API readiness, neighboring health and prior assets passed. API pointer/PID unchanged.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Operator interaction/provider acceptance remains pending; no frontend/helper automated tests, browser automation or paid calls ran. Keep task in_progress.
