@@ -399,3 +399,11 @@ owns the frozen shared API and supersedes earlier browser scheduling limits.
   offline backend tests, Ruff/frozen/lock/OpenAPI and web ESLint/TypeScript pass.
   Fresh 19-input env-free build passed with unchanged production sources; see
   check-zero-weight.md and zero-weight-build-verification.md.
+
+- [x] Commit65560f3 and matched API-first release20261016T034213, published
+  2026-10-16T04:06:17Z after the existing48-group run completed naturally.
+  Private schema3 backup, config continuity, exact public hashes/health,
+  retained assets and auth/no-store checks pass; see
+  deployment-zero-weight-2026-10-16.md.
+- [ ] Operator real-provider zero-omission/interaction acceptance; broader task
+  remains in_progress.
