@@ -640,3 +640,26 @@ Implemented shared scene/other and seven per-character sections, hidden effectiv
 ### Status
 
 [OK] **Completed**
+
+
+## Session 19: Per-section AI and tag-search assistant deployed
+<!-- trellis-session: v=2 fp=0126f5712356b885 -->
+
+**Date**: 2026-10-16
+**Task**: Per-section AI and tag-search assistant deployed
+**Branch**: `feat/native-character-prompts`
+
+### Summary
+
+Added compact assistant popovers to shared/person/style/negative prompts with AI advice and prompt-search tabs. Current-section consultation is editable and explicitly submitted; suggestions and canonical search tags support exact stable-target append/replace, preserving hidden state and validating relevant budgets atomically before settings are complete. Independent full affected frontend review, ESLint/TypeScript, context/whitespace and final 23-input env-free locked build passed; no source correction. Strengthened publication with exact committed/working/build file-set equality. Published web-only release 20261016T071424 with exact public hashes, retained old assets and health checks. API release20261016T064813/PID3446533 unchanged; no restart, backend/runtime changes, paid probes or frontend/helper/browser automated tests. Broad task stays in_progress for interaction and AI/search content acceptance; unrelated active tasks left untouched.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a2fb618` | feat: add section prompt assistant |
+| `4ed4e80` | docs: record section assistant deployment |
+
+### Status
+
+[OK] **Completed**
