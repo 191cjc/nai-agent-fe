@@ -16,7 +16,11 @@
   GREEN. ESLint/TypeScript, whitespace/context validation and clean23-input
   env-free build pass; no checker source correction/rebuild. See
   check-section-assistant.md and section-assistant-build-verification.md.
-- [ ] Final clean build, spec sync, scoped commit and web-only publication.
+- [x] Executable spec sync, final23-input build and scoped commit a2fb618;
+  web-only release20261016T071424 verified with exact committed/working/build
+  file-set/hashes, public HTML/JS/CSS, health and retained previous assets.
+  API release20261016T064813/PID3446533 unchanged. See
+  deployment-section-assistant-2026-10-16.md.
 - [ ] Operator interaction/visual and actual AI/search result acceptance.
 
 The operator chose native independent characters after the flat-versus-native

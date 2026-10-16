@@ -29,3 +29,7 @@ All23 final source inputs match this clean build; no rebuild required.
 Publication also verifies exact input-set equality across committed/working/
 build trees and each input SHA-256. Source checks establish static behavior
 only; interactive and actual service-result acceptance remain operator checks.
+
+Source commit a2fb618 passed those exact publication comparisons. Web-only
+release20261016T071424 serves the HTML/JS/CSS hashes above; existing API
+release20261016T064813 and PID3446533 remained unchanged.
