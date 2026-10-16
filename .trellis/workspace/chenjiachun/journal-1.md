@@ -579,3 +579,41 @@ Implemented exact-zero omission for new style experiments with browser/server pa
 ### Status
 
 [OK] **Completed**
+
+
+## Session 17: Automatic character positioning deployed
+<!-- trellis-session: v=2 fp=ad4e0ed41073da87 -->
+
+**Date**: 2026-10-16
+**Task**: Automatic character positioning deployed
+**Branch**: `feat/native-character-prompts`
+
+### Summary
+
+Added explicit automatic/manual character placement, preserved legacy history and frozen experiment semantics, and deployed matched API/web after later restart authorization.
+
+### Main Changes
+
+- Strict default-false stored mode; automatic MCP payload omits child x/y, manual retains exact coordinates, unsupported automatic capability fails before paid calls.
+- Native selector releases dragging and preserves coordinates; summaries, reuse and immutable server experiments retain placement mode.
+- Published release 20261016T060747 after private online backup and zero-active-work preflight; schema3, existing state/images and provider configuration preserved.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7c7e3d7` | feat: add automatic character positioning |
+| `b856e1f` | docs: record automatic positioning deployment |
+
+### Testing
+
+- [OK] 462 offline backend tests, frozen sync/lock, Ruff, reviewed additive OpenAPI and web ESLint/TypeScript passed; final 19-input env-free build matches committed source.
+- [OK] Verified exact running OpenAPI, public HTML/JS/CSS hashes/readiness, retained assets, private image root, neighboring health and unauthenticated no-store boundaries; no paid calls or browser tests.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Operator validates real NovelAI placement and desktop/mobile interaction; broader native-character task remains in_progress.

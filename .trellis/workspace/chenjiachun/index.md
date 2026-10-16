@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 16
+- **Total Sessions**: 17
 - **Last Active**: 2026-10-16
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~581 | Active |
+| `journal-1.md` | ~619 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 17 | 2026-10-16 | Automatic character positioning deployed | `7c7e3d7`, `b856e1f` | `feat/native-character-prompts` |
 | 16 | 2026-10-16 | Experiment zero weight omission and paired production release | `65560f3`, `4eb44fc` | `feat/native-character-prompts` |
 | 15 | 2026-10-16 | Canvas workspace and bottom prompt drawer release | `8f86e5a`, `e9d3672` | `feat/native-character-prompts` |
 | 14 | 2026-10-15 | Bounded viewer image cache and web release | `b30250c`, `42a89f2` | `feat/native-character-prompts` |
