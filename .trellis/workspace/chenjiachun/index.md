@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 19
+- **Total Sessions**: 20
 - **Last Active**: 2026-10-16
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~665 | Active |
+| `journal-1.md` | ~688 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 20 | 2026-10-16 | Image-service Anlas balance header | `377a634`, `2fd539b` | `feat/native-character-prompts` |
 | 19 | 2026-10-16 | Per-section AI and tag-search assistant deployed | `a2fb618`, `4ed4e80` | `feat/native-character-prompts` |
 | 18 | 2026-10-16 | Prompt sections and private snapshots deployed | `9f445e5`, `6b6c040` | `feat/native-character-prompts` |
 | 17 | 2026-10-16 | Automatic character positioning deployed | `7c7e3d7`, `b856e1f` | `feat/native-character-prompts` |

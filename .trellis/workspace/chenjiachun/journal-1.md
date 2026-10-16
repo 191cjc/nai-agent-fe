@@ -663,3 +663,26 @@ Added compact assistant popovers to shared/person/style/negative prompts with AI
 ### Status
 
 [OK] **Completed**
+
+
+## Session 20: Image-service Anlas balance header
+<!-- trellis-session: v=2 fp=9a0e0be77f438074 -->
+
+**Date**: 2026-10-16
+**Task**: Image-service Anlas balance header
+**Branch**: `feat/native-character-prompts`
+
+### Summary
+
+Implemented and deployed authenticated normalized NovelAI Anlas header with strict allowlist, short singleflight cache, truthful freshness and protected refresh lifecycle. Independent gate: 639 offline backend tests, Ruff/frozen/lock/OpenAPI and web ESLint/TypeScript/source review passed; fresh25-input env-free build. Matched schema4 API/web release20261016T090442 after idle/private backup checks; all72 retained image bytes/expiry and provider config preserved. Live read-only adapter probe passed, no paid calls. Header interaction remains operator acceptance; broader task stays in_progress, unrelated tasks untouched.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `377a634` | feat: show image service Anlas balance |
+| `2fd539b` | docs: record Anlas balance deployment |
+
+### Status
+
+[OK] **Completed**
