@@ -34,6 +34,11 @@ and review how the web app consumes the change.
 - `POST /api/advice` has a typed suggestion response. A default runner is
   wired only when `NAI_CODEX_API_KEY` is configured; see
   [Codex Advice Runtime Contract](./codex-advice-contract.md).
+- `/api/prompt-snapshots` lists/creates durable private named section bundles;
+  `/{id}` reads/deletes only the owner's object. GenerationRequest adds optional
+  validated prompt_sections metadata while retaining effective provider fields.
+  See [Prompt Sections and Snapshots](./prompt-sections-contract.md) for exact
+  types, exclusion of hidden text, idempotency, errors and schema4.
 
 ## Contracts
 

@@ -7,6 +7,7 @@ import { createStyleExperimentPlan, type StyleExperimentPlan, type StyleExperime
 import { supportsNativeCharacters, type GenerationStore } from './store'
 import { PromptSummary } from './PromptSummary'
 import type { SavedResultsStore } from './saved-results'
+import { sharedPrompt } from './prompt-sections'
 
 interface Configuration {
   source: string
@@ -45,7 +46,7 @@ export const StyleExperimentConfig = observer(({ generation, hidden }: { generat
   } : { source, ranges: liveRanges, sampleCount: generation.draft.sample_count }
   const tags = parsePromptTags(displayed.source)
   const { plan, error: planError } = planPreview(displayed.source, displayed.ranges)
-  const error = planError || (!frozen && plan?.canBeEmpty && !generation.draft.positive_prompt.trim()
+  const error = planError || (!frozen && plan?.canBeEmpty && !sharedPrompt(generation.draft.shared_sections).trim()
     ? '权重为 0 时可能移除全部画风词条，请填写公共提示词，或调整范围以保留至少一个画风词条。' : '')
   const samples = sampleCount(displayed.sampleCount)
   const supportedModel = supportsNativeCharacters(snapshot?.parameters.model ?? generation.draft.model)

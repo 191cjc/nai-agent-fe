@@ -402,3 +402,17 @@ clean build and idle/backup preflight before API-first publication. See
 auto-character-position-design.md and the new configured-provider discovery
 snapshot. This supersedes earlier claims that the configured provider lacks
 automatic positioning. No paid verification calls.
+
+## Follow-up: Prompt Sections and Snapshots (2026-10-16)
+
+The user requests public 场景/其他 and, for each independent character,
+角色/上半身服饰/下半身服饰/动作/标签/特殊/其他. Each section offers 隐藏
+(retained but excluded from generation), 保存 and 导入. Multiple selected
+sections can form one named snapshot; a global importer accepts multiple
+snapshots. The user explicitly chose append/replace at import time, with
+append as default. Snapshots are private durable account data; character
+imports expose target mapping. Import preserves current hidden states and
+only changes selected destination text. Existing unsplit text restores
+verbatim in 其他. History/reuse preserve hidden sections and character positions;
+active experiments retain their frozen prompts. See prompt-sections-design.md
+for exact contracts, atomic application, compatibility and acceptance checks.

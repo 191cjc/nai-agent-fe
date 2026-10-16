@@ -18,7 +18,9 @@ This replaces earlier browser-only/no-continuation contracts.
   failed_count, current_ordinal, current_job_id, seed, sample_count, parameters,
   ranges, created_at, updated_at, error_code. Counts/ordinals use exact decimal
   strings; nullable current fields; safe latest error diagnostic.
-- Migration 0003_style_experiments.sql, SCHEMA_VERSION=3. Images remain separate
+- Migration 0003_style_experiments.sql introduced the run table at schema3.
+  Current SCHEMA_VERSION=4 also includes the private prompt snapshot library;
+  see [Prompt Sections](./prompt-sections-contract.md). Images remain separate
   private files; see [Image Retention](./image-retention-contract.md).
 
 ## Contracts
@@ -56,6 +58,11 @@ This replaces earlier browser-only/no-continuation contracts.
   false default. Canonical same-id comparison may supply only that missing
   false mode for compatibility; do not rewrite raw definitions, drop unknown
   keys or equate a changed true mode. Preserve plan_version1/2 semantics.
+- Freeze optional prompt_sections metadata with all hidden text/state and source
+  axes. Absent None is excluded from model_dump/model_dump_json so old same-ID
+  definitions require no new normalization. Effective fields must match the
+  metadata; style-only group overrides preserve it. Changed hidden metadata
+  still conflicts even if effective prompts match. See prompt-sections-contract.md.
 - Single lifecycle scheduler uses GenerationManager's existing single-worker
   bounded executor/reservations. At most one group per run in flight. Queue
   contention waits without consuming a group. Rotate the starting owner across

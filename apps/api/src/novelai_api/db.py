@@ -9,7 +9,7 @@ from importlib.resources import files
 from pathlib import Path
 from urllib.parse import quote
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 def _restrict_existing_file(path: Path, *, missing_ok: bool = False) -> None:
@@ -78,6 +78,7 @@ class Database:
                 (1, "0001_auth.sql"),
                 (2, "0002_generations.sql"),
                 (3, "0003_style_experiments.sql"),
+                (4, "0004_prompt_snapshots.sql"),
             ):
                 if version >= next_version:
                     continue
@@ -101,6 +102,7 @@ class Database:
                 connection.execute("SELECT 1 FROM access_tokens LIMIT 1")
                 connection.execute("SELECT 1 FROM generation_jobs LIMIT 1")
                 connection.execute("SELECT 1 FROM style_experiment_runs LIMIT 1")
+                connection.execute("SELECT 1 FROM prompt_snapshots LIMIT 1")
             return True
         except (sqlite3.Error, OSError):
             return False

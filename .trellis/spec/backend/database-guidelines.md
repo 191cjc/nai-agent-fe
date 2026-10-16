@@ -28,12 +28,17 @@ generated image bytes to it.
   directories or change the process-wide umask.
 - Admin migrations run before API readiness. DB schema lives in
   `migrations/0001_auth.sql`, `0002_generations.sql` and
-  `0003_style_experiments.sql` (schema3), with
+  `0003_style_experiments.sql` and `0004_prompt_snapshots.sql` (schema4), with
   `PRAGMA user_version` and transactional scripts. Store job parameters, effective
   seed, timestamps and outcome, including optional experiment metadata in
   settings_json. Durable compact run/cursor/seed/Stop state uses the schema3 run table; see
   [Durable Experiments](./durable-experiment-contract.md). Image payloads are stored separately in private seven-day
   disk results; see [Image Retention](./image-retention-contract.md).
+- Schema4 adds an owner/id-keyed immutable prompt_snapshots library. Readiness
+  probes its table; explicit migrations preserve all existing records. Snapshot
+  entries stay in private SQLite and online backups, never image/public files;
+  see [Prompt Sections](./prompt-sections-contract.md). Section history metadata
+  alone uses existing settings_json and needs no additional generation columns.
 - Deploy the API on a trusted, private data volume. Existing parent directory
   modes and Windows ACLs require operator review; these POSIX modes do not
   protect against an attacker who can replace paths inside the directory.
@@ -43,7 +48,7 @@ generated image bytes to it.
 | Input / condition | Expected behavior |
 | --- | --- |
 | New path under an absent directory | Create private parent/data and DB before migrations |
-| Existing v1 DB with permissive modes | Restrict DB/WAL/SHM, migrate through v3, preserve records |
+| Existing v1 DB with permissive modes | Restrict DB/WAL/SHM, migrate through v4, preserve records |
 | Backup path exists or is a symlink | Reject exclusive creation without overwrite |
 | Backup fails after creating destination | Close connections and remove only that destination |
 | Missing/unsupported schema | Readiness false / reject future schema version |

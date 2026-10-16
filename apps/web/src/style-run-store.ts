@@ -1,4 +1,5 @@
 import { makeAutoObservable, runInAction } from 'mobx'
+import { copyPromptMetadata } from './prompt-sections'
 import { ApiFailure, errorText, type ExperimentRunDefinition, type ExperimentRunRange, type ExperimentRunState, type GenerationRequest, WorkspaceApi } from './api'
 
 /** Observes one server-owned run. Detaching never sends a stop request. */
@@ -113,7 +114,10 @@ export class StyleRunStore {
       return
     }
     const definition: ExperimentRunDefinition = {
-      id, parameters: { ...parameters, character_prompts: parameters.character_prompts.map(character => ({ ...character })) },
+      id, parameters: {
+        ...parameters, character_prompts: parameters.character_prompts.map(character => ({ ...character })),
+        ...(parameters.prompt_sections ? { prompt_sections: copyPromptMetadata(parameters.prompt_sections) } : {}),
+      },
       ranges: ranges.map(range => ({ ...range })),
     }
     const { epoch, version, controller } = this.beginRequest()

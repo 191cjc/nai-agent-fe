@@ -30,3 +30,6 @@
 {"file": ".trellis/tasks/10-14-native-character-prompts/zero-weight-design.md", "reason": "Newest experiment-only exact-zero omission, preflight and frozen legacy-run compatibility contract."}
 {"file": ".trellis/tasks/10-14-native-character-prompts/auto-character-position-design.md", "reason": "Latest explicit auto/manual placement contract and later restart authorization; independent checks, clean build and API-first idle/backup publication gates."}
 {"file": ".trellis/tasks/10-14-native-character-prompts/research/deployed-mcp-auto-position-schema.json", "reason": "Fresh configured-provider discovery confirms nullable boolean auto_character_position without tools/call."}
+{"file": ".trellis/tasks/10-14-native-character-prompts/prompt-sections-design.md", "reason": "Newest exact fixed sections, strict effective-prompt metadata, private snapshot API/schema4 and atomic append/replace import contract."}
+{"file": ".trellis/tasks/10-14-native-character-prompts/research/prompt-sections-and-snapshots.md", "reason": "Cross-layer source evidence for section history, effective payloads, frozen runs, private owner snapshots and schema4 rollout."}
+{"file": ".trellis/spec/backend/prompt-sections-contract.md", "reason": "Executable exact section projection and hidden-state, private snapshot API/schema4, atomic import and compatibility test contract."}

@@ -80,6 +80,8 @@ tests. The current test modules own these boundaries:
 | `tests/test_image_retention.py` | Private durable images, expiry, capacity reservations, owners and filesystem safety |
 | `tests/test_style_plan.py` | Exact tokenizer/decimal/Cartesian parity, neutral weights, Unicode and plan limits |
 | `tests/test_style_runs.py` | Durable claim/Stop/recovery, failed continuation, seed, idempotency, fairness and migration3 |
+| `tests/test_prompt_sections.py` | Strict hidden editor metadata, effective projection, history/backup/restart, frozen run metadata and legacy omission |
+| `tests/test_prompt_snapshots.py` | Private immutable snapshot CRUD, owner/Origin/no-store, pagination/idempotency, schema4 migration and backup/restart |
 | `tests/test_mcp_images.py` | Schema compatibility, PNG validation, safe errors and no retry of uncertain paid outcomes |
 | `tests/test_tags.py` | NSFW normalization, deadlines, decoded-size caps, concurrency and validated upstream `Retry-After` |
 | `tests/test_advice.py` | Explicit input only, structured output, observed tool rejection and child cleanup |

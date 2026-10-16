@@ -433,3 +433,29 @@ owns the frozen shared API and supersedes earlier browser scheduling limits.
   continuity, retained assets and health/auth/no-store passed. See
   deployment-auto-character-position-2026-10-16.md.
 - [ ] Operator real-provider placement and desktop/mobile interaction checks.
+
+## Follow-up Execution: Prompt Sections and Snapshots (2026-10-16)
+
+1. Backend and frontend native implementers own their package sources and follow
+   the exact prompt-sections-design.md cross-layer contract; research source
+   evidence is in research/prompt-sections-and-snapshots.md. No nested agents.
+2. Independent final full affected-layer checker, all offline backend checks,
+   web ESLint/TypeScript and exact OpenAPI; then parent executable spec sync.
+3. Fresh clean build, scoped commit and matched API-first schema4 release after
+   idle/private-online-backup gates; retain compatible API after migration.
+4. Record deployment/journal; operator interaction/appearance remain acceptance.
+
+- [x] Backend implementation frozen: strict metadata, private snapshot routes,
+  schema4 and reviewed additive OpenAPI. Implementer full offline555 tests plus
+  final snapshot/API41 checks, Ruff/frozen sync/lock passed. Final independent
+  review added meaningful frozen-run coverage and passed559 tests below.
+- [x] Frontend sections/library/import UI source frozen; implementer ESLint/
+  TypeScript and scoped whitespace checks pass. Default append and explicit
+  replace, source-person mapping and atomic incomplete-draft imports are in.
+  Fresh22-input build and final independent source review pass.
+- [x] Independent full affected-layer gate GREEN:559 offline backend tests,
+  frozen sync/lock, Ruff, exact additive OpenAPI, frontend ESLint/TypeScript
+  and source review. No web corrections; clean22-input build remains current.
+  Executable sections/snapshots and deployment contracts synchronized.
+- [ ] Fresh build, scoped commit and verified matched schema4 publication.
+- [ ] Operator real interaction and resulting image appearance checks.

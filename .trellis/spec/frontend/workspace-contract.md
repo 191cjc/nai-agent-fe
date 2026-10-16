@@ -10,6 +10,13 @@ Use this contract when changing `apps/web/src/api.ts`, `store.ts`, `App.tsx`,
 or the Vite base path. The frontend handles the user workflow but never owns
 provider credentials, durable image storage, or backend authorization.
 
+Shared/person inputs now follow the fixed section and snapshot contract in
+[Prompt Sections](../backend/prompt-sections-contract.md). Section state is
+the editable source; effective flat fields are projections for generation.
+Keep hidden content in private metadata/history, never downstream prompts.
+The private account snapshot library follows protected session cleanup and
+explicit atomic append/replace import with visible character target mapping.
+
 ## Signatures
 
 - `WorkspaceApi(fetcher = fetch, onUnauthorized = () => {})` owns all browser
@@ -89,11 +96,15 @@ provider credentials, durable image storage, or backend authorization.
   for fields, composition, limits, model validation and provider behavior.
   Character cards have stable draft-only identities; explicit positive tag
   targets must not move to another character when a sibling is removed.
-  Removal of the targeted character, reuse and protected-state reset restore
-  the shared target. Legacy history restores its flat positive text in shared.
+  Targets identify the exact enabled section and stable character ID. Removal
+  or hiding of a targeted section, reuse and protected-state reset choose a
+  valid enabled section/style fallback. Legacy shared/character text restores
+  verbatim into the corresponding enabled other section.
 - Browser `CharacterPrompt` permits omitted x/y for legacy inputs; every
-  `CharacterDraft` owns numeric coordinates defaulting to 0.5. Submit positions
-  only for nonblank cards. Reuse preserves coordinates, defaults omitted axes
+  `CharacterDraft` owns numeric coordinates defaulting to 0.5. Effective provider
+  fields include only nonblank composed people; private prompt_sections metadata
+  retains every source card and its coordinates, including empty/hidden people.
+  Reuse preserves coordinates, defaults omitted axes
   and creates fresh stable IDs. Position changes increment `draftVersion` to
   invalidate pending automatic entry restoration.
 - `CharacterPositions` shows numbered markers in a responsive board matching
@@ -102,7 +113,8 @@ provider credentials, durable image storage, or backend authorization.
   Use pointer capture for mouse/touch, clean up up/cancel/lost capture and
   ignore unrelated pointers/buttons. A removed/reused stable ID must never
   transfer its drag to another card. Explicit selection makes overlapping
-  markers reachable. Distinguish empty cards, which stay draft-only.
+  markers reachable. Distinguish people without effective text, whose source
+  card and position remain in private editor metadata.
   Focused arrow keys adjust by 0.01; retain focus, Tab order and center reset.
   Dragging never submits. Shared history/result summaries show saved positions.
 - A global automatic/manual position selector controls draft

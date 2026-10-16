@@ -10,6 +10,7 @@ from uuid import uuid4
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from test_prompt_sections import sections_request
 
 import novelai_api._http_response as http_response
 import novelai_api.mcp_images as mcp_images
@@ -698,6 +699,37 @@ def test_workspace_experiment_metadata_never_changes_provider_arguments(native: 
     provider_for(experiment_transport).generate(parameters)
     assert experiment_calls[-1]["params"]["arguments"] == plain_calls[-1]["params"]["arguments"]
     assert len(experiment_calls[-1]["params"]["arguments"]) == (12 if native else 11)
+
+
+@pytest.mark.parametrize("all_hidden", [False, True])
+@pytest.mark.parametrize("automatic", [False, True])
+def test_section_metadata_and_hidden_text_never_enter_exact_mcp_payload(all_hidden, automatic):
+    payload = sections_request(all_hidden=all_hidden, automatic=automatic)
+    if all_hidden:
+        payload["model"] = "fixture-model"
+    parameters = GenerationRequest.model_validate(payload)
+    schema = {**SCHEMA, "properties": {
+        **SCHEMA["properties"], "character_prompts": CHARACTER_SCHEMA,
+        "auto_character_position": POSITION_SCHEMA,
+    }}
+    transport, calls = mock_mcp(schema=schema)
+    provider_for(transport).generate(parameters)
+    expected = {
+        "prompt": "artist:fixture, garden", "negative_prompt": "blurry",
+        "model": payload["model"], "width": 512, "height": 512,
+        "steps": 28, "scale": 5.0, "sampler": "fixture-sampler", "seed": 77,
+        "n_samples": 2, "quality": True,
+    }
+    if not all_hidden:
+        child = {"prompt": "  blue hair  ", "negative_prompt": "", "enabled": True}
+        if not automatic:
+            child.update(x=0.7, y=0.3)
+        expected.update(character_prompts=[child], auto_character_position=automatic)
+    assert calls[-1]["params"] == {"name": "generate_image", "arguments": expected}
+    assert len([call for call in calls if call["method"] == "tools/call"]) == 1
+    assert "PRIVATE" not in json.dumps(calls)
+    assert "prompt_sections" not in json.dumps(calls)
+    assert parameters.prompt_sections.model_dump() == payload["prompt_sections"]
 
 
 @pytest.mark.parametrize(

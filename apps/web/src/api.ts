@@ -1,3 +1,6 @@
+import { isSnapshot, isSnapshotPage, validRequestSections, type PromptSections, type PromptSnapshot, type PromptSnapshotCreate, type PromptSnapshotPage } from './prompt-sections'
+export type { PromptSections, PromptSnapshot, PromptSnapshotCreate, PromptSnapshotEntry, PromptSnapshotSummary, PromptSnapshotPage } from './prompt-sections'
+
 export interface UserInfo {
   id: string
   label: string
@@ -38,6 +41,7 @@ export interface GenerationRequest {
   sample_count: number
   quality: boolean
   experiment?: ExperimentContext | null
+  prompt_sections?: PromptSections | null
 }
 
 export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed'
@@ -171,10 +175,16 @@ function checkedRun(value: ExperimentRunState): ExperimentRunState {
     && (parameters.seed === null || Number.isInteger(parameters.seed))
     && Array.isArray(parameters.character_prompts) && parameters.character_prompts.every(character => character && typeof character.prompt === 'string'
       && (character.x === undefined || Number.isFinite(character.x)) && (character.y === undefined || Number.isFinite(character.y)))
+    && validRequestSections(parameters)
     && Array.isArray(value.ranges) && value.ranges.length > 0 && value.ranges.every(range => range && Number.isInteger(range.tag_index)
       && typeof range.min === 'string' && typeof range.max === 'string' && typeof range.step === 'string')
   if (!valid) throw new ApiFailure(0, 'invalid_response', '实验响应无效，请重新连接核对。')
   return value
+}
+
+function checkedHistoryItem<T extends HistoryItem>(item: T): T {
+  if (!item?.parameters || !validRequestSections(item.parameters)) throw new ApiFailure(0, 'invalid_response', '保存的提示词分区无效，请重新加载。')
+  return item
 }
 
 export class ApiFailure extends Error {
@@ -211,6 +221,7 @@ export function errorText(error: unknown): string {
       experiment_conflict: '这组画风实验已经提交或实验信息不一致，请先检查历史记录。',
       experiment_run_active: '已有进行中的画风实验，请查看其进度或手动停止。',
       experiment_run_conflict: '实验编号已被其他定义使用，请检查已保存的实验。',
+      prompt_snapshot_conflict: '此快照编号已用于其他内容，请关闭后重新保存。',
       experiment_run_unknown: '实验提交结果未知，请重新连接核对，不要重复开始。',
       experiment_run_missing: '尚未找到这次实验，提交结果仍待确认；请检查历史后再次连接。',
       experiment_active: '这条记录属于进行中的画风实验，请先停止实验或等待完成后删除。',
@@ -304,20 +315,46 @@ export class WorkspaceApi {
     return this.request('/api/generations', { method: 'POST', body: JSON.stringify(parameters) })
   }
 
-  generation(id: string, signal?: AbortSignal): Promise<GenerationView> {
-    return this.request(`/api/generations/${encodeURIComponent(id)}`, { signal })
+  async generation(id: string, signal?: AbortSignal): Promise<GenerationView> {
+    return checkedHistoryItem(await this.request<GenerationView>(`/api/generations/${encodeURIComponent(id)}`, { signal }))
   }
 
-  history(offset: number, limit = 20): Promise<HistoryPage> {
-    return this.request(`/api/generations?offset=${offset}&limit=${limit}`)
+  async history(offset: number, limit = 20): Promise<HistoryPage> {
+    const page = await this.request<HistoryPage>(`/api/generations?offset=${offset}&limit=${limit}`)
+    page.items.forEach(checkedHistoryItem)
+    return page
   }
 
   experiments(offset = 0, limit = 20, signal?: AbortSignal): Promise<ExperimentPage> {
     return this.request(`/api/style-experiments?offset=${offset}&limit=${limit}`, { signal })
   }
 
-  experiment(id: string, offset = 0, limit = 1, signal?: AbortSignal): Promise<ExperimentDetailPage> {
-    return this.request(`/api/style-experiments/${encodeURIComponent(id)}?offset=${offset}&limit=${limit}`, { signal })
+  async experiment(id: string, offset = 0, limit = 1, signal?: AbortSignal): Promise<ExperimentDetailPage> {
+    const page = await this.request<ExperimentDetailPage>(`/api/style-experiments/${encodeURIComponent(id)}?offset=${offset}&limit=${limit}`, { signal })
+    page.items.forEach(checkedHistoryItem)
+    return page
+  }
+
+  async promptSnapshots(offset = 0, signal?: AbortSignal): Promise<PromptSnapshotPage> {
+    const page = await this.request<unknown>(`/api/prompt-snapshots?limit=20&offset=${offset}`, { signal })
+    if (!isSnapshotPage(page)) throw new ApiFailure(0, 'invalid_response', '快照列表无效，请重新加载。')
+    return page
+  }
+
+  async promptSnapshot(id: string, signal?: AbortSignal): Promise<PromptSnapshot> {
+    const snapshot = await this.request<unknown>(`/api/prompt-snapshots/${encodeURIComponent(id)}`, { signal })
+    if (!isSnapshot(snapshot) || snapshot.id !== id) throw new ApiFailure(0, 'invalid_response', '快照内容无效，请重新加载。')
+    return snapshot
+  }
+
+  async savePromptSnapshot(snapshot: PromptSnapshotCreate, signal?: AbortSignal): Promise<PromptSnapshot> {
+    const saved = await this.request<unknown>('/api/prompt-snapshots', { method: 'POST', body: JSON.stringify(snapshot), signal })
+    if (!isSnapshot(saved) || saved.id !== snapshot.id) throw new ApiFailure(0, 'invalid_response', '快照保存结果无效，请刷新列表核对。')
+    return saved
+  }
+
+  deletePromptSnapshot(id: string, signal?: AbortSignal): Promise<void> {
+    return this.request(`/api/prompt-snapshots/${encodeURIComponent(id)}`, { method: 'DELETE', signal })
   }
 
   async createExperimentRun(definition: ExperimentRunDefinition, signal?: AbortSignal): Promise<ExperimentRunState> {

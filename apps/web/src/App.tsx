@@ -2,13 +2,14 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type R
 import { observer } from 'mobx-react-lite'
 import {
   ArrowDownToLine, ArrowLeft, ArrowRight, Check, ChevronDown, ChevronUp,
-  FlaskConical, History, Image as ImageIcon, LogOut, Plus, RefreshCw, Search, Send, Settings2,
+  FlaskConical, History, Image as ImageIcon, LogOut, RefreshCw, Search, Send, Settings2,
   Sparkles, Tags, Trash2, WandSparkles, X,
 } from 'lucide-react'
 import { ApiFailure, errorText } from './api'
 import type { GenerationDraft } from './store'
-import { AppStore, MAX_CHARACTERS, NATIVE_CHARACTER_MODELS, supportsNativeCharacters } from './store'
-import { CharacterPositions } from './CharacterPositions'
+import { AppStore, NATIVE_CHARACTER_MODELS, supportsNativeCharacters } from './store'
+import { PromptSectionsEditor } from './PromptSections'
+import { characterPrompt } from './prompt-sections'
 import { PromptEditor } from './PromptEditor'
 import { StyleExperimentConfig, StyleExperimentProgress } from './StyleExperiment'
 import { PromptSummary } from './PromptSummary'
@@ -117,35 +118,7 @@ const Editor = observer(({ store }: { store: AppStore }) => {
               onFocus={() => generation.setPositiveTagTarget('style_prompt')}
               onChange={value => generation.setField('style_prompt', value)} />
             <StyleExperimentConfig generation={generation} hidden={!experimentOpen} /></div>
-          <div className="field prompt-field"><label htmlFor="shared-prompt">公共</label>
-            <PromptEditor id="shared-prompt" label="公共" value={draft.positive_prompt} rows={3} placeholder="描述场景、构图与人物共有内容"
-              onFocus={() => generation.setPositiveTagTarget('positive_prompt')}
-              onChange={value => generation.setField('positive_prompt', value)} /></div>
-          <p className="prompt-hint prompt-base-hint">画风和公共至少填写一项，合计最多 3000 字符。</p>
-          <section className="character-section" aria-labelledby="characters-title">
-            <div className="character-heading"><h3 id="characters-title">人物 <span>{draft.character_prompts.length} / {MAX_CHARACTERS}</span></h3>
-              <button className="text-action" id="add-character" type="button" disabled={draft.character_prompts.length >= MAX_CHARACTERS}
-                onClick={() => {
-                  const id = generation.addCharacter()
-                  if (id) requestAnimationFrame(() => document.getElementById(`character-prompt-${id}`)?.focus())
-                }}><Plus size={15} aria-hidden="true" /> 添加人物</button>
-            </div>
-            <p className="prompt-hint">分别填写每个人物的特征，可选择自动安排或手动调整位置。留空的人物不会提交。</p>
-            <CharacterPositions generation={generation} />
-            <div className="character-list">{draft.character_prompts.map((character, index) => <div className="character-card" key={character.id}>
-              <div className="character-card-heading"><label htmlFor={`character-prompt-${character.id}`}>人物 {index + 1}</label>
-                <button className="icon-button danger" type="button" title={`移除人物 ${index + 1}`} aria-label={`移除人物 ${index + 1}`}
-                  onClick={() => {
-                    generation.removeCharacter(character.id)
-                    requestAnimationFrame(() => document.getElementById('add-character')?.focus())
-                  }}><X size={15} aria-hidden="true" /></button>
-              </div>
-              <div className="field"><PromptEditor id={`character-prompt-${character.id}`} label={`人物 ${index + 1}`} value={character.prompt} rows={2}
-                placeholder="这个人物的外貌、服装、动作等"
-                onFocus={() => generation.setPositiveTagTarget(`character:${character.id}`)}
-                onChange={value => generation.setCharacterPrompt(character.id, value)} /></div>
-            </div>)}</div>
-          </section>
+          <PromptSectionsEditor store={store} />
         </div>
         <div className="prompt-panel" id="prompt-panel-negative" role="tabpanel" aria-labelledby="prompt-tab-negative" hidden={panel !== 'negative'}>
           <div className="field prompt-field"><label htmlFor="negative-prompt">负面提示词</label>
@@ -206,7 +179,7 @@ const SettingsPanel = observer(({ store, hidden, onClose }: { store: AppStore; h
             onChange={event => generation.setField('model', event.target.value)} /></label>
         <datalist id="native-character-models">{NATIVE_CHARACTER_MODELS.map(model => <option key={model} value={model} />)}</datalist>
         <p className="prompt-hint">独立人物支持列表中的 V4 / V4.5 / V5 模型。</p>
-        {draft.character_prompts.some(character => character.prompt.trim()) && draft.model.trim() && !supportsNativeCharacters(draft.model)
+        {draft.character_prompts.some(character => characterPrompt(character.sections).trim()) && draft.model.trim() && !supportsNativeCharacters(draft.model)
           && <p className="model-hint" role="status">当前模型不支持独立人物，请选择列表中的模型。</p>}
         <label className="field"><span>采样器 <span className="required">*</span></span>
           <select value={showManualSampler ? 'manual' : draft.sampler} onChange={event => {
@@ -350,7 +323,7 @@ const Result = observer(({ store, hidden }: { store: AppStore; hidden: boolean }
 const TagSearch = observer(({ store }: { store: AppStore }) => {
   const tags = store.tags
   const generation = store.generation
-  const positiveTargetLabel = generation.positiveTagTargets.find(target => target.value === generation.positiveTagTarget)?.label ?? '公共'
+  const positiveTargetLabel = generation.positiveTagTargets.find(target => target.value === generation.positiveTagTarget)?.label ?? '公共 · 场景'
   return <div className="tool-content">
     <form className="search-form" onSubmit={event => { event.preventDefault(); void tags.search() }}>
       <label className="sr-only" htmlFor="tag-query">搜索中文或英文标签</label>

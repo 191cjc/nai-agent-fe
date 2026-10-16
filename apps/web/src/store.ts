@@ -16,6 +16,13 @@ import {
 } from './style-experiment'
 import { SavedResultsStore } from './saved-results'
 import { StyleRunStore } from './style-run-store'
+import { PromptSnapshotStore } from './prompt-snapshots'
+import {
+  CHARACTER_SECTION_KEYS, SHARED_SECTION_KEYS, SECTION_LABELS, characterPrompt, sharedPrompt,
+  emptyCharacterSections, emptySharedSections, metadataFromDraft, restoredSections, sectionAt,
+  validateSectionBudgets, projectSnapshotImport, type SectionCharacterDraft, type SectionReference,
+  type SharedSections, type CharacterSections, type PromptSnapshot, type SnapshotImportMode,
+} from './prompt-sections'
 
 export const MAX_CHARACTERS = 6
 export const CHARACTER_POSITION_MIN = 0.1
@@ -30,16 +37,11 @@ export const NATIVE_CHARACTER_MODELS = [
   'nai-diffusion-5-curated',
 ] as const
 
-export interface CharacterDraft {
-  id: string
-  prompt: string
-  x: number
-  y: number
-}
+export type CharacterDraft = SectionCharacterDraft
+export type PositiveTagTarget = 'style_prompt' | `shared:${typeof SHARED_SECTION_KEYS[number]}` | `character:${string}:${typeof CHARACTER_SECTION_KEYS[number]}`
 
-export type PositiveTagTarget = 'style_prompt' | 'positive_prompt' | `character:${string}`
-
-export type GenerationDraft = Omit<GenerationRequest, 'width' | 'height' | 'steps' | 'cfg_scale' | 'seed' | 'sample_count' | 'character_prompts' | 'auto_character_position' | 'experiment'> & {
+export type GenerationDraft = Omit<GenerationRequest, 'positive_prompt' | 'prompt_sections' | 'width' | 'height' | 'steps' | 'cfg_scale' | 'seed' | 'sample_count' | 'character_prompts' | 'auto_character_position' | 'experiment'> & {
+  shared_sections: SharedSections
   width: string
   height: string
   steps: string
@@ -52,8 +54,8 @@ export type GenerationDraft = Omit<GenerationRequest, 'width' | 'height' | 'step
 
 let characterSequence = 0
 
-function newCharacter(prompt = '', x = CHARACTER_POSITION_CENTER, y = CHARACTER_POSITION_CENTER): CharacterDraft {
-  return { id: `character-${++characterSequence}`, prompt, x, y }
+function newCharacter(sections: CharacterSections = emptyCharacterSections(), x = CHARACTER_POSITION_CENTER, y = CHARACTER_POSITION_CENTER): CharacterDraft {
+  return { id: `character-${++characterSequence}`, sections, x, y }
 }
 
 function validCharacterPosition(value: number): boolean {
@@ -66,7 +68,7 @@ export function supportsNativeCharacters(model: string): boolean {
 
 export function emptyDraft(): GenerationDraft {
   return {
-    positive_prompt: '', style_prompt: '', character_prompts: [newCharacter()], auto_character_position: false,
+    shared_sections: emptySharedSections(), style_prompt: '', character_prompts: [newCharacter()], auto_character_position: false,
     negative_prompt: '', model: '', width: '1024', height: '1024',
     steps: '28', cfg_scale: '5', sampler: '', seed: '', sample_count: '1', quality: true,
   }
@@ -81,20 +83,15 @@ function integer(value: string, label: string, min: number, max: number, multipl
 }
 
 export function requestFromDraft(draft: GenerationDraft): GenerationRequest {
+  validateSectionBudgets(draft)
+  const positive = sharedPrompt(draft.shared_sections)
   const basePrompt = draft.style_prompt.trim()
-    ? [draft.style_prompt.trim(), draft.positive_prompt.trim()].filter(Boolean).join(', ')
-    : draft.positive_prompt
+    ? [draft.style_prompt.trim(), positive.trim()].filter(Boolean).join(', ')
+    : positive
   if (!basePrompt.trim()) throw new Error('请填写画风或公共提示词。')
-  if (draft.style_prompt.length > 3000 || draft.positive_prompt.length > 3000 || basePrompt.length > 3000) {
-    throw new Error('画风和公共提示词合计不能超过 3000 字符（含分隔符）。')
-  }
   if (draft.negative_prompt.length > 3000) throw new Error('负面提示词不能超过 3000 字符。')
-  if (draft.character_prompts.length > MAX_CHARACTERS) throw new Error(`最多添加 ${MAX_CHARACTERS} 个人物。`)
-  const characters = draft.character_prompts.filter(character => character.prompt.trim())
-  if (characters.some(character => character.prompt.length > 3000)) throw new Error('每个人物的提示词不能超过 3000 字符。')
-  if (characters.some(character => !validCharacterPosition(character.x) || !validCharacterPosition(character.y))) {
-    throw new Error('人物的 X / Y 坐标须为 0.1–0.9 之间的有效数值。')
-  }
+  const characters = draft.character_prompts.map(character => ({ prompt: characterPrompt(character.sections), x: character.x, y: character.y }))
+    .filter(character => character.prompt.trim())
   if (!draft.model.trim() || draft.model.length > 80) throw new Error('请输入模型 ID（最多 80 字符）。')
   if (characters.length && !supportsNativeCharacters(draft.model)) {
     throw new Error('当前模型不支持独立人物，请在生成设置中选择列表中的 V4 / V4.5 / V5 模型。')
@@ -103,7 +100,8 @@ export function requestFromDraft(draft: GenerationDraft): GenerationRequest {
   const cfgScale = Number(draft.cfg_scale)
   if (!draft.cfg_scale.trim() || !Number.isFinite(cfgScale) || cfgScale < 0 || cfgScale > 20) throw new Error('CFG 系数须为 0-20。')
   return {
-    positive_prompt: draft.positive_prompt,
+    positive_prompt: positive,
+    prompt_sections: metadataFromDraft(draft),
     style_prompt: draft.style_prompt,
     character_prompts: characters.map(character => ({ prompt: character.prompt, x: character.x, y: character.y })),
     auto_character_position: draft.auto_character_position,
@@ -231,7 +229,7 @@ interface GenerationOperation {
 
 export class GenerationStore {
   draft = emptyDraft()
-  positiveTagTarget: PositiveTagTarget = 'positive_prompt'
+  positiveTagTarget: PositiveTagTarget = 'shared:scene'
   job: GenerationView | null = null
   activeId: string | null = null
   images: ResultImage[] = []
@@ -272,18 +270,25 @@ export class GenerationStore {
     return `${this.draftVersion}:${this.epoch}:${this.operationVersion}`
   }
 
-  get positiveTagTargets(): { value: PositiveTagTarget; label: string }[] {
+  get positiveTagTargets(): { value: PositiveTagTarget; label: string; reference?: SectionReference }[] {
     return [
       { value: 'style_prompt', label: '画风' },
-      { value: 'positive_prompt', label: '公共' },
-      ...this.draft.character_prompts.map((character, index) => ({
-        value: `character:${character.id}` as const, label: `人物 ${index + 1}`,
+      ...SHARED_SECTION_KEYS.filter(key => this.draft.shared_sections[key].enabled).map(key => ({
+        value: `shared:${key}` as const, label: `公共 · ${SECTION_LABELS[key]}`, reference: { scope: 'shared' as const, section: key },
       })),
+      ...this.draft.character_prompts.flatMap((character, index) => CHARACTER_SECTION_KEYS.filter(key => character.sections[key].enabled).map(key => ({
+        value: `character:${character.id}:${key}` as const, label: `人物 ${index + 1} · ${SECTION_LABELS[key]}`,
+        reference: { scope: 'character' as const, characterId: character.id, section: key },
+      }))),
     ]
   }
 
+  private fallbackTagTarget(): PositiveTagTarget {
+    return this.positiveTagTargets.find(target => target.reference?.scope === 'shared')?.value ?? 'style_prompt'
+  }
+
   setPositiveTagTarget(target: string): void {
-    this.positiveTagTarget = this.positiveTagTargets.find(option => option.value === target)?.value ?? 'positive_prompt'
+    this.positiveTagTarget = this.positiveTagTargets.find(option => option.value === target)?.value ?? this.fallbackTagTarget()
   }
 
   addCharacter(): string | null {
@@ -294,12 +299,27 @@ export class GenerationStore {
     return character.id
   }
 
-  setCharacterPrompt(id: string, prompt: string): void {
-    const character = this.draft.character_prompts.find(character => character.id === id)
-    if (character) {
-      this.draftVersion += 1
-      character.prompt = prompt
-    }
+  setSectionText(reference: SectionReference, text: string): void {
+    const section = sectionAt(this.draft, reference)
+    if (!section || text.length > 3000) return
+    this.draftVersion += 1
+    section.text = text
+  }
+
+  setSectionEnabled(reference: SectionReference, enabled: boolean): void {
+    const section = sectionAt(this.draft, reference)
+    if (!section || section.enabled === enabled) return
+    this.draftVersion += 1
+    section.enabled = enabled
+    if (!this.positiveTagTargets.some(target => target.value === this.positiveTagTarget)) this.positiveTagTarget = this.fallbackTagTarget()
+  }
+
+  importSnapshots(snapshots: PromptSnapshot[], mode: SnapshotImportMode, mappings: Record<string, string>, destination?: SectionReference): void {
+    const projected = projectSnapshotImport(this.draft, snapshots, mode, mappings, () => newCharacter(), destination)
+    this.draftVersion += 1
+    this.draft.shared_sections = projected.shared_sections
+    this.draft.character_prompts = projected.character_prompts
+    if (!this.positiveTagTargets.some(target => target.value === this.positiveTagTarget)) this.positiveTagTarget = this.fallbackTagTarget()
   }
 
   setCharacterPosition(id: string, x: number, y: number): void {
@@ -315,45 +335,53 @@ export class GenerationStore {
   removeCharacter(id: string): void {
     this.draftVersion += 1
     this.draft.character_prompts = this.draft.character_prompts.filter(character => character.id !== id)
-    if (this.positiveTagTarget === `character:${id}`) this.positiveTagTarget = 'positive_prompt'
+    if (!this.positiveTagTargets.some(target => target.value === this.positiveTagTarget)) this.positiveTagTarget = this.fallbackTagTarget()
   }
 
   insertTag(tag: string, target: 'positive' | 'negative'): void {
-    this.draftVersion += 1
     const append = (value: string) => {
       const current = value.trim()
       return current ? `${current.replace(/,\s*$/, '')}, ${tag}` : tag
     }
-    if (target === 'negative') {
-      this.draft.negative_prompt = append(this.draft.negative_prompt)
-    } else if (this.positiveTagTarget === 'style_prompt' || this.positiveTagTarget === 'positive_prompt') {
-      this.draft[this.positiveTagTarget] = append(this.draft[this.positiveTagTarget])
-    } else {
-      const character = this.draft.character_prompts.find(character => `character:${character.id}` === this.positiveTagTarget)
-      if (character) character.prompt = append(character.prompt)
-      else {
-        this.positiveTagTarget = 'positive_prompt'
-        this.draft.positive_prompt = append(this.draft.positive_prompt)
-      }
+    if (target === 'negative' || this.positiveTagTarget === 'style_prompt') {
+      const key = target === 'negative' ? 'negative_prompt' : 'style_prompt'
+      const next = append(this.draft[key])
+      if (next.length > 3000) { this.error = '加入标签后将超过 3000 字符，请先精简提示词。'; return }
+      this.setField(key, next)
+      return
     }
+    const reference = this.positiveTagTargets.find(option => option.value === this.positiveTagTarget)?.reference
+    const section = reference && sectionAt(this.draft, reference)
+    if (!reference || !section?.enabled) {
+      this.positiveTagTarget = this.fallbackTagTarget()
+      this.error = '原标签目标已隐藏或移除，请确认目标后再加入。'
+      return
+    }
+    const next = append(section.text)
+    if (next.length > 3000) { this.error = '加入标签后将超过 3000 字符，请先精简提示词。'; return }
+    this.setSectionText(reference, next)
   }
 
   reuse(item: HistoryItem): void {
+    let metadata
+    try { metadata = restoredSections(item.parameters) } catch (error) {
+      this.error = error instanceof Error ? error.message : '保存的提示词分区无效，草稿未修改。'
+      return
+    }
     this.draftVersion += 1
-    const parameters = { ...item.parameters }
-    // Historical experiment identity belongs to its saved run, never a draft.
-    delete parameters.experiment
     this.draft = {
-      ...parameters,
+      negative_prompt: item.parameters.negative_prompt, model: item.parameters.model,
+      sampler: item.parameters.sampler, quality: item.parameters.quality,
+      shared_sections: metadata.shared,
       style_prompt: item.parameters.style_prompt ?? '',
       auto_character_position: item.parameters.auto_character_position ?? false,
-      character_prompts: item.parameters.character_prompts?.length
-        ? item.parameters.character_prompts.map(character => newCharacter(character.prompt, character.x, character.y)) : [newCharacter()],
+      character_prompts: metadata.characters.length || item.parameters.prompt_sections
+        ? metadata.characters.map(character => newCharacter(character.sections, character.x, character.y)) : [newCharacter()],
       width: String(item.parameters.width), height: String(item.parameters.height),
       steps: String(item.parameters.steps), cfg_scale: String(item.parameters.cfg_scale),
       seed: String(item.effective_seed), sample_count: String(item.parameters.sample_count),
     }
-    this.positiveTagTarget = 'positive_prompt'
+    this.positiveTagTarget = this.fallbackTagTarget()
     this.error = ''
   }
 
@@ -563,7 +591,7 @@ export class GenerationStore {
     this.clearResult()
     this.draftVersion += 1
     this.draft = emptyDraft()
-    this.positiveTagTarget = 'positive_prompt'
+    this.positiveTagTarget = 'shared:scene'
     this.busy = false
     this.submitUncertain = false
     this.error = ''
@@ -794,6 +822,7 @@ export class AppStore {
   readonly advice: AdviceStore
   readonly savedResults: SavedResultsStore
   readonly styleRuns: StyleRunStore
+  readonly promptSnapshots: PromptSnapshotStore
   private workspaceUser: UserInfo | null = null
   private workspaceEntryVersion = 0
 
@@ -804,8 +833,10 @@ export class AppStore {
       this.generation.suspendForLogout()
       this.styleRuns.detach()
       this.savedResults.reset()
+      this.promptSnapshots.reset()
     })
     this.savedResults = new SavedResultsStore(this.api)
+    this.promptSnapshots = new PromptSnapshotStore(this.api)
     this.history = new HistoryStore(this.api)
     this.styleRuns = new StyleRunStore(this.api, () => this.history.refresh())
     this.generation = new GenerationStore(
@@ -845,6 +876,7 @@ export class AppStore {
     this.tags.reset()
     this.advice.reset()
     this.savedResults.reset()
+    this.promptSnapshots.reset()
     this.styleRuns.reset()
   }
 
@@ -854,5 +886,6 @@ export class AppStore {
     this.styleRuns.reset()
     this.tags.reset()
     this.savedResults.reset()
+    this.promptSnapshots.reset()
   }
 }

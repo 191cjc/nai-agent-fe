@@ -34,6 +34,13 @@ from .generations import (
     ResultStore,
 )
 from .mcp_images import NovelAiMcpProvider
+from .prompt_snapshots import (
+    PromptSnapshot,
+    PromptSnapshotConflict,
+    PromptSnapshotCreate,
+    PromptSnapshotPage,
+    PromptSnapshotStore,
+)
 from .security import SESSION_COOKIE, SESSION_LIFETIME_SECONDS
 from .style_experiments import (
     ActiveRun,
@@ -118,6 +125,7 @@ def create_app(
         image_provider = NovelAiMcpProvider(settings.novelai_mcp_url, settings.novelai_mcp_token)
     manager = GenerationManager(database, image_provider, cache=result_cache)
     experiments = StyleExperimentService(database, manager)
+    snapshots = PromptSnapshotStore(database)
     tag_search = tag_search or TagSearch(
         settings.tag_search_url, settings.public_origin, settings.tag_search_key
     )
@@ -274,6 +282,76 @@ def create_app(
                 detail=ApiError(code="not_found", message="Generation not found").model_dump(),
             )
         return job
+
+    @app.get(
+        "/api/prompt-snapshots",
+        response_model=PromptSnapshotPage,
+        responses={401: {"model": ApiError}, 422: {"model": ApiError}, 503: {"model": ApiError}},
+    )
+    def list_prompt_snapshots(
+        user: Annotated[UserInfo, Depends(require_user)],
+        limit: int = Query(default=20, ge=1, le=100),
+        offset: int = Query(default=0, ge=0, le=9_007_199_254_740_991),
+    ) -> PromptSnapshotPage:
+        return snapshots.list(user.id, limit=limit, offset=offset)
+
+    @app.post(
+        "/api/prompt-snapshots",
+        status_code=201,
+        response_model=PromptSnapshot,
+        responses={
+            401: {"model": ApiError}, 403: {"model": ApiError}, 409: {"model": ApiError},
+            422: {"model": ApiError}, 503: {"model": ApiError},
+        },
+    )
+    def create_prompt_snapshot(
+        payload: PromptSnapshotCreate, user: Annotated[UserInfo, Depends(require_user)],
+    ) -> PromptSnapshot | JSONResponse:
+        try:
+            return snapshots.create(user.id, payload)
+        except PromptSnapshotConflict:
+            return error(
+                409, "prompt_snapshot_conflict", "Prompt snapshot already exists or changed",
+            )
+
+    def own_snapshot(user: UserInfo, snapshot_id: str) -> PromptSnapshot:
+        saved = snapshots.get(user.id, snapshot_id)
+        if saved is None:
+            raise HTTPException(
+                status_code=404,
+                detail=ApiError(code="not_found", message="Prompt snapshot not found").model_dump(),
+            )
+        return saved
+
+    @app.get(
+        "/api/prompt-snapshots/{snapshot_id}",
+        response_model=PromptSnapshot,
+        responses={
+            401: {"model": ApiError}, 404: {"model": ApiError},
+            422: {"model": ApiError}, 503: {"model": ApiError},
+        },
+    )
+    def get_prompt_snapshot(
+        snapshot_id: UUID, user: Annotated[UserInfo, Depends(require_user)],
+    ) -> PromptSnapshot:
+        return own_snapshot(user, str(snapshot_id))
+
+    @app.delete(
+        "/api/prompt-snapshots/{snapshot_id}",
+        status_code=204,
+        responses={
+            401: {"model": ApiError}, 403: {"model": ApiError}, 404: {"model": ApiError},
+            422: {"model": ApiError}, 503: {"model": ApiError},
+        },
+    )
+    def delete_prompt_snapshot(
+        snapshot_id: UUID, user: Annotated[UserInfo, Depends(require_user)],
+    ) -> None:
+        if not snapshots.delete(user.id, str(snapshot_id)):
+            raise HTTPException(
+                status_code=404,
+                detail=ApiError(code="not_found", message="Prompt snapshot not found").model_dump(),
+            )
 
     @app.post(
         "/api/generations",

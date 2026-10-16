@@ -8,7 +8,8 @@ instructions, or API environment wiring. The operator chose a single-server
 deployment without Docker: Vite/FastAPI locally, host Nginx and one systemd
 API process in production. Generated images use private seven-day disk retention;
 see [Image Retention](./image-retention-contract.md) and
-[Durable Experiments](./durable-experiment-contract.md) (schema3).
+[Durable Experiments](./durable-experiment-contract.md) (introduced schema3)
+and [Prompt Sections](./prompt-sections-contract.md) (current schema4).
 
 ## Signatures
 
@@ -24,7 +25,7 @@ see [Image Retention](./image-retention-contract.md) and
 
 ## Contracts
 
-- Experiment zero omission keeps schema3 but introduces definition plan_version2.
+- Experiment zero omission originally shipped at schema3 and introduced definition plan_version2.
   Publish its compatible API before the web and retain that API on web fallback.
   Once any v2 run definition has been accepted, the old schema3 API is also an
   unsafe fallback: it interprets zero as emphasis and ignores the new version.
@@ -81,6 +82,17 @@ see [Image Retention](./image-retention-contract.md) and
   Verify the additive strict-boolean/default-false OpenAPI before switching
   the web. Keep the new API on web fallback for already-open tabs and accepted
   automatic-mode history/run snapshots; never restore the live database.
+- Prompt-section snapshot rollout requires explicit migration4 after a private
+  verified online schema3 backup and idle/shutdown checks. Verify preserved
+  existing rows/config/images and new-table readiness before API-first web
+  publication. Schema3 API code rejects schema4 even with an empty library;
+  retain the compatible API once migration4 commits, including web fallback.
+  Never automatically restore the live DB or start schema3 code after commit.
+  Check unauthenticated new snapshot routes return401 with no-store on both
+  loopback and public paths. For image preservation evidence, capture private
+  manifest/PNG SHA-256 inventory while the API is stopped, then verify exact
+  bytes and original expiry for every still-unexpired result after startup.
+  Root-directory existence/permissions alone do not verify retained images.
 
 - Retained images live under /var/lib/novelai/generation-images/, service-owned
   with 0700 directories/0600 files, outside the immutable release/web trees.

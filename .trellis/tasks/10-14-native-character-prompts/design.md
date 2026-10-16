@@ -183,3 +183,11 @@ run identity. The operator subsequently authorized service restart; use the
 scoped design's independent checks, clean build and API-first publication
 gates. Historical centered-only claims are superseded by fresh
 configured-provider discovery.
+
+## Follow-up Design: Prompt Sections and Snapshots (2026-10-16)
+
+prompt-sections-design.md owns fixed editor sections, temporary exclusion,
+strict additive private composition metadata and schema4 owner-scoped reusable
+snapshots. The original effective provider fields remain the paid boundary.
+The user confirmed selectable append/replace import, default append. Publish
+the schema4-compatible API before the web and retain it on fallback.

@@ -104,6 +104,85 @@
         "title": "CharacterPrompt",
         "type": "object"
       },
+      "CharacterSections": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/PromptSection"
+          },
+          "character": {
+            "$ref": "#/components/schemas/PromptSection"
+          },
+          "lower_clothing": {
+            "$ref": "#/components/schemas/PromptSection"
+          },
+          "other": {
+            "$ref": "#/components/schemas/PromptSection"
+          },
+          "special": {
+            "$ref": "#/components/schemas/PromptSection"
+          },
+          "tags": {
+            "$ref": "#/components/schemas/PromptSection"
+          },
+          "upper_clothing": {
+            "$ref": "#/components/schemas/PromptSection"
+          }
+        },
+        "required": [
+          "character",
+          "upper_clothing",
+          "lower_clothing",
+          "action",
+          "tags",
+          "special",
+          "other"
+        ],
+        "title": "CharacterSections",
+        "type": "object"
+      },
+      "CharacterSnapshotEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "character_index": {
+            "maximum": 5.0,
+            "minimum": 0.0,
+            "title": "Character Index",
+            "type": "integer"
+          },
+          "scope": {
+            "const": "character",
+            "title": "Scope",
+            "type": "string"
+          },
+          "section": {
+            "enum": [
+              "character",
+              "upper_clothing",
+              "lower_clothing",
+              "action",
+              "tags",
+              "special",
+              "other"
+            ],
+            "title": "Section",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 3000,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "character_index",
+          "section",
+          "text"
+        ],
+        "title": "CharacterSnapshotEntry",
+        "type": "object"
+      },
       "ExperimentContext": {
         "properties": {
           "id": {
@@ -386,6 +465,16 @@
             "title": "Positive Prompt",
             "type": "string"
           },
+          "prompt_sections": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PromptSections"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "quality": {
             "title": "Quality",
             "type": "boolean"
@@ -630,6 +719,210 @@
         "title": "HistoryPage",
         "type": "object"
       },
+      "PromptSection": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "text": {
+            "maxLength": 3000,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "PromptSection",
+        "type": "object"
+      },
+      "PromptSections": {
+        "additionalProperties": false,
+        "properties": {
+          "characters": {
+            "items": {
+              "$ref": "#/components/schemas/SectionCharacter"
+            },
+            "maxItems": 6,
+            "title": "Characters",
+            "type": "array"
+          },
+          "shared": {
+            "$ref": "#/components/schemas/SharedSections"
+          },
+          "version": {
+            "const": 1,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "shared",
+          "characters"
+        ],
+        "title": "PromptSections",
+        "type": "object"
+      },
+      "PromptSnapshot": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "integer"
+          },
+          "entries": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "character": "#/components/schemas/CharacterSnapshotEntry",
+                  "shared": "#/components/schemas/SharedSnapshotEntry"
+                },
+                "propertyName": "scope"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/SharedSnapshotEntry"
+                },
+                {
+                  "$ref": "#/components/schemas/CharacterSnapshotEntry"
+                }
+              ]
+            },
+            "maxItems": 44,
+            "minItems": 1,
+            "title": "Entries",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "entries",
+          "created_at"
+        ],
+        "title": "PromptSnapshot",
+        "type": "object"
+      },
+      "PromptSnapshotCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "entries": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "character": "#/components/schemas/CharacterSnapshotEntry",
+                  "shared": "#/components/schemas/SharedSnapshotEntry"
+                },
+                "propertyName": "scope"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/SharedSnapshotEntry"
+                },
+                {
+                  "$ref": "#/components/schemas/CharacterSnapshotEntry"
+                }
+              ]
+            },
+            "maxItems": 44,
+            "minItems": 1,
+            "title": "Entries",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "entries"
+        ],
+        "title": "PromptSnapshotCreate",
+        "type": "object"
+      },
+      "PromptSnapshotPage": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PromptSnapshotSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_offset": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Offset"
+          }
+        },
+        "required": [
+          "items",
+          "next_offset"
+        ],
+        "title": "PromptSnapshotPage",
+        "type": "object"
+      },
+      "PromptSnapshotSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "integer"
+          },
+          "entry_count": {
+            "title": "Entry Count",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "entry_count"
+        ],
+        "title": "PromptSnapshotSummary",
+        "type": "object"
+      },
       "RunCreate": {
         "properties": {
           "id": {
@@ -818,6 +1111,33 @@
         "title": "SearchResults",
         "type": "object"
       },
+      "SectionCharacter": {
+        "additionalProperties": false,
+        "properties": {
+          "sections": {
+            "$ref": "#/components/schemas/CharacterSections"
+          },
+          "x": {
+            "default": 0.5,
+            "maximum": 0.9,
+            "minimum": 0.1,
+            "title": "X",
+            "type": "number"
+          },
+          "y": {
+            "default": 0.5,
+            "maximum": 0.9,
+            "minimum": 0.1,
+            "title": "Y",
+            "type": "number"
+          }
+        },
+        "required": [
+          "sections"
+        ],
+        "title": "SectionCharacter",
+        "type": "object"
+      },
       "SessionRequest": {
         "properties": {
           "token": {
@@ -831,6 +1151,53 @@
           "token"
         ],
         "title": "SessionRequest",
+        "type": "object"
+      },
+      "SharedSections": {
+        "additionalProperties": false,
+        "properties": {
+          "other": {
+            "$ref": "#/components/schemas/PromptSection"
+          },
+          "scene": {
+            "$ref": "#/components/schemas/PromptSection"
+          }
+        },
+        "required": [
+          "scene",
+          "other"
+        ],
+        "title": "SharedSections",
+        "type": "object"
+      },
+      "SharedSnapshotEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "scope": {
+            "const": "shared",
+            "title": "Scope",
+            "type": "string"
+          },
+          "section": {
+            "enum": [
+              "scene",
+              "other"
+            ],
+            "title": "Section",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 3000,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "section",
+          "text"
+        ],
+        "title": "SharedSnapshotEntry",
         "type": "object"
       },
       "TagCandidate": {
@@ -1772,6 +2139,363 @@
           }
         },
         "summary": "Ready"
+      }
+    },
+    "/api/prompt-snapshots": {
+      "get": {
+        "operationId": "list_prompt_snapshots_api_prompt_snapshots_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "__Host-nai_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "  Host-Nai Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptSnapshotPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List Prompt Snapshots"
+      },
+      "post": {
+        "operationId": "create_prompt_snapshot_api_prompt_snapshots_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "__Host-nai_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "  Host-Nai Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromptSnapshotCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptSnapshot"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Create Prompt Snapshot"
+      }
+    },
+    "/api/prompt-snapshots/{snapshot_id}": {
+      "delete": {
+        "operationId": "delete_prompt_snapshot_api_prompt_snapshots__snapshot_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "snapshot_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Snapshot Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "__Host-nai_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "  Host-Nai Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Delete Prompt Snapshot"
+      },
+      "get": {
+        "operationId": "get_prompt_snapshot_api_prompt_snapshots__snapshot_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "snapshot_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Snapshot Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "__Host-nai_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "  Host-Nai Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptSnapshot"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Prompt Snapshot"
       }
     },
     "/api/style-experiment-runs": {

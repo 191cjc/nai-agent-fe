@@ -16,6 +16,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .db import Database
+from .prompt_sections import PromptSections
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 PNG_TRAILER = b"\x00\x00\x00\x00IEND\xaeB`\x82"
@@ -88,6 +89,9 @@ class GenerationRequest(BaseModel):
     style_prompt: str = Field(default="", max_length=3000)
     character_prompts: list[CharacterPrompt] = Field(default_factory=list, max_length=6)
     auto_character_position: bool = Field(default=False, strict=True)
+    prompt_sections: PromptSections | None = Field(
+        default=None, exclude_if=lambda value: value is None,
+    )
     negative_prompt: str = Field(default="", max_length=3000)
     model: str = Field(min_length=1, max_length=80)
     width: int = Field(ge=64, le=2048, multiple_of=64)
@@ -119,6 +123,13 @@ class GenerationRequest(BaseModel):
 
     @model_validator(mode="after")
     def valid_prompt_structure(self) -> Self:
+        if self.prompt_sections is not None:
+            if self.positive_prompt != self.prompt_sections.shared.compose():
+                raise ValueError("Shared prompt differs from section metadata")
+            if [character.model_dump() for character in self.character_prompts] != (
+                self.prompt_sections.effective_characters()
+            ):
+                raise ValueError("Character prompts differ from section metadata")
         base = self.base_prompt
         if not base.strip() or len(base) > 3000:
             raise ValueError("Combined style and shared prompt must contain 1 to 3000 characters")

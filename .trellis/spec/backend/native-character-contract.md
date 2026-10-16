@@ -7,6 +7,12 @@ parameter JSON, or the NovelAI MCP adapter. The browser sends workspace fields;
 only the API maps them to the provider. Native character descriptions must
 remain separate through editing, persistence, reuse and provider submission.
 
+Fixed shared/character editor sections and hidden states follow
+[Prompt Sections](./prompt-sections-contract.md): optional private metadata
+must exactly project to the unchanged effective fields below. Fully hidden
+people stay in metadata; they never relax CharacterPrompt nonblank validation
+or enter MCP. Old unsplit text restores in 其他 without semantic inference.
+
 ## Signatures
 
 - `GenerationRequest` retains `positive_prompt` as shared scene text and adds
