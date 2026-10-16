@@ -88,12 +88,112 @@ def test_grid_off_max_negative_cross_zero_and_high_precision() -> None:
     assert [experiment.combination(index)[1][0].weight for index in range(4)] == [
         "-0.1", "0.0", "0.1", "0.2",
     ]
+    assert [experiment.combination(index)[0] for index in range(4)] == [
+        "-0.1::artist:a::", "", "0.1::artist:a::", "0.2::artist:a::",
+    ]
     precise = plan("artist:a", [axis(
         0, "1.00000000000000000000000000000000001",
         "1.00000000000000000000000000000000003", "0.00000000000000000000000000000000001",
     )])
     assert precise.total == 3
     assert precise.combination(1)[1][0].weight == "1.00000000000000000000000000000000002"
+
+
+@pytest.mark.parametrize(
+    ("source", "removed", "expected"),
+    [
+        ("  a, b, c  ", [0], "  b, c  "),
+        ("  a, b, c  ", [1], "  a, c  "),
+        ("  a, b, c  ", [2], "  a, b  "),
+        ("  a, b, c  ", [0, 1], "  c  "),
+        ("  a, b, c  ", [1, 2], "  a  "),
+        ("  a, b, c  ", [0, 2], "  b  "),
+        ("  a, b, c  ", [0, 1, 2], ""),
+        ("a, a, a", [1], "a, a"),
+        ("a\r\n b,\n\n c\r d", [1, 2], "a\r\n d"),
+        ("a,, \n b,,c", [1], "a,, \n c"),
+        ("foo\\,bar, (a,b), tail", [0], "(a,b), tail"),
+        ("foo\\,bar, (a,b), tail", [1], "foo\\,bar, tail"),
+        ("2::nested(a,[b,c]), 0.7::d:: ::,tail", [0], "tail"),
+        ("😀,2::画风,0.7::乙:: ::,尾", [1], "😀,尾"),
+        ("a,[legacy],b", [0, 2], "[legacy]"),
+        (" a\\ , b, c\\ ", [1], " a\\ , c\\ "),
+    ],
+)
+def test_zero_omits_selected_occurrences_and_safe_separator_runs(
+    source: str, removed: list[int], expected: str,
+) -> None:
+    experiment = plan(source, [axis(index, "-0.000", "+0", "0.1") for index in removed])
+    rendered, weights = experiment.combination(0)
+    assert rendered == expected
+    assert experiment.max_style_length == len(expected)
+    assert [(weight.tag_index, weight.weight) for weight in weights] == [
+        (index, "0.0") for index in sorted(removed)
+    ]
+
+
+def test_zero_omissions_do_not_shift_other_selected_source_spans() -> None:
+    experiment = plan("  a, 2:: blue,red ::, c, tail  ", [
+        axis(0, "0", "0", "1"), axis(1, "1", "2", "1"),
+        axis(2, "0", "0", "1"), axis(3, "1.1", "1.1", "1"),
+    ])
+    assert experiment.total == 2
+    assert [experiment.combination(index)[0] for index in range(2)] == [
+        "   blue,red , 1.1::tail::  ", "  2.0:: blue,red ::, 1.1::tail::  ",
+    ]
+    assert [weight.label for weight in experiment.combination(0)[1]] == [
+        "a", " blue,red ", "c", "tail",
+    ]
+
+
+def test_zero_is_exact_not_an_epsilon_and_off_grid_zero_is_unreachable() -> None:
+    tiny = "0." + "0" * 50 + "1"
+    experiment = plan("a", [axis(0, f"-{tiny}", tiny, tiny)])
+    assert [experiment.combination(index)[0] for index in range(3)] == [
+        f"-{tiny}::a::", "", f"{tiny}::a::",
+    ]
+    off_grid = plan("a", [axis(0, "-0.1", "0.2", "0.2")], shared="")
+    assert [off_grid.combination(index)[0] for index in range(2)] == [
+        "-0.1::a::", "0.1::a::",
+    ]
+
+
+@pytest.mark.parametrize("shared", ["", " \t\n"])
+def test_any_all_zero_combination_requires_shared_base_before_acceptance(shared: str) -> None:
+    with pytest.raises(ValueError, match="Zero weights can remove all style tags"):
+        plan("a,b", [axis(0, "-0.1", "0.1", "0.1"), axis(1, "0", "1", "1")],
+             shared=shared)
+    # An unselected occurrence or an axis that cannot reach zero keeps a base.
+    assert plan("a,b", [axis(0, "0", "0", "1")], shared="").combination(0)[0] == "b"
+    assert plan("a,b", [axis(0, "0", "1", "1"), axis(1, "1", "1", "1")],
+                shared="").combination(0)[0] == "b"
+
+
+def test_zero_only_bounds_omit_separators_and_preserve_shared_only_composition() -> None:
+    experiment = plan(" \ta, b \n", [axis(0, "0", "0.01", "1"), axis(1, "0", "0", "1")],
+                      shared=" y ")
+    assert experiment.total == 1 and experiment.max_style_length == 0
+    rendered, weights = experiment.combination(0)
+    assert rendered == "" and len(weights) == 2
+    parameters = GenerationRequest(**{**INPUT, "positive_prompt": " y ", "style_prompt": rendered})
+    assert parameters.base_prompt == " y "
+    near_limit = plan("a", [axis(0, "0", "0", "1")], shared="y" * 2997)
+    assert near_limit.max_style_length == 0
+    source = "x" * 2980 + ", drop"
+    shrunk = plan(source, [axis(), axis(1, "0", "0", "1")], shared="y" * 10)
+    assert shrunk.max_style_length == 2987
+    assert all(len(GenerationRequest(**{
+        **INPUT, "positive_prompt": "y" * 10, "style_prompt": shrunk.combination(index)[0],
+    }).base_prompt) <= 3000 for index in range(shrunk.total))
+
+
+def test_legacy_plan_preserves_zero_emphasis_and_accepts_style_only_zero() -> None:
+    parameters = GenerationRequest(**{**INPUT, "positive_prompt": "", "style_prompt": "a"})
+    legacy = create_style_plan(parameters, [ExperimentRange(**axis(0, "0", "0", "1"))],
+                               plan_version=1)
+    assert legacy.combination(0)[0] == "0.0::a::"
+    assert legacy.combination(0)[1][0].weight == "0.0"
+    assert legacy.max_style_length == 8
 
 
 def test_neutral_only_off_grid_max_shrinks_near_limit_wrapper() -> None:

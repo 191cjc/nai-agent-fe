@@ -86,6 +86,24 @@ def request(*, run_id=None, seed=None, maximum="1.0", **changes) -> RunCreate:
     })
 
 
+def rewrite_legacy_definition(database: Database, user: str, run_id: str, *, style_only=False):
+    """Fixture a definition persisted by the old version; never use new-plan validation."""
+    with database.connect(write=True) as connection:
+        definition = json.loads(connection.execute(
+            "SELECT definition_json FROM style_experiment_runs WHERE user_id = ? AND id = ?",
+            (user, run_id),
+        ).fetchone()[0])
+        definition["plan_version"] = 1
+        if style_only:
+            definition["parameters"]["positive_prompt"] = ""
+        frozen = json.dumps(definition, sort_keys=True, separators=(",", ":"))
+        connection.execute(
+            "UPDATE style_experiment_runs SET definition_json = ? WHERE user_id = ? AND id = ?",
+            (frozen, user, run_id),
+        )
+    return frozen
+
+
 def pump(service: StyleExperimentService, user: str, run_id: str, *, terminal=True):
     deadline = time.monotonic() + 3
     while time.monotonic() < deadline:
@@ -99,6 +117,169 @@ def pump(service: StyleExperimentService, user: str, run_id: str, *, terminal=Tr
             return state
         time.sleep(0.005)
     pytest.fail("Fake durable style run did not reach expected state")
+
+
+@pytest.mark.parametrize(
+    ("style", "expected"),
+    [
+        ("a,b,kept", ["kept", "b,kept", "a,kept", "a,b,kept"]),
+        ("a,b", ["", "b", "a", "a,b"]),
+    ],
+)
+def test_new_zero_weight_groups_submit_omissions_with_full_metadata(
+    database: Database, style: str, expected: list[str],
+) -> None:
+    user = owner(database)
+    provider = ScriptedProvider()
+    manager = GenerationManager(database, provider, cache=ResultCache())
+    service = StyleExperimentService(database, manager)
+    payload = request(seed=77, style_prompt=style).model_dump(mode="json")
+    payload["ranges"] = [
+        {"tag_index": index, "min": "-0.000", "max": "1", "step": "1"} for index in (0, 1)
+    ]
+    manager.start()
+    try:
+        run = service.store.create(user, RunCreate.model_validate(payload))
+        assert run._plan_version == 2 and "plan_version" not in run.model_dump()
+        ended = pump(service, user, run.id)
+        assert ended.succeeded_count == "4" and ended.failed_count == "0"
+        assert [call.style_prompt for call in provider.calls] == expected
+        assert [call.experiment.ordinal for call in provider.calls] == ["1", "2", "3", "4"]
+        actual_weights = [[weight.weight for weight in call.experiment.weights]
+                          for call in provider.calls]
+        assert actual_weights == [
+            ["0.0", "0.0"], ["0.0", "1.0"], ["1.0", "0.0"], ["1.0", "1.0"],
+        ]
+        assert all(call.seed == 77 and call.positive_prompt == "scene" for call in provider.calls)
+        assert all([weight.label for weight in call.experiment.weights] == ["a", "b"]
+                   for call in provider.calls)
+        assert all(call.character_prompts == run.parameters.character_prompts
+                   for call in provider.calls)
+        saved = sorted(manager.store.list(user, limit=100, offset=0).items,
+                       key=lambda item: int(item.parameters.experiment.ordinal))
+        for item, call in zip(saved, provider.calls, strict=True):
+            assert item.parameters == call
+            assert item.effective_seed == 77 and item.status == "succeeded"
+            assert item.parameters.base_prompt == call.base_prompt
+    finally:
+        service.stop()
+        manager.stop()
+
+
+def test_new_all_zero_style_only_run_is_rejected_without_state_or_provider(database: Database):
+    provider = ScriptedProvider()
+    app = create_app(Settings(database.path, "https://testserver"), database,
+                     image_provider=provider, result_cache=ResultCache())
+    payload = request(positive_prompt="").model_dump(mode="json")
+    payload["ranges"] = [{"tag_index": 0, "min": "0", "max": "1", "step": "1"}]
+    with TestClient(app, base_url="https://testserver") as client:
+        _token, user, _session = login(client, database, "alice")
+        assert client.post("/api/style-experiment-runs", json=payload,
+                           headers=ORIGIN).status_code == 422
+        assert client.get("/api/style-experiment-runs/active").json() == {"run": None}
+        assert app.state.generations.store.list(user, limit=100, offset=0).items == []
+        with database.connect() as connection:
+            assert connection.execute(
+                "SELECT COUNT(*) FROM style_experiment_runs",
+            ).fetchone()[0] == 0
+        assert provider.calls == []
+
+
+def test_legacy_same_definition_keeps_version_and_restart_never_repeats_ordinal(database: Database):
+    user = owner(database)
+    store = RunStore(database)
+    payload = request(seed=77).model_dump(mode="json")
+    payload["ranges"] = [{"tag_index": 0, "min": "-0.1", "max": "0.1", "step": "0.1"}]
+    original = RunCreate.model_validate(payload)
+    run = store.create(user, original)
+    frozen = rewrite_legacy_definition(database, user, run.id)
+    # A normalized retry cannot switch a legacy run to the new zero renderer.
+    payload["ranges"] = [{"tag_index": 0, "min": "-00.1000", "max": "+.100", "step": ".100"}]
+    attached = store.create(user, RunCreate.model_validate(payload))
+    assert attached._plan_version == 1
+    assert attached.model_dump() == run.model_dump()
+    assert "plan_version" not in attached.model_dump()
+    job = store.claim(user, run.id, "1", group_parameters(attached))
+    assert JobStore(database).mark_running(job)
+    provider = ScriptedProvider()
+    manager = GenerationManager(database, provider, cache=ResultCache())
+    service = StyleExperimentService(database, manager)
+    manager.start()
+    try:
+        ended = pump(service, user, run.id)
+        assert ended.processed_count == "3" and ended.failed_count == "1"
+        assert [call.experiment.ordinal for call in provider.calls] == ["2", "3"]
+        assert [call.style_prompt for call in provider.calls] == [
+            "0.0::artist:fixture::", "0.1::artist:fixture::",
+        ]
+        assert all(call.seed == 77 for call in provider.calls)
+        with database.connect() as connection:
+            assert connection.execute(
+                "SELECT definition_json FROM style_experiment_runs WHERE user_id = ? AND id = ?",
+                (user, run.id),
+            ).fetchone()[0] == frozen
+            assert connection.execute("PRAGMA user_version").fetchone()[0] == 3
+        assert store.create(user, original).model_dump() == ended.model_dump()
+        payload["parameters"]["width"] = 1024
+        with pytest.raises(RunConflict, match="experiment_run_conflict"):
+            store.create(user, RunCreate.model_validate(payload))
+    finally:
+        service.stop()
+        manager.stop()
+
+
+def test_legacy_all_zero_style_only_run_survives_loading_stop_and_restart(database: Database):
+    user = owner(database)
+    store = RunStore(database)
+    payload = request(seed=77).model_dump(mode="json")
+    payload["ranges"] = [{"tag_index": 0, "min": "0", "max": "0", "step": "1"}]
+    valid = RunCreate.model_validate(payload)
+    stopped = store.create(user, valid)
+    rewrite_legacy_definition(database, user, stopped.id, style_only=True)
+    loaded = store.active(user)
+    assert loaded._plan_version == 1 and loaded.parameters.positive_prompt == ""
+    assert group_parameters(loaded).base_prompt == "0.0::artist:fixture::"
+    assert store.stop(user, stopped.id).status == "stopped"
+    payload["id"] = str(uuid4())
+    running = store.create(user, RunCreate.model_validate(payload))
+    rewrite_legacy_definition(database, user, running.id, style_only=True)
+    provider = ScriptedProvider()
+    manager = GenerationManager(database, provider, cache=ResultCache())
+    service = StyleExperimentService(database, manager)
+    manager.start()
+    try:
+        ended = pump(service, user, running.id)
+        assert ended.succeeded_count == "1"
+        assert len(provider.calls) == 1
+        assert provider.calls[0].base_prompt == "0.0::artist:fixture::"
+        assert provider.calls[0].experiment.weights[0].weight == "0.0"
+        assert provider.calls[0].seed == 77
+        assert store.get(user, stopped.id).status == "stopped"
+    finally:
+        service.stop()
+        manager.stop()
+
+
+@pytest.mark.parametrize("change", [{"plan_version": 3}, {"unexpected_definition_field": 1}])
+def test_definition_compatibility_does_not_ignore_unknown_version_or_other_keys(
+    database: Database, change: dict,
+) -> None:
+    user = owner(database)
+    store = RunStore(database)
+    original = request(seed=77)
+    run = store.create(user, original)
+    with database.connect(write=True) as connection:
+        definition = json.loads(connection.execute(
+            "SELECT definition_json FROM style_experiment_runs WHERE user_id = ? AND id = ?",
+            (user, run.id),
+        ).fetchone()[0])
+        definition.update(change)
+        connection.execute(
+            "UPDATE style_experiment_runs SET definition_json = ? WHERE user_id = ? AND id = ?",
+            (json.dumps(definition), user, run.id),
+        )
+    with pytest.raises(RunConflict, match="experiment_run_conflict"):
+        store.create(user, original)
 
 
 @pytest.mark.parametrize("seed", [None, 77])
@@ -680,4 +861,4 @@ def test_v2_migration_and_backup_preserve_auth_jobs_and_private_run_state(tmp_pa
         persisted = json.loads(connection.execute(
             "SELECT definition_json FROM style_experiment_runs",
         ).fetchone()[0])
-        assert persisted["plan_version"] == 1
+        assert persisted["plan_version"] == 2

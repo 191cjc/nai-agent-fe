@@ -379,3 +379,13 @@ opens the prompt drawer; history status opens the current result. Desktop and
 narrow/short mobile layouts keep the toggle/action bar reachable. Verify via
 source/static checks and a fresh build; existing no-browser/no-paid-call and
 web-only publication authority applies. See canvas-layout-design.md.
+
+
+## Follow-up: Experiment Zero Weight (2026-10-16)
+
+The operator requires weight 0 in style experiments to mean removal of the
+selected occurrence. Keep its zero weight in comparison metadata, preserve
+unselected duplicates, and match browser/server rendering. Reject a plan
+that could leave both style and shared prompts empty before starting.
+Existing durable runs keep their frozen original semantics. See
+zero-weight-design.md for the scoped contract and release gate.

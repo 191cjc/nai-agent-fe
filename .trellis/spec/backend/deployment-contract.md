@@ -24,6 +24,12 @@ see [Image Retention](./image-retention-contract.md) and
 
 ## Contracts
 
+- Experiment zero omission keeps schema3 but introduces definition plan_version2.
+  Publish its compatible API before the web and retain that API on web fallback.
+  Once any v2 run definition has been accepted, the old schema3 API is also an
+  unsafe fallback: it interprets zero as emphasis and ignores the new version.
+  Before API validation, an emergency old-API fallback requires a read-only
+  check proving no stored v2 definitions. Never restore the live database.
 - The systemd unit uses `User=novelai`, `StateDirectory=novelai` with mode
   `0700`, `UMask=0077`, a root-owned mode-`0600` environment file at
   `/etc/novelai/api.env`, and a 65-second stop deadline. The API alone can

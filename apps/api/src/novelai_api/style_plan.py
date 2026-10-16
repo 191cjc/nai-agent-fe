@@ -2,6 +2,7 @@
 
 import re
 from dataclasses import dataclass
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -164,6 +165,31 @@ def set_tag_weight(source: str, tag: PromptTag, weight: str) -> str:
     return source[:tag.start] + weight + "::" + tag.source + "::" + source[tag.end:]
 
 
+def _omission_ranges(
+    source: str, tags: list[PromptTag], omitted: set[int],
+) -> list[tuple[int, int]]:
+    """Remove adjacent occurrences and their separators without touching survivors."""
+    if not omitted:
+        return []
+    if len(omitted) == len(tags):
+        return [(0, len(source))]
+    ranges = []
+    index = 0
+    while index < len(tags):
+        if index not in omitted:
+            index += 1
+            continue
+        first = index
+        while index + 1 in omitted:
+            index += 1
+        if index + 1 < len(tags):
+            ranges.append((tags[first].start, tags[index + 1].start))
+        else:
+            ranges.append((tags[first - 1].end, tags[index].end))
+        index += 1
+    return ranges
+
+
 class ExperimentRange(BaseModel):
     tag_index: int = Field(ge=0, le=2999, strict=True)
     min: str = Field(min_length=1, max_length=1000)
@@ -187,25 +213,44 @@ class StylePlan:
     dimensions: tuple[Dimension, ...]
     total: int
     max_style_length: int
+    plan_version: Literal[1, 2] = 2
 
     def combination(self, index: int) -> tuple[str, list[ExperimentWeight]]:
         if not 0 <= index < self.total:
             raise ValueError("Style combination out of range")
         remaining, source = index, self.source
         weights = []
+        omitted: set[int] = set()
+        edits: list[tuple[int, int, PromptTag | None, str]] = []
         for dimension in reversed(self.dimensions):
             remaining, value_index = divmod(remaining, dimension.count)
             weight = format_decimal(
                 dimension.min_units + value_index * dimension.step_units, dimension.places,
             )
-            source = set_tag_weight(source, dimension.tag, weight)
+            if self.plan_version == 2 and weight == "0.0":
+                omitted.add(dimension.range.tag_index)
+            else:
+                edits.append((dimension.tag.start, dimension.tag.end, dimension.tag, weight))
             weights.append(ExperimentWeight(
                 tag_index=dimension.range.tag_index, label=dimension.tag.text, weight=weight,
             ))
+        edits.extend((start, end, None, "") for start, end in _omission_ranges(
+            self.source, parse_prompt_tags(self.source), omitted,
+        ))
+        for start, end, tag, weight in sorted(edits, key=lambda edit: edit[0], reverse=True):
+            source = (
+                set_tag_weight(source, tag, weight) if tag is not None
+                else source[:start] + source[end:]
+            )
         return source, list(reversed(weights))
 
 
-def create_style_plan(parameters: GenerationRequest, ranges: list[ExperimentRange]) -> StylePlan:
+def create_style_plan(
+    parameters: GenerationRequest, ranges: list[ExperimentRange], *,
+    plan_version: Literal[1, 2] = 2,
+) -> StylePlan:
+    if plan_version not in (1, 2):
+        raise ValueError("Unsupported style plan version")
     if not 1 <= len(ranges) <= 1500:
         raise ValueError("Select between one and 1500 style tags")
     tags = parse_prompt_tags(parameters.style_prompt)
@@ -236,11 +281,20 @@ def create_style_plan(parameters: GenerationRequest, ranges: list[ExperimentRang
             normalized, tag, (maximum - minimum) // step + 1, min_units, step_units, places,
         ))
     dimensions.sort(key=lambda dimension: dimension.tag.start)
-    total, maximum_length = 1, len(parameters.style_prompt)
+    fixed_zeros = {
+        dimension.range.tag_index for dimension in dimensions
+        if plan_version == 2 and dimension.count == 1 and dimension.min_units == 0
+    }
+    maximum_length = len(parameters.style_prompt) - sum(
+        end - start for start, end in _omission_ranges(parameters.style_prompt, tags, fixed_zeros)
+    )
+    total = 1
     for dimension in dimensions:
         total *= dimension.count
         if len(str(total)) > 1000:
             raise ValueError("Experiment total exceeds metadata limit")
+        if dimension.range.tag_index in fixed_zeros:
+            continue
         if dimension.count == 1 and dimension.range.min == "1.0":
             maximum_length += len(dimension.tag.text) - len(dimension.tag.source)
             continue
@@ -255,11 +309,24 @@ def create_style_plan(parameters: GenerationRequest, ranges: list[ExperimentRang
             if dimension.tag.weight_end is not None else weight_length + 4
         )
     shared = parameters.positive_prompt.strip()
+    can_be_empty = len(dimensions) == len(tags) and all(
+        dimension.min_units <= 0
+        and -dimension.min_units % dimension.step_units == 0
+        and -dimension.min_units // dimension.step_units < dimension.count
+        for dimension in dimensions
+    )
+    if plan_version == 2 and can_be_empty and not shared:
+        raise ValueError("Zero weights can remove all style tags; add a shared prompt")
     outer_space = len(parameters.style_prompt) - len(parameters.style_prompt.strip())
-    combined_length = maximum_length - outer_space + (len(shared) + 2 if shared else 0)
+    combined_length = (
+        maximum_length - outer_space + (len(shared) + 2 if shared else 0)
+        if maximum_length else len(parameters.positive_prompt)
+    )
     if maximum_length > 3000 or combined_length > 3000:
         raise ValueError("Experiment prompt exceeds limit")
-    plan = StylePlan(parameters.style_prompt, tuple(dimensions), total, maximum_length)
+    plan = StylePlan(
+        parameters.style_prompt, tuple(dimensions), total, maximum_length, plan_version,
+    )
     # Validate the exact shared saved-metadata bounds before any accepted run.
     _source, weights = plan.combination(0)
     ExperimentContext(id="00000000-0000-0000-0000-000000000000", ordinal="1",

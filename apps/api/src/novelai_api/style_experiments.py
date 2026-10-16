@@ -8,7 +8,7 @@ import time
 from typing import Literal, Self
 from uuid import UUID
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
 from .db import Database
 from .generations import (
@@ -39,7 +39,7 @@ class RunCreate(BaseModel):
     def definition(self) -> tuple[str, str]:
         plan = create_style_plan(self.parameters, self.ranges)
         definition = {
-            "plan_version": 1,
+            "plan_version": 2,
             "parameters": self.parameters.model_dump(mode="json"),
             "ranges": [dimension.range.model_dump() for dimension in plan.dimensions],
         }
@@ -47,6 +47,7 @@ class RunCreate(BaseModel):
 
 
 class RunState(BaseModel):
+    _plan_version: Literal[1, 2] = PrivateAttr(default=2)
     id: str
     status: Literal["running", "stopping", "stopped", "completed"]
     total: str
@@ -82,7 +83,10 @@ class RunStore:
     @staticmethod
     def _state(row: sqlite3.Row) -> RunState:
         definition = json.loads(row["definition_json"])
-        return RunState(
+        version = definition.get("plan_version", 1)
+        if version not in (1, 2):
+            raise ValueError("Unsupported stored style plan version")
+        state = RunState(
             **{key: row[key] for key in (
                 "id", "status", "total", "next_ordinal", "processed_count", "succeeded_count",
                 "failed_count", "current_ordinal", "current_job_id", "seed", "created_at",
@@ -91,6 +95,8 @@ class RunStore:
             parameters=definition["parameters"], ranges=definition["ranges"],
             sample_count=definition["parameters"]["sample_count"],
         )
+        state._plan_version = version
+        return state
 
     def create(self, user_id: str, request: RunCreate) -> RunState:
         definition, total = request.definition()
@@ -101,7 +107,14 @@ class RunStore:
                 (user_id, run_id),
             ).fetchone()
             if existing:
-                if existing["definition_json"] != definition:
+                saved = json.loads(existing["definition_json"])
+                requested = json.loads(definition)
+                # A retry of a frozen v1 definition must retain its original renderer.
+                if saved.get("plan_version", 1) not in (1, 2):
+                    raise RunConflict("experiment_run_conflict")
+                saved.pop("plan_version", None)
+                requested.pop("plan_version", None)
+                if saved != requested:
                     raise RunConflict("experiment_run_conflict")
                 return self._state(existing)
             active = connection.execute(
@@ -273,7 +286,7 @@ class RunStore:
 
 
 def group_parameters(run: RunState) -> GenerationRequest:
-    plan = create_style_plan(run.parameters, run.ranges)
+    plan = create_style_plan(run.parameters, run.ranges, plan_version=run._plan_version)
     source, weights = plan.combination(int(run.next_ordinal) - 1)
     return GenerationRequest.model_validate({
         **run.parameters.model_dump(mode="json"), "style_prompt": source, "seed": run.seed,

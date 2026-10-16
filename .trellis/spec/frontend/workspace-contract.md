@@ -130,7 +130,10 @@ provider credentials, durable image storage, or backend authorization.
   Preserve body whitespace, escapes, nested emphasis and surrounding source.
   The shared absolute setter owns this rule for both prompt buttons and style
   experiments. Plain 1.0 needs no wrapper; blur/manual view changes alone
-  still leave source unchanged. Other weights retain numeric serialization.
+  still leave source unchanged. Other weights retain numeric serialization
+  in ordinary prompt editing. New style experiments omit selected exact-zero
+  occurrences under style-experiment-contract.md; do not change the shared
+  ordinary-editor setter to implement that experiment-only rule.
 - Derive prompt tags from current props so tag search, history reuse and
   character edits cannot diverge from the submitted prompt. Keep buttons
   outside enclosing labels, use `type="button"`, retain stable character IDs

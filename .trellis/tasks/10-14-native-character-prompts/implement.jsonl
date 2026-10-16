@@ -26,3 +26,4 @@
 {"file": ".trellis/spec/frontend/viewer-cache-contract.md", "reason": "Executable 32-entry/64-MiB viewer cache, authenticated metadata, ownership and verification contract."}
 {"file": ".trellis/tasks/10-14-native-character-prompts/canvas-layout-design.md", "reason": "Canvas-centered main image, mounted collapsible bottom prompt drawer, persistent Generate and operation controls; frontend-only boundary."}
 {"file": ".trellis/spec/frontend/canvas-layout-contract.md", "reason": "Executable canvas/current-vs-saved, mounted bottom prompt disclosure, persistent submission/Stop and responsive focus contract."}
+{"file": ".trellis/tasks/10-14-native-character-prompts/zero-weight-design.md", "reason": "Newest experiment-only exact-zero omission, preflight and frozen legacy-run compatibility contract."}

@@ -44,7 +44,9 @@ export const StyleExperimentConfig = observer(({ generation, hidden }: { generat
     sampleCount: String(snapshot.parameters.sample_count),
   } : { source, ranges: liveRanges, sampleCount: generation.draft.sample_count }
   const tags = parsePromptTags(displayed.source)
-  const { plan, error } = planPreview(displayed.source, displayed.ranges)
+  const { plan, error: planError } = planPreview(displayed.source, displayed.ranges)
+  const error = planError || (!frozen && plan?.canBeEmpty && !generation.draft.positive_prompt.trim()
+    ? '权重为 0 时可能移除全部画风词条，请填写公共提示词，或调整范围以保留至少一个画风词条。' : '')
   const samples = sampleCount(displayed.sampleCount)
   const supportedModel = supportsNativeCharacters(snapshot?.parameters.model ?? generation.draft.model)
   const notice = sourceChanged && configuration.ranges.length ? SOURCE_CHANGED : configuration.notice
@@ -74,7 +76,7 @@ export const StyleExperimentConfig = observer(({ generation, hidden }: { generat
   }
 
   function start() {
-    if (locked || !plan || !samples || !supportedModel || configuration.source !== source) return
+    if (locked || error || !plan || !samples || !supportedModel || configuration.source !== source) return
     const ranges = liveRanges.map(range => ({ ...range }))
     void generation.startStyleExperiment(source, ranges)
   }
@@ -83,6 +85,7 @@ export const StyleExperimentConfig = observer(({ generation, hidden }: { generat
     onKeyDown={event => { if (event.key === 'Enter' && event.target instanceof HTMLInputElement) event.preventDefault() }}>
     <h3 id="style-experiment-config-title"><FlaskConical size={15} aria-hidden="true" /> 画风实验</h3>
     <p className="prompt-hint">选择要模糊测试的画风词条，为每个词条设置下限、上限和步长，依次尝试所有权重组合。</p>
+    <p className="prompt-hint">新实验中，权重为 0 时移除该词条。</p>
     {frozen && <p className="experiment-note" role="status">这里展示本次实验固定的画风和范围。编辑草稿不会改变服务器实验。</p>}
     {!frozen && notice && <p className="experiment-note" role="status">{notice}</p>}
     <fieldset className="experiment-tag-options" disabled={frozen}>
@@ -123,7 +126,7 @@ export const StyleExperimentConfig = observer(({ generation, hidden }: { generat
     {!frozen && !supportedModel && <p className="experiment-note">画风实验需要生成设置列表中的 V4 / V4.5 / V5 模型。</p>}
     {!frozen && generation.error && !generation.submitUncertain && <p className="alert" role="alert">{generation.error}</p>}
     <div className="experiment-config-actions">
-      <button className="primary" type="button" disabled={locked || !plan || samples === null || !supportedModel} onClick={start}>
+      <button className="primary" type="button" disabled={locked || Boolean(error) || !plan || samples === null || !supportedModel} onClick={start}>
         <FlaskConical size={15} aria-hidden="true" /> 开始批量测试
       </button>
     </div>

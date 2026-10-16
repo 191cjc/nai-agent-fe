@@ -165,3 +165,11 @@ emphasis for exact decimal increments, with the compatibility limitation made
 clear for older models. Keep weight controls outside labels and use explicit
 button types. Only the manual-edit control enters text mode and focuses its
 textarea. Newly added blank character editors can begin in text mode.
+
+
+## Follow-up Design: Experiment Zero Weight (2026-10-16)
+
+zero-weight-design.md owns exact-zero omission, separator/span preservation,
+empty/length validation and internal plan-version compatibility. It supersedes
+only experiment zero rendering for new runs; ordinary prompt editing and
+existing version1 runs retain their previous behavior.

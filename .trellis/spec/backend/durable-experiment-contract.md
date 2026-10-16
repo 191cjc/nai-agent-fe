@@ -32,8 +32,23 @@ This replaces earlier browser-only/no-continuation contracts.
   Match escaped/balanced prompt syntax and exact scaled-integer decimal math.
   Last source occurrence varies fastest; include only grid points <=max.
   Neutral 1.0 removes the outer numeric wrapper; preserve remaining source.
+  New definitions use internal plan_version2: exact zero removes the selected
+  parsed occurrence and its neighboring separators, while ExperimentWeight
+  retains the original tag index/label and `0.0`. No string-wide removal of
+  duplicate labels. Source-span removal follows the frontend experiment
+  contract, with Python offsets parsed independently from browser UTF-16.
   Validate all metadata/prompt limits before acceptance, without allocating
   combinations or imposing a hidden product truncation.
+- Keep persisted version1 plans on their original numeric-zero rendering and
+  validation after restart. Carry the definition version internally; it is
+  not a public RunState/OpenAPI field or schema migration. Same-owner/id with
+  matching normalized parameters/ranges still returns its legacy definition;
+  version alone does not create a conflict. Never rewrite or replay old groups.
+- New plans reject reachable all-zero style combinations when shared prompt
+  is blank before any run is accepted. Use exact grid divisibility, not product
+  enumeration or a check of only the first group. All removed style is empty;
+  with shared content its base has no extra comma. Zero-only dimensions shrink
+  the conservative rendered bound; preserve raw/trimmed field limits.
 - Persist one effective seed at run creation (random once if blank) and use
   it even when the first or a later group fails. Never read later draft edits.
 - Single lifecycle scheduler uses GenerationManager's existing single-worker
@@ -64,6 +79,9 @@ This replaces earlier browser-only/no-continuation contracts.
 | Condition | Behavior |
 | --- | --- |
 | Invalid plan/settings/nested metadata | 422 before paid work |
+| New all-zero-reachable style and blank shared | 422 before run creation |
+| New selected zero weight | Omitted from provider style; retained in metadata |
+| Stored v1 zero group after restart | Original numeric-zero semantics |
 | Existing same owner/id/definition | Return existing run; no duplicate work |
 | Same id with changed definition | 409 experiment_run_conflict |
 | Another active run | 409 experiment_run_active |
@@ -91,6 +109,10 @@ Stop/claim race, admission/capacity release, failed placeholders, restart at
 claim/paid/completion windows with no duplicate calls, active deletion guard,
 v2->v3 upgrade preserving auth/jobs and private backup. Full backend quality
 gate and OpenAPI review; frontend static/source checks only, no paid probes.
+Zero-omission regressions must assert exact prompts/metadata at the fake
+provider and saved history, separator/Unicode/duplicate/nested syntax cases,
+empty and near-limit bounds, signed/precise zero grids and legacy v1 restart
+and idempotency. Do not regenerate OpenAPI for this internal-only change.
 
 ## Wrong vs Correct
 

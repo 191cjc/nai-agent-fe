@@ -33,6 +33,24 @@ export interface StyleExperimentPlan {
   readonly total: bigint
   /** Conservative upper bound; never materialize a range to find its length. */
   readonly maxStyleLength: number
+  readonly canBeEmpty: boolean
+}
+
+interface SourceRange { start: number; end: number }
+
+function omissionRanges(source: string, tags: PromptTag[], omitted: Set<number>): SourceRange[] {
+  if (!omitted.size) return []
+  if (omitted.size === tags.length) return [{ start: 0, end: source.length }]
+  const ranges: SourceRange[] = []
+  for (let index = 0; index < tags.length; index += 1) {
+    if (!omitted.has(index)) continue
+    const first = index
+    while (omitted.has(index + 1)) index += 1
+    ranges.push(index + 1 < tags.length
+      ? { start: tags[first].start, end: tags[index + 1].start }
+      : { start: tags[first - 1].end, end: tags[index].end })
+  }
+  return ranges
 }
 
 export function createStyleExperimentPlan(source: string, ranges: StyleExperimentRange[]): StyleExperimentPlan {
@@ -65,10 +83,14 @@ export function createStyleExperimentPlan(source: string, ranges: StyleExperimen
       step: formatDecimal(stepUnits, places), count, minUnits, stepUnits, places,
     })
   }).sort((left, right) => left.tag.start - right.tag.start)
+  const fixedZeros = new Set(dimensions.filter(dimension => dimension.count === 1n && dimension.minUnits === 0n)
+    .map(dimension => dimension.tagIndex))
   let total = 1n
-  let maxStyleLength = source.length
+  let maxStyleLength = source.length - omissionRanges(source, tags, fixedZeros)
+    .reduce((length, range) => length + range.end - range.start, 0)
   for (const dimension of dimensions) {
     total *= dimension.count
+    if (fixedZeros.has(dimension.tagIndex)) continue
     // A single neutral grid point removes any outer numeric wrapper, even
     // when the configured maximum is above 1 but is not reached by the step.
     if (dimension.count === 1n && dimension.min === '1.0') {
@@ -84,7 +106,10 @@ export function createStyleExperimentPlan(source: string, ranges: StyleExperimen
       ? maxWeightLength - (dimension.tag.weightRange.end - dimension.tag.weightRange.start)
       : maxWeightLength + 4
   }
-  return Object.freeze({ source, dimensions: Object.freeze(dimensions), total, maxStyleLength })
+  const canBeEmpty = dimensions.length === tags.length && dimensions.every(dimension =>
+    dimension.minUnits <= 0n && -dimension.minUnits % dimension.stepUnits === 0n
+    && -dimension.minUnits / dimension.stepUnits < dimension.count)
+  return Object.freeze({ source, dimensions: Object.freeze(dimensions), total, maxStyleLength, canBeEmpty })
 }
 
 /** Decode only one mixed-radix ordinal; the last source occurrence varies fastest. */
@@ -93,15 +118,24 @@ export function styleExperimentCombination(plan: StyleExperimentPlan, index: big
   let remaining = index
   let stylePrompt = plan.source
   const weights: StyleExperimentWeight[] = []
+  const omitted = new Set<number>()
+  const edits: (SourceRange & { tag?: PromptTag; weight?: string })[] = []
   for (let position = plan.dimensions.length - 1; position >= 0; position -= 1) {
     const dimension = plan.dimensions[position]
     const valueIndex = remaining % dimension.count
     remaining /= dimension.count
     const weight = formatDecimal(dimension.minUnits + valueIndex * dimension.stepUnits, dimension.places)
-    const updated = setPromptTagWeight(stylePrompt, dimension.tag, weight)
-    if (updated === null) throw new Error('画风词条源文本不匹配，请重新选择。')
-    stylePrompt = updated
+    if (weight === '0.0') omitted.add(dimension.tagIndex)
+    else edits.push({ start: dimension.tag.start, end: dimension.tag.end, tag: dimension.tag, weight })
     weights.push({ tagIndex: dimension.tagIndex, label: dimension.label, weight })
+  }
+  edits.push(...omissionRanges(plan.source, parsePromptTags(plan.source), omitted))
+  for (const edit of edits.sort((left, right) => right.start - left.start)) {
+    if (edit.tag && edit.weight !== undefined) {
+      const updated = setPromptTagWeight(stylePrompt, edit.tag, edit.weight)
+      if (updated === null) throw new Error('画风词条源文本不匹配，请重新选择。')
+      stylePrompt = updated
+    } else stylePrompt = stylePrompt.slice(0, edit.start) + stylePrompt.slice(edit.end)
   }
   return { stylePrompt, weights: weights.reverse() }
 }

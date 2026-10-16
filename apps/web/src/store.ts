@@ -391,9 +391,12 @@ export class GenerationStore {
       if (!supportsNativeCharacters(parameters.model)) throw new Error('画风实验需要列表中的 V4 / V4.5 / V5 模型。')
       plan = createStyleExperimentPlan(source, ranges)
       validateExperimentMetadata(plan)
-      const trimmedStyleLength = plan.maxStyleLength - (source.length - source.trim().length)
       const shared = parameters.positive_prompt.trim()
-      if (plan.maxStyleLength > 3000 || trimmedStyleLength + (shared ? 2 + shared.length : 0) > 3000) {
+      if (plan.canBeEmpty && !shared) throw new Error('权重为 0 时可能移除全部画风词条，请填写公共提示词，或调整范围以保留至少一个画风词条。')
+      const combinedLength = plan.maxStyleLength
+        ? plan.maxStyleLength - (source.length - source.trim().length) + (shared ? 2 + shared.length : 0)
+        : parameters.positive_prompt.length
+      if (plan.maxStyleLength > 3000 || combinedLength > 3000) {
         throw new Error('实验权重可能使画风和公共提示词超过 3000 字符，请缩短提示词或权重范围。')
       }
     } catch (error) {

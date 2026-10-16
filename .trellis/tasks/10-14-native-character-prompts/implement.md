@@ -383,3 +383,19 @@ owns the frozen shared API and supersedes earlier browser scheduling limits.
   Exact public HTML/JS/CSS, health and retained assets verified; API pointer/PID
   unchanged. See deployment-canvas-layout-2026-10-16.md.
 - [ ] Operator visual/desktop/mobile acceptance; broader task stays in_progress.
+
+
+## Follow-up Execution: Experiment Zero Weight (2026-10-16)
+
+1. Implement the scoped zero-weight-design.md cross-layer renderer/preflight
+   and offline regression contract using native trellis-implement.
+2. Independently review full changed behavior, static web checks and full
+   offline backend gate with trellis-check, then synchronize specs.
+3. Fresh env-free build and matched staging, scoped commit and API-first
+   release only after no-active-work/private-backup/config-preservation gates.
+4. Record deployment and journal; broader operator acceptance stays open.
+
+- [x] Scoped implementation and independent final full affected-layer review:385
+  offline backend tests, Ruff/frozen/lock/OpenAPI and web ESLint/TypeScript pass.
+  Fresh 19-input env-free build passed with unchanged production sources; see
+  check-zero-weight.md and zero-weight-build-verification.md.
