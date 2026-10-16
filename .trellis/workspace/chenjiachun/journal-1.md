@@ -518,3 +518,41 @@ Added and published viewer-local LRU image caching so saved-image comparisons re
 ### Next Steps
 
 - Operator verifies arrow comparison and outstanding real-provider/background/desktop/mobile acceptance; keep the broader task in_progress.
+
+
+## Session 15: Canvas workspace and bottom prompt drawer release
+<!-- trellis-session: v=2 fp=92e5a1d9d13c4130 -->
+
+**Date**: 2026-10-16
+**Task**: Canvas workspace and bottom prompt drawer release
+**Branch**: `feat/native-character-prompts`
+
+### Summary
+
+Implemented and published a canvas-centered workspace with mounted collapsible bottom prompts, persistent Generate, local current-image arrows/thumbnails, and integrated retained-result comparison.
+
+### Main Changes
+
+- Kept prompt/editor/configuration state mounted and operation controls outside disclosure; history reuse/resume use explicit safe navigation and focus.
+- Independent review fixed saved-close left-panel side effects and metadata starving image height; proportional canvas regions and short-screen scroll bounds recorded in specs.
+- Web-only release20261016T025802 preserves live API20261015T140424 and PID3184888, credentials/schema and background experiment execution.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8f86e5a` | feat: center workspace on image canvas with bottom prompt drawer |
+| `e9d3672` | docs: record canvas layout deployment |
+
+### Testing
+
+- [OK] Independent full affected frontend source review, ESLint/TypeScript, diff/context validation and final 19-input explicit env-free locked build passed.
+- [OK] Final committed-source/public HTML/JS/CSS hashes, readiness, neighboring health and retained assets passed; superseded preliminary builds were not published. No frontend/helper/browser automation or paid calls.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Operator visual, desktop/mobile and outstanding real-provider acceptance; keep broader native-character task in_progress.

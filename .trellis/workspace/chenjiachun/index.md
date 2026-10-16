@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 14
-- **Last Active**: 2026-10-15
+- **Total Sessions**: 15
+- **Last Active**: 2026-10-16
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~520 | Active |
+| `journal-1.md` | ~558 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 15 | 2026-10-16 | Canvas workspace and bottom prompt drawer release | `8f86e5a`, `e9d3672` | `feat/native-character-prompts` |
 | 14 | 2026-10-15 | Bounded viewer image cache and web release | `b30250c`, `42a89f2` | `feat/native-character-prompts` |
 | 13 | 2026-10-15 | Retained images and durable background style experiments | `326d8f9be3a899461b31027d8a7e177902a2ed8d`, `e150031` | `feat/native-character-prompts` |
 | 12 | 2026-10-15 | Draggable character positions and paired release | `31cff3e`, `140bea2` | `feat/native-character-prompts` |
