@@ -503,5 +503,9 @@ owns the frozen shared API and supersedes earlier browser scheduling limits.
   OpenAPI and frontend ESLint/TypeScript/source review. No product corrections;
   paid image transport unchanged. Fresh25-input env-free web build passed.
   See check-account-balance.md and account-balance-build-verification.md.
-- [ ] Matched API-first schema4 publication and read-only configured-adapter
-  probe; operator header interaction acceptance.
+- [x] Source commit377a634, matched API-first schema4 release20261016T090442
+  and read-only configured-adapter query verified at17:05 China time. Private
+  backup/idle/config/record/image gates, exact public hashes and401/no-store
+  pass. All72 images retain original bytes/expiry. No paid probe. See
+  deployment-account-balance-2026-10-16.md.
+- [ ] Operator header interaction acceptance; broader task remains in_progress.
