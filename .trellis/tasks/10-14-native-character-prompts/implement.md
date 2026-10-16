@@ -526,4 +526,9 @@ owns the frozen shared API and supersedes earlier browser scheduling limits.
   OpenAPI and web ESLint/TypeScript/source review. No fixes or new literal-copy
   tests; all11 typed section scopes covered. Fresh25-input env-free build passes.
   See check-novelai-advice.md and novelai-advice-build-verification.md.
-- [ ] Matched API-first publication and operator suggestion-quality acceptance.
+- [x] Commit14ff663 and matched API-first release20261016T094354 published
+  at17:44 China time. Backup/idle/schema4/config/image continuity, exact public
+  hashes/readiness/401-no-store and retained old assets passed. All72 images
+  preserve original bytes/expiry. No paid AI/advice/image/provider probe. See
+  deployment-novelai-advice-2026-10-16.md.
+- [ ] Operator suggestion-quality acceptance; broader task remains in_progress.
