@@ -556,3 +556,26 @@ Implemented and published a canvas-centered workspace with mounted collapsible b
 ### Next Steps
 
 - Operator visual, desktop/mobile and outstanding real-provider acceptance; keep broader native-character task in_progress.
+
+
+## Session 16: Experiment zero weight omission and paired production release
+<!-- trellis-session: v=2 fp=b58b375dd685302d -->
+
+**Date**: 2026-10-16
+**Task**: Experiment zero weight omission and paired production release
+**Branch**: `feat/native-character-prompts`
+
+### Summary
+
+Implemented exact-zero omission for new style experiments with browser/server parity, occurrence-safe separator edits, retained comparison metadata, empty/length preflight and frozen legacy v1 run compatibility. Independent gate:385 offline backend tests, Ruff/frozen/lock/OpenAPI and frontend ESLint/TypeScript; fresh19-input env-free web build. Waited for existing48-group experiment to complete naturally with48 successes, then published matched API/web20261016T034213 at2026-10-16T04:06Z after private schema3 online backup. Exact public hashes/readiness/auth-no-store, config continuity and retained assets passed. No frontend/browser tests, paid probes, env/unit/Nginx edits or push. Broader real-provider/visual acceptance remains in_progress.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `65560f3` | fix: omit zero-weight tags from new style experiments |
+| `4eb44fc` | docs: record zero-weight experiment deployment |
+
+### Status
+
+[OK] **Completed**
