@@ -379,5 +379,7 @@ owns the frozen shared API and supersedes earlier browser scheduling limits.
   Fixed saved-close side effects and image-height starvation; see
   check-canvas-layout.md. Final fresh 19-input build passed; see
   canvas-layout-build-verification.md.
-- [ ] Fresh build, commit and verified web-only deployment.
+- [x] Final fresh 19-input build, commit8f86e5a and web-only release20261016T025802.
+  Exact public HTML/JS/CSS, health and retained assets verified; API pointer/PID
+  unchanged. See deployment-canvas-layout-2026-10-16.md.
 - [ ] Operator visual/desktop/mobile acceptance; broader task stays in_progress.
