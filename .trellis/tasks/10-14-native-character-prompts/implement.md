@@ -427,5 +427,9 @@ owns the frozen shared API and supersedes earlier browser scheduling limits.
   web ESLint/TypeScript and source review. The checker corrected the character
   hint for automatic/manual mode; final source is frozen. See
   check-auto-character-position.md.
-- [ ] Fresh final build, scoped commit and coordinated API-first release.
+- [x] Fresh final 19-input build, source commit7c7e3d7 and matched API-first
+  release20261016T060747 on2026-10-16T06:08:18Z. Private backup/idle checks,
+  schema3 record continuity, exact running OpenAPI/public hashes, configuration
+  continuity, retained assets and health/auth/no-store passed. See
+  deployment-auto-character-position-2026-10-16.md.
 - [ ] Operator real-provider placement and desktop/mobile interaction checks.
