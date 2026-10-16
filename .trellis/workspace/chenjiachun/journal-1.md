@@ -686,3 +686,26 @@ Implemented and deployed authenticated normalized NovelAI Anlas header with stri
 ### Status
 
 [OK] **Completed**
+
+
+## Session 21: NovelAI-aware advice and section scopes
+<!-- trellis-session: v=2 fp=d0e9d48ef1be82f0 -->
+
+**Date**: 2026-10-16
+**Task**: NovelAI-aware advice and section scopes
+**Branch**: `feat/native-character-prompts`
+
+### Summary
+
+Strengthened fixed advice guidance for NovelAI/Danbooru-compatible English tags; visible editable scoped consultations cover all11 typed destinations and only current-section text. Unified advice UI explains purpose. Independent639 fake-only offline backend tests, frozen/lock/Ruff/unchanged OpenAPI and web ESLint/TypeScript/source checks passed; fresh25-input clean build. Matched API/web release20261016T094354 at17:44 China time after backup/idle checks; schema4, config and all72 image bytes/expiry retained. Zero paid model/provider probes. Actual suggestion quality remains operator acceptance; broader task open.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `14ff663` | feat: guide advice with NovelAI section tags |
+| `6344a67` | docs: record NovelAI advice guidance deployment |
+
+### Status
+
+[OK] **Completed**
