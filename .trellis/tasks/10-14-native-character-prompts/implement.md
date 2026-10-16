@@ -1,5 +1,24 @@
 # Implementation Plan
 
+## Follow-up Execution: Per-section Assistant (2026-10-16)
+
+1. Native frontend implementer follows section-assistant-design.md and owns
+   apps/web changes only: reusable popover, independent tool requests and exact
+   atomic target application; lint/TypeScript and source freeze.
+2. Independent native checker reviews the full changed frontend, owning local
+   fixes and npm run lint; no frontend/helper/browser tests or paid probes.
+3. Parent syncs executable specs, builds fresh env-free locked sources, commits
+   scoped work and publishes web-only with unchanged API pointer/PID and old
+   asset/hash/health checks. Never restart API for this change.
+4. Record evidence/journal; retain broader operator acceptance as in_progress.
+
+- [x] Seven-file frontend implementation and independent full affected review
+  GREEN. ESLint/TypeScript, whitespace/context validation and clean23-input
+  env-free build pass; no checker source correction/rebuild. See
+  check-section-assistant.md and section-assistant-build-verification.md.
+- [ ] Final clean build, spec sync, scoped commit and web-only publication.
+- [ ] Operator interaction/visual and actual AI/search result acceptance.
+
 The operator chose native independent characters after the flat-versus-native
 compatibility distinction was explained. Implement the recorded behavior.
 

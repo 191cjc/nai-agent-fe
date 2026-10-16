@@ -32,7 +32,10 @@ proof that every tool is unavailable before execution.
   setting; `shell_tool` reports disabled. This is an **accepted limitation**,
   not pre-execution tool denial. Host/process secrets must remain protected.
 - Request strict JSON output with a single `suggestion` property. The public
-  result is display-only. `AdviceService` caps input/output, admits at most
+  result is plain text, never executable instructions or an automatic draft
+  mutation. The unified drawer displays it; the per-section frontend helper
+  permits explicit user-reviewed text application under its own target/length
+  contract. `AdviceService` caps input/output, admits at most
   two concurrent turns and sets a 45-second deadline. Abort and close the
   SDK execution before removing the temporary workspace on failure, timeout,
   cancellation and shutdown. Never write advice text or output to SQLite.

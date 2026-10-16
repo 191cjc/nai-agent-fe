@@ -21,6 +21,7 @@ import {
   CHARACTER_SECTION_KEYS, SHARED_SECTION_KEYS, SECTION_LABELS, characterPrompt, sharedPrompt,
   emptyCharacterSections, emptySharedSections, metadataFromDraft, restoredSections, sectionAt,
   validateSectionBudgets, projectSnapshotImport, type SectionCharacterDraft, type SectionReference,
+  copySharedSections, copyCharacterSections, type PromptTextTarget,
   type SharedSections, type CharacterSections, type PromptSnapshot, type SnapshotImportMode,
 } from './prompt-sections'
 
@@ -229,6 +230,7 @@ interface GenerationOperation {
 
 export class GenerationStore {
   draft = emptyDraft()
+  assistantDraftRevision = 0
   positiveTagTarget: PositiveTagTarget = 'shared:scene'
   job: GenerationView | null = null
   activeId: string | null = null
@@ -306,6 +308,39 @@ export class GenerationStore {
     section.text = text
   }
 
+  promptTextAt(target: PromptTextTarget): string | undefined {
+    if (target.scope === 'style') return this.draft.style_prompt
+    if (target.scope === 'negative') return this.draft.negative_prompt
+    return sectionAt(this.draft, target)?.text
+  }
+
+  invalidateAssistant(): void {
+    this.assistantDraftRevision += 1
+  }
+
+  /** A local assistant edits its captured destination, independently of the left tools. */
+  applyPromptText(target: PromptTextTarget, text: string, mode: SnapshotImportMode, openingRevision: number): void {
+    if (openingRevision !== this.assistantDraftRevision) throw new Error('草稿已切换，请重新打开分区助手。')
+    const current = this.promptTextAt(target)
+    if (current === undefined) throw new Error('目标分区已移除，草稿未修改。')
+    if (mode !== 'append' && mode !== 'replace') throw new Error('请选择追加或覆盖。')
+    const value = mode === 'replace' ? text : [current, text].filter(part => part.trim()).join(', ')
+    if (value.length > 3000) throw new Error('当前分区不能超过 3000 字符，草稿未修改。')
+    const next: GenerationDraft = {
+      ...this.draft, shared_sections: copySharedSections(this.draft.shared_sections),
+      character_prompts: this.draft.character_prompts.map(person => ({ ...person, sections: copyCharacterSections(person.sections) })),
+    }
+    if (target.scope === 'style') next.style_prompt = value
+    else if (target.scope === 'negative') next.negative_prompt = value
+    else sectionAt(next, target)!.text = value
+    validateSectionBudgets(next, target)
+    // Commit only this exact text after all relevant budgets have passed.
+    if (target.scope === 'style') this.draft.style_prompt = value
+    else if (target.scope === 'negative') this.draft.negative_prompt = value
+    else sectionAt(this.draft, target)!.text = value
+    this.draftVersion += 1
+  }
+
   setSectionEnabled(reference: SectionReference, enabled: boolean): void {
     const section = sectionAt(this.draft, reference)
     if (!section || section.enabled === enabled) return
@@ -369,6 +404,7 @@ export class GenerationStore {
       return
     }
     this.draftVersion += 1
+    this.invalidateAssistant()
     this.draft = {
       negative_prompt: item.parameters.negative_prompt, model: item.parameters.model,
       sampler: item.parameters.sampler, quality: item.parameters.quality,
@@ -578,6 +614,7 @@ export class GenerationStore {
   }
 
   suspendForLogout(): void {
+    this.invalidateAssistant()
     const submissionPending = this.busy
     this.clearResult()
     this.busy = false
@@ -588,6 +625,7 @@ export class GenerationStore {
   }
 
   reset(): void {
+    this.invalidateAssistant()
     this.clearResult()
     this.draftVersion += 1
     this.draft = emptyDraft()
@@ -882,6 +920,7 @@ export class AppStore {
 
   dispose(): void {
     this.workspaceEntryVersion += 1
+    this.generation.invalidateAssistant()
     this.generation.clearResult()
     this.styleRuns.reset()
     this.tags.reset()

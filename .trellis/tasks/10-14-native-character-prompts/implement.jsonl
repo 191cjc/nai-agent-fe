@@ -32,3 +32,5 @@
 {"file": ".trellis/tasks/10-14-native-character-prompts/prompt-sections-design.md", "reason": "Newest exact fixed sections, strict effective-prompt metadata, private snapshot API/schema4 and atomic append/replace import contract."}
 {"file": ".trellis/tasks/10-14-native-character-prompts/research/prompt-sections-and-snapshots.md", "reason": "Cross-layer source evidence for section history, effective payloads, frozen runs, private owner snapshots and schema4 rollout."}
 {"file": ".trellis/spec/backend/prompt-sections-contract.md", "reason": "Executable exact section projection and hidden-state, private snapshot API/schema4, atomic import and compatibility test contract."}
+{"file": ".trellis/tasks/10-14-native-character-prompts/section-assistant-design.md", "reason": "Newest per-section AI/search popover, explicit stable target append/replace, independent requests, lifecycle and web-only no-restart contract."}
+{"file": ".trellis/spec/frontend/section-assistant-contract.md", "reason": "Executable per-section helper/current-only explicit AI/search input, stable atomic application and disclosure/session race contracts."}

@@ -384,15 +384,16 @@ export class WorkspaceApi {
     return this.request(`/api/generations/${encodeURIComponent(id)}`, { method: 'DELETE' })
   }
 
-  search(query: string): Promise<SearchResults> {
+  search(query: string, signal?: AbortSignal): Promise<SearchResults> {
     return this.request('/api/tags/search', {
       method: 'POST',
       body: JSON.stringify({ query, limit: 10 }),
+      signal,
     })
   }
 
-  advice(input: string): Promise<{ suggestion: string }> {
-    return this.request('/api/advice', { method: 'POST', body: JSON.stringify({ input }) })
+  advice(input: string, signal?: AbortSignal): Promise<{ suggestion: string }> {
+    return this.request('/api/advice', { method: 'POST', body: JSON.stringify({ input }), signal })
   }
 
   async image(path: string, signal?: AbortSignal): Promise<Blob> {

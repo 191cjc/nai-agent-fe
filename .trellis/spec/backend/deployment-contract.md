@@ -42,7 +42,10 @@ and [Prompt Sections](./prompt-sections-contract.md) (current schema4).
   `apps/api/node_modules` beside `apps/api/src`, so a global CLI install or
   non-editable package layout is not equivalent. Stage web inputs separately
   without `.env*`, run the build with a clean process environment, and publish
-  only `dist` under `/srv/www/novelai`.
+  only `dist` under `/srv/www/novelai`. Compare the exact web input file set
+  (src files plus explicit root build inputs) across clean-build manifest,
+  working tree and committed git tree before per-file SHA-256 checks. Checking
+  only listed manifest hashes misses a newly added source file after a build.
 - Both npm lockfiles and the `uv` lock must resolve package archives through
   HTTPS. The pinned Tencent npm mirror uses HTTPS URLs with unchanged package
   versions and integrity hashes; `npm ci` verifies the downloaded content.

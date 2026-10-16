@@ -1,5 +1,33 @@
 # Native Character Prompt Editor
 
+## Follow-up: Per-section Assistant (2026-10-16)
+
+The operator requests a button on each prompt section that opens a compact
+anchored popover with AI advice and prompt-search tabs, while retaining the
+left unified advice drawer. Search results must offer one-click append or
+replace into the exact opening section. Continue the existing in_progress
+editor task and retained implementation/publication authority.
+
+- Cover the fixed shared/character sections and reuse the same helper for
+  style and negative prompts. Keep existing section actions and style tests.
+- Opening/switching tabs performs no request. AI advice uses an explicit,
+  editable consultation containing only the opening section's current text
+  and label, submitted only on request. Search uses the existing tag service.
+- Show AI suggestion as editable plain text with explicit application actions;
+  never apply output automatically. Search candidates expose append/replace.
+- Application affects only the exact stable section/card, preserves hidden
+  state, validates relevant per-field/composed limits atomically, and works
+  before generation settings are complete. Missing/reset targets cannot be
+  silently reassigned. Failures leave all draft content intact.
+- Popover avoids clipping in the bottom drawer, supports narrow/short screens,
+  keyboard tabs, Escape/outside close and safe focus. Close on owner disclosure
+  hiding, session/reset/removal; discard stale responses on close/switch/reset.
+- Keep left search/advice state independent, rate-limit feedback and safe
+  errors intact. No backend contract/migration/dependency or generation-flow
+  change. Web-only publication preserves live API work.
+- Verify lint/TypeScript, source review and a fresh env-free build; no
+  frontend/helper/browser automated tests or paid advice/generation probes.
+
 ## Goal
 
 Let users compose style, shared scene content and multiple independent

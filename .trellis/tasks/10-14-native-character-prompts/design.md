@@ -1,5 +1,9 @@
 # Design: Native Character Prompt Editor
 
+> Latest frontend follow-up: section-assistant-design.md owns the per-section
+> AI/search popover, explicit target writes and web-only rollout. The existing
+> unified left tools, backend advice contract and schema4 remain unchanged.
+
 > Follow-up precedence (2026-10-15): `durable-experiment-design.md` now owns
 > server scheduling, continuation, reattachment and schema3 migration. Earlier
 > browser-only/no-resume/no-migration exclusions below are historical for that

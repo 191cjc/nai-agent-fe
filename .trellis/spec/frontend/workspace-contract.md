@@ -88,8 +88,11 @@ explicit atomic append/replace import with visible character target mapping.
   or expired rows have one metadata placeholder. Show original seven-day
   retention and unavailable images accurately. Explicit history archive/list
   actions fetch; ordinary sidebar switching still preserves mounted state.
-- Advice sends only the explicit advice input and never reads or mutates the
-  generation draft. Tag selection inserts only the chosen canonical tag.
+- Left unified advice sends only its explicit input and never reads or mutates
+  the generation draft. The explicitly opened per-section helper follows
+  [Per-section Assistant](./section-assistant-contract.md): visible editable
+  current-section consultation and explicit validated local result application.
+  Tag selection inserts only the chosen canonical tag.
 - Style, shared text, global negative text and native character descriptions
   remain separate in the draft and saved request. Use the
   [Native Character Prompt Contract](../backend/native-character-contract.md)

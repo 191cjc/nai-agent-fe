@@ -17,6 +17,7 @@ export interface SectionCharacterDraft extends SectionCharacter { id: string }
 export interface SectionDraft { shared_sections: SharedSections; character_prompts: SectionCharacterDraft[]; style_prompt: string }
 export type SectionReference = { scope: 'shared'; section: SharedSectionKey }
   | { scope: 'character'; characterId: string; section: CharacterSectionKey }
+export type PromptTextTarget = SectionReference | { scope: 'style' } | { scope: 'negative' }
 export type PromptSnapshotEntry = { scope: 'shared'; section: SharedSectionKey; text: string }
   | { scope: 'character'; character_index: number; section: CharacterSectionKey; text: string }
 export interface PromptSnapshotCreate { id: string; name: string; entries: PromptSnapshotEntry[] }
@@ -60,17 +61,21 @@ export function copyPromptMetadata(metadata: PromptSections): PromptSections {
 }
 
 /** Import can be valid before model/settings/base text are filled in. */
-export function validateSectionBudgets(draft: SectionDraft): void {
+export function validateSectionBudgets(draft: SectionDraft, target?: PromptTextTarget): void {
   if (draft.character_prompts.length > 6) throw new Error('最多添加 6 个人物，草稿未修改。')
-  const allSections = [...SHARED_SECTION_KEYS.map(key => draft.shared_sections[key]),
-    ...draft.character_prompts.flatMap(person => CHARACTER_SECTION_KEYS.map(key => person.sections[key]))]
+  const checkShared = !target || target.scope === 'shared' || target.scope === 'style'
+  const characters = target ? target.scope === 'character' ? draft.character_prompts.filter(person => person.id === target.characterId) : [] : draft.character_prompts
+  const allSections = [...(checkShared ? SHARED_SECTION_KEYS.map(key => draft.shared_sections[key]) : []),
+    ...characters.flatMap(person => CHARACTER_SECTION_KEYS.map(key => person.sections[key]))]
   if (allSections.some(section => section.text.length > 3000)) throw new Error('每个分区不能超过 3000 字符，草稿未修改。')
-  const shared = sharedPrompt(draft.shared_sections)
-  const base = draft.style_prompt.trim() ? [draft.style_prompt.trim(), shared.trim()].filter(Boolean).join(', ') : shared
-  if (draft.style_prompt.length > 3000 || shared.length > 3000 || base.length > 3000) {
-    throw new Error('画风和公共提示词合计不能超过 3000 字符（含分隔符），草稿未修改。')
+  if (checkShared) {
+    const shared = sharedPrompt(draft.shared_sections)
+    const base = draft.style_prompt.trim() ? [draft.style_prompt.trim(), shared.trim()].filter(Boolean).join(', ') : shared
+    if (draft.style_prompt.length > 3000 || shared.length > 3000 || base.length > 3000) {
+      throw new Error('画风和公共提示词合计不能超过 3000 字符（含分隔符），草稿未修改。')
+    }
   }
-  if (draft.character_prompts.some(person => characterPrompt(person.sections).length > 3000)) {
+  if (characters.some(person => characterPrompt(person.sections).length > 3000)) {
     throw new Error('每个人物启用的提示词合计不能超过 3000 字符（含分隔符），草稿未修改。')
   }
   if (draft.character_prompts.some(person => !validAxis(person.x) || !validAxis(person.y))) throw new Error('人物位置无效，草稿未修改。')
@@ -118,6 +123,9 @@ export function restoredSections(parameters: GenerationRequest): PromptSections 
 
 export function sectionReferenceKey(reference: SectionReference): string {
   return reference.scope === 'shared' ? `shared:${reference.section}` : `character:${reference.characterId}:${reference.section}`
+}
+export function promptTextTargetKey(target: PromptTextTarget): string {
+  return target.scope === 'style' || target.scope === 'negative' ? target.scope : sectionReferenceKey(target)
 }
 export function sectionAt(draft: SectionDraft, reference: SectionReference): PromptSection | undefined {
   return reference.scope === 'shared' ? draft.shared_sections[reference.section]

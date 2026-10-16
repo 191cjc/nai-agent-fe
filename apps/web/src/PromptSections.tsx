@@ -6,10 +6,11 @@ import type { AppStore, GenerationStore } from './store'
 import { MAX_CHARACTERS } from './store'
 import { CharacterPositions } from './CharacterPositions'
 import { PromptEditor } from './PromptEditor'
+import { SectionAssistantButton, type OpenSectionAssistant } from './SectionAssistant'
 import {
   CHARACTER_SECTION_KEYS, SHARED_SECTION_KEYS, SECTION_LABELS, compatibleEntries, sectionAt, sectionReferenceKey,
   snapshotEntries, snapshotGroupKey, type PromptSection, type PromptSnapshot, type PromptSnapshotCreate,
-  type PromptSnapshotEntry, type SectionReference, type SnapshotImportMode,
+  type PromptSnapshotEntry, type PromptTextTarget, type SectionReference, type SnapshotImportMode,
 } from './prompt-sections'
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
@@ -221,15 +222,17 @@ const ImportSnapshots = observer(({ store, destination, onClose }: { store: AppS
   </Modal>
 })
 
-const SectionEditor = observer(({ generation, reference, section, label, selected, onSelect, onSave, onImport }: {
+const SectionEditor = observer(({ generation, reference, section, label, selected, onSelect, onSave, onImport, assistantTarget, onAssistant }: {
   generation: GenerationStore; reference: SectionReference; section: PromptSection; label: string; selected: boolean
   onSelect: (selected: boolean) => void; onSave: () => void; onImport: () => void
+  assistantTarget: PromptTextTarget | null; onAssistant: OpenSectionAssistant
 }) => {
   const id = `prompt-section-${sectionReferenceKey(reference)}`
   return <section className={`prompt-section-card${section.enabled ? '' : ' section-disabled'}`} aria-label={label}>
     <div className="prompt-section-heading"><label className="section-selection"><input type="checkbox" checked={selected}
       aria-label={`选择${label}用于保存快照`} onChange={event => onSelect(event.target.checked)} /><span>{SECTION_LABELS[reference.section]}</span></label>
-      <div className="prompt-section-actions"><button className="text-action" type="button" aria-pressed={!section.enabled}
+      <div className="prompt-section-actions"><SectionAssistantButton target={reference} label={label} activeTarget={assistantTarget} onOpen={onAssistant} />
+        <button className="text-action" type="button" aria-pressed={!section.enabled}
         aria-label={`${section.enabled ? '隐藏' : '显示'}${label}`} onClick={() => generation.setSectionEnabled(reference, !section.enabled)}>{section.enabled ? '隐藏' : '显示'}</button>
         <button className="text-action" type="button" aria-label={`保存${label}快照`} onClick={onSave}>保存</button>
         <button className="text-action" type="button" aria-label={`导入快照到${label}`} onClick={onImport}>导入</button></div></div>
@@ -240,7 +243,9 @@ const SectionEditor = observer(({ generation, reference, section, label, selecte
   </section>
 })
 
-export const PromptSectionsEditor = observer(({ store }: { store: AppStore }) => {
+export const PromptSectionsEditor = observer(({ store, assistantTarget, onAssistant }: {
+  store: AppStore; assistantTarget: PromptTextTarget | null; onAssistant: OpenSectionAssistant
+}) => {
   const generation = store.generation
   const draft = generation.draft
   const [selected, setSelected] = useState<SectionReference[]>([])
@@ -275,6 +280,7 @@ export const PromptSectionsEditor = observer(({ store }: { store: AppStore }) =>
     if (!value) return null
     return <SectionEditor key={sectionReferenceKey(reference)} generation={generation} reference={reference} section={value} label={label}
       selected={selectedKeys.has(sectionReferenceKey(reference))} onSelect={checked => select(reference, checked)}
+      assistantTarget={assistantTarget} onAssistant={onAssistant}
       onSave={() => save([reference])} onImport={() => openImport(reference)} />
   }
 

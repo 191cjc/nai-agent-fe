@@ -1,0 +1,322 @@
+import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { createPortal } from 'react-dom'
+import { observer } from 'mobx-react-lite'
+import { Search, Send, Sparkles, X } from 'lucide-react'
+import { ApiFailure, errorText, type TagCandidate, type WorkspaceApi } from './api'
+import type { GenerationStore } from './store'
+import { SECTION_LABELS, promptTextTargetKey, type PromptTextTarget, type SnapshotImportMode } from './prompt-sections'
+
+const TABS = [['advice', 'AI 建议'], ['search', '提示词搜索']] as const
+type AssistantTab = typeof TABS[number][0]
+export interface AssistantOpening {
+  id: number
+  target: PromptTextTarget
+  label: string
+  text: string
+  revision: number
+  opener: HTMLButtonElement
+}
+export type OpenSectionAssistant = (target: PromptTextTarget, label: string, opener: HTMLButtonElement) => void
+
+export function SectionAssistantButton({ target, label, activeTarget, onOpen }: {
+  target: PromptTextTarget; label: string; activeTarget: PromptTextTarget | null; onOpen: OpenSectionAssistant
+}) {
+  return <button className="text-action section-assistant-trigger" type="button" aria-label={`打开${label}助手`}
+    aria-haspopup="dialog" aria-controls="section-assistant-popover"
+    aria-expanded={activeTarget !== null && promptTextTargetKey(activeTarget) === promptTextTargetKey(target)}
+    onClick={event => onOpen(target, label, event.currentTarget)}><Sparkles size={13} aria-hidden="true" />助手</button>
+}
+
+/** A request belongs to one opening, independently of the mounted left tools. */
+function useLocalRequest(isCurrent: () => boolean) {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [retryUntil, setRetryUntil] = useState(0)
+  const [now, setNow] = useState(() => Date.now())
+  const controller = useRef<AbortController | null>(null)
+  const epoch = useRef(0)
+  const alive = useRef(false)
+  const currentRef = useRef(isCurrent)
+  currentRef.current = isCurrent
+  useLayoutEffect(() => {
+    alive.current = true
+    return () => { alive.current = false; epoch.current += 1; controller.current?.abort(); controller.current = null }
+  }, [])
+  useEffect(() => {
+    if (retryUntil <= Date.now()) return
+    const timer = setInterval(() => {
+      const time = Date.now()
+      setNow(time)
+      if (time >= retryUntil) clearInterval(timer)
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [retryUntil])
+
+  function cancel() {
+    epoch.current += 1
+    controller.current?.abort()
+    controller.current = null
+    setLoading(false)
+    setError('')
+  }
+
+  async function run<T,>(request: (signal: AbortSignal) => Promise<T>, onSuccess: (response: T) => void): Promise<void> {
+    if (controller.current || retryUntil > Date.now() || !currentRef.current()) return
+    const version = ++epoch.current
+    const active = new AbortController()
+    controller.current = active
+    setLoading(true)
+    setError('')
+    const accepted = () => alive.current && version === epoch.current && controller.current === active
+      && !active.signal.aborted && currentRef.current()
+    try {
+      const result = await request(active.signal)
+      if (accepted()) onSuccess(result)
+    } catch (caught) {
+      if (accepted()) {
+        setError(errorText(caught))
+        if (caught instanceof ApiFailure && caught.retryAfterSeconds) {
+          const time = Date.now()
+          setNow(time)
+          setRetryUntil(time + caught.retryAfterSeconds * 1000)
+        }
+      }
+    } finally {
+      if (accepted()) setLoading(false)
+      if (controller.current === active) controller.current = null
+    }
+  }
+
+  return { loading, error, retrySeconds: Math.max(0, Math.ceil((retryUntil - now) / 1000)), run, cancel }
+}
+
+function openerVisible(opener: HTMLElement): boolean {
+  if (!opener.isConnected || opener.closest('[hidden], [inert]')) return false
+  const rect = opener.getBoundingClientRect()
+  if (rect.width <= 0 || rect.height <= 0 || getComputedStyle(opener).visibility !== 'visible') return false
+  // A mobile keyboard can cover the anchor while the editor remains open.
+  // Layout clipping, rather than the smaller visual viewport, defines hiding.
+  for (let ancestor = opener.parentElement; ancestor; ancestor = ancestor.parentElement) {
+    const style = getComputedStyle(ancestor)
+    const bounds = ancestor.getBoundingClientRect()
+    if (style.visibility === 'hidden' || style.display === 'none') return false
+    if (/(auto|scroll|hidden|clip)/.test(style.overflowY) && (rect.bottom <= bounds.top || rect.top >= bounds.bottom)) return false
+    if (/(auto|scroll|hidden|clip)/.test(style.overflowX) && (rect.right <= bounds.left || rect.left >= bounds.right)) return false
+  }
+  return true
+}
+
+export const SectionAssistantPopover = observer(({ api, generation, opening, onClose }: {
+  api: WorkspaceApi; generation: GenerationStore; opening: AssistantOpening; onClose: () => void
+}) => {
+  const [tab, setTab] = useState<AssistantTab>('advice')
+  const [input, setInput] = useState(() => `请为「${opening.label}」提供可直接使用的逗号分隔提示词，只返回提示词文本。\n当前分区：\n${opening.text}`.slice(0, 4000))
+  const [suggestion, setSuggestion] = useState('')
+  const [hasSuggestion, setHasSuggestion] = useState(false)
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<TagCandidate[]>([])
+  const [searched, setSearched] = useState(false)
+  const [applyError, setApplyError] = useState('')
+  const [applied, setApplied] = useState('')
+  const panelRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const queryRef = useRef<HTMLInputElement>(null)
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
+  const id = useId()
+  const target = opening.target
+  const label = target.scope === 'character'
+    ? `人物 ${generation.draft.character_prompts.findIndex(person => person.id === target.characterId) + 1} · ${SECTION_LABELS[target.section]}` : opening.label
+  const isCurrent = () => opening.revision === generation.assistantDraftRevision
+    && generation.promptTextAt(opening.target) !== undefined && openerVisible(opening.opener)
+  const advice = useLocalRequest(isCurrent)
+  const search = useLocalRequest(isCurrent)
+
+  useLayoutEffect(() => {
+    const panel = panelRef.current
+    if (!panel) return
+    let frame = 0
+    function position() {
+      if (!panel || !openerVisible(opening.opener)) { closeRef.current(); return }
+      const viewport = window.visualViewport
+      const margin = 8
+      const gap = 8
+      const left = (viewport?.offsetLeft ?? 0) + margin
+      const top = (viewport?.offsetTop ?? 0) + margin
+      const width = Math.max(1, (viewport?.width ?? window.innerWidth) - margin * 2)
+      const height = Math.max(1, (viewport?.height ?? window.innerHeight) - margin * 2)
+      panel.style.width = `${Math.min(420, width)}px`
+      panel.style.maxHeight = `${Math.min(580, height)}px`
+      const anchor = opening.opener.getBoundingClientRect()
+      const box = panel.getBoundingClientRect()
+      const below = top + height - anchor.bottom - gap
+      const above = anchor.top - gap - top
+      const desiredTop = below >= box.height || below >= above ? anchor.bottom + gap : anchor.top - box.height - gap
+      panel.style.left = `${Math.max(left, Math.min(anchor.right - box.width, left + width - box.width))}px`
+      panel.style.top = `${Math.max(top, Math.min(desiredTop, top + height - box.height))}px`
+      panel.style.visibility = 'visible'
+    }
+    function schedulePosition() {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(position)
+    }
+    function outside(event: PointerEvent) {
+      if (event.target instanceof Node && !panel?.contains(event.target) && !opening.opener.contains(event.target)) closeRef.current()
+    }
+    function focusOutside(event: FocusEvent) {
+      if (event.target instanceof Node && !panel?.contains(event.target) && !opening.opener.contains(event.target)) closeRef.current()
+    }
+    function escape(event: globalThis.KeyboardEvent) {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      event.stopPropagation()
+      closeRef.current()
+    }
+    position()
+    inputRef.current?.focus({ preventScroll: true })
+    window.addEventListener('resize', schedulePosition)
+    window.addEventListener('scroll', schedulePosition, true)
+    window.visualViewport?.addEventListener('resize', schedulePosition)
+    window.visualViewport?.addEventListener('scroll', schedulePosition)
+    document.addEventListener('pointerdown', outside, true)
+    document.addEventListener('focusin', focusOutside)
+    document.addEventListener('keydown', escape, true)
+    const resize = new ResizeObserver(schedulePosition)
+    resize.observe(panel)
+    resize.observe(opening.opener)
+    const mutations = new MutationObserver(schedulePosition)
+    for (let ancestor: HTMLElement | null = opening.opener; ancestor; ancestor = ancestor.parentElement) {
+      mutations.observe(ancestor, { attributes: true, attributeFilter: ['hidden', 'inert', 'style', 'class'] })
+    }
+    mutations.observe(document.body, { childList: true, subtree: true })
+    return () => {
+      cancelAnimationFrame(frame)
+      resize.disconnect()
+      mutations.disconnect()
+      window.removeEventListener('resize', schedulePosition)
+      window.removeEventListener('scroll', schedulePosition, true)
+      window.visualViewport?.removeEventListener('resize', schedulePosition)
+      window.visualViewport?.removeEventListener('scroll', schedulePosition)
+      document.removeEventListener('pointerdown', outside, true)
+      document.removeEventListener('focusin', focusOutside)
+      document.removeEventListener('keydown', escape, true)
+      if (panel.contains(document.activeElement) || document.activeElement === document.body) {
+        const fallback = document.getElementById('prompt-drawer-toggle')
+        const destination = openerVisible(opening.opener) ? opening.opener : fallback
+        if (destination?.isConnected && !destination.closest('[hidden], [inert]')) destination.focus({ preventScroll: true })
+      }
+    }
+  }, [opening])
+
+  function selectTab(next: AssistantTab, focusTab = false) {
+    setTab(next)
+    if (focusTab) panelRef.current?.querySelector<HTMLButtonElement>(`[data-assistant-tab="${next}"]`)?.focus()
+  }
+
+  function tabKeys(event: KeyboardEvent<HTMLDivElement>) {
+    const current = TABS.findIndex(([name]) => name === tab)
+    const next = event.key === 'ArrowRight' ? (current + 1) % TABS.length
+      : event.key === 'ArrowLeft' ? (current + TABS.length - 1) % TABS.length
+        : event.key === 'Home' ? 0 : event.key === 'End' ? TABS.length - 1 : null
+    if (next === null) return
+    event.preventDefault()
+    event.stopPropagation()
+    selectTab(TABS[next][0], true)
+  }
+
+  async function requestAdvice() {
+    if (!input.trim() || input.length > 4000 || advice.loading || advice.retrySeconds) return
+    setHasSuggestion(false)
+    setSuggestion('')
+    setApplied('')
+    await advice.run(signal => api.advice(input, signal), response => {
+      if (typeof response.suggestion !== 'string' || !response.suggestion.trim() || response.suggestion.length > 3000) {
+        setApplyError('建议结果无效，请重新获取；草稿未修改。')
+        return
+      }
+      setSuggestion(response.suggestion)
+      setHasSuggestion(true)
+      setApplyError('')
+    })
+  }
+
+  async function requestSearch() {
+    if (!query.trim() || query.trim().length > 100 || search.loading || search.retrySeconds) return
+    setSearched(false)
+    setResults([])
+    await search.run(signal => api.search(query.trim(), signal), response => {
+      setResults(response.results)
+      setSearched(true)
+    })
+  }
+
+  function apply(text: string, mode: SnapshotImportMode) {
+    setApplyError('')
+    setApplied('')
+    if (!isCurrent()) { closeRef.current(); return }
+    try {
+      generation.applyPromptText(opening.target, text, mode, opening.revision)
+      setApplied(`已${mode === 'append' ? '追加到' : '覆盖'}${label}`)
+    } catch (caught) { setApplyError(caught instanceof Error ? caught.message : '无法填入当前分区，草稿未修改。') }
+  }
+
+  return createPortal(<div ref={panelRef} id="section-assistant-popover" className="section-assistant-popover"
+    role="dialog" aria-modal="false" aria-labelledby={`${id}-title`} style={{ visibility: 'hidden' }}
+    onKeyDown={event => {
+      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose() }
+      // Portal events bubble through the editor's generation form.
+      if (event.key === 'Enter') event.stopPropagation()
+    }}>
+    <header className="section-assistant-heading"><h2 id={`${id}-title`}>{label}<span>分区助手</span></h2>
+      <button className="icon-button" type="button" aria-label="关闭分区助手" onClick={onClose}><X size={17} aria-hidden="true" /></button></header>
+    <div className="section-assistant-tabs" role="tablist" aria-label="分区助手工具" onKeyDown={tabKeys}>
+      {TABS.map(([name, label]) => <button key={name} type="button" role="tab" data-assistant-tab={name} id={`${id}-tab-${name}`}
+        aria-selected={tab === name} aria-controls={`${id}-panel-${name}`} tabIndex={tab === name ? 0 : -1}
+        onClick={() => selectTab(name)}>{label}</button>)}
+    </div>
+    <div className="section-assistant-scroll">
+      <div role="tabpanel" id={`${id}-panel-advice`} aria-labelledby={`${id}-tab-advice`} hidden={tab !== 'advice'}>
+        <label className="field"><span>咨询内容</span><textarea ref={inputRef} value={input} rows={4} maxLength={4000}
+          onChange={event => { advice.cancel(); setInput(event.target.value) }}
+          onKeyDown={event => { if (event.key === 'Enter' && !event.nativeEvent.isComposing && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void requestAdvice() } }} /></label>
+        <p className="prompt-hint">仅发送上方内容，可修改后咨询。Ctrl / ⌘ + Enter 获取建议。</p>
+        <div className="section-assistant-submit"><button className="primary" type="button" disabled={advice.loading || advice.retrySeconds > 0 || !input.trim()}
+          onClick={() => void requestAdvice()}><Send size={14} aria-hidden="true" />{advice.loading ? '正在获取...' : '获取建议'}</button></div>
+        {advice.error && <p role="alert" className="alert">{advice.error}</p>}
+        {advice.retrySeconds > 0 && <p className="subtle" role="status">{advice.retrySeconds} 秒后可重试</p>}
+        {advice.loading && <p className="subtle" role="status">正在获取当前分区的建议...</p>}
+        {hasSuggestion && <div className="section-assistant-suggestion"><label className="field"><span>建议提示词 · 可编辑</span>
+          <textarea value={suggestion} rows={4} maxLength={3000} onChange={event => setSuggestion(event.target.value)} /></label>
+          <div className="section-assistant-apply"><button type="button" className="secondary" disabled={!suggestion.trim()} onClick={() => apply(suggestion, 'append')}>追加</button>
+            <button type="button" className="secondary" disabled={!suggestion.trim()} onClick={() => apply(suggestion, 'replace')}>覆盖</button></div></div>}
+      </div>
+      <div role="tabpanel" id={`${id}-panel-search`} aria-labelledby={`${id}-tab-search`} hidden={tab !== 'search'}>
+        <div className="search-form"><label className="sr-only" htmlFor={`${id}-query`}>搜索当前分区提示词</label>
+          <input ref={queryRef} id={`${id}-query`} value={query} maxLength={100} placeholder="搜索中文或英文提示词"
+            onChange={event => { search.cancel(); setQuery(event.target.value); setResults([]); setSearched(false) }}
+            onKeyDown={event => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) { event.preventDefault(); void requestSearch() } }} />
+          <button className="primary icon-button" type="button" aria-label="搜索当前分区提示词" disabled={search.loading || search.retrySeconds > 0 || !query.trim()}
+            onClick={() => void requestSearch()}><Search size={17} aria-hidden="true" /></button></div>
+        <div className="source-line">来源：<a href="https://huggingface.co/spaces/SAkizuki/DanbooruSearch" target="_blank" rel="noopener noreferrer">DanbooruSearch</a></div>
+        {search.error && <p role="alert" className="alert">{search.error}</p>}
+        {search.retrySeconds > 0 && <p className="subtle" role="status">{search.retrySeconds} 秒后可重试</p>}
+        {search.loading && <p className="subtle" role="status">正在搜索...</p>}
+        {searched && !results.length && <p className="subtle" role="status">没有匹配的提示词</p>}
+        <div className="tag-results">{results.map((candidate, index) => <article className="tag-item" key={`${candidate.tag}-${index}`}>
+          <div className="tag-head"><strong>{candidate.tag}</strong>{candidate.is_nsfw === true && <span className="nsfw">NSFW</span>}</div>
+          {candidate.cn_name && <div className="tag-cn">{candidate.cn_name}</div>}
+          {(candidate.category || candidate.count != null || candidate.score != null) && <div className="tag-meta">
+            {candidate.category && <span>{candidate.category}</span>}
+            {candidate.count != null && <span>{candidate.count.toLocaleString()} 次使用</span>}
+            {candidate.score != null && <span>评分 {candidate.score.toFixed(2)}</span>}
+          </div>}
+          {candidate.summary && <p className="tag-summary">{candidate.summary}</p>}
+          <div className="tag-actions"><button className="text-action" type="button" aria-label={`将 ${candidate.tag} 追加到${label}`} onClick={() => apply(candidate.tag, 'append')}>追加</button>
+            <button className="text-action" type="button" aria-label={`用 ${candidate.tag} 覆盖${label}`} onClick={() => apply(candidate.tag, 'replace')}>覆盖</button></div>
+        </article>)}</div>
+      </div>
+    </div>
+    {(applyError || applied) && <footer className="section-assistant-feedback">{applyError ? <p className="alert" role="alert">{applyError}</p>
+      : <p className="prompt-hint" role="status">{applied}</p>}</footer>}
+  </div>, document.body)
+})

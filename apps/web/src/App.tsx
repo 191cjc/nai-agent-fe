@@ -9,7 +9,8 @@ import { ApiFailure, errorText } from './api'
 import type { GenerationDraft } from './store'
 import { AppStore, NATIVE_CHARACTER_MODELS, supportsNativeCharacters } from './store'
 import { PromptSectionsEditor } from './PromptSections'
-import { characterPrompt } from './prompt-sections'
+import { characterPrompt, promptTextTargetKey, type PromptTextTarget } from './prompt-sections'
+import { SectionAssistantButton, SectionAssistantPopover, type AssistantOpening } from './SectionAssistant'
 import { PromptEditor } from './PromptEditor'
 import { StyleExperimentConfig, StyleExperimentProgress } from './StyleExperiment'
 import { PromptSummary } from './PromptSummary'
@@ -86,11 +87,28 @@ function NumericField({ label, name, value, onChange, min, max, step = 1, placeh
   </label>
 }
 
-const Editor = observer(({ store }: { store: AppStore }) => {
+const Editor = observer(({ store, active }: { store: AppStore; active: boolean }) => {
   const [panel, setPanel] = useState<PromptPanel>('positive')
   const [experimentOpen, setExperimentOpen] = useState(false)
+  const [assistant, setAssistant] = useState<AssistantOpening | null>(null)
+  const assistantSequence = useRef(0)
   const generation = store.generation
   const draft = generation.draft
+  const assistantValid = assistant !== null && active && assistant.revision === generation.assistantDraftRevision
+    && generation.promptTextAt(assistant.target) !== undefined && (assistant.target.scope === 'negative' ? panel === 'negative' : panel === 'positive')
+  useEffect(() => { if (assistant && !assistantValid) setAssistant(null) }, [assistant, assistantValid])
+
+  function openAssistant(target: PromptTextTarget, label: string, opener: HTMLButtonElement) {
+    if (assistantValid && assistant && promptTextTargetKey(assistant.target) === promptTextTargetKey(target)) { setAssistant(null); return }
+    const text = generation.promptTextAt(target)
+    if (text === undefined) return
+    setAssistant({ id: ++assistantSequence.current, target, label, text, revision: generation.assistantDraftRevision, opener })
+  }
+
+  function changePanel(next: PromptPanel) {
+    setAssistant(null)
+    setPanel(next)
+  }
 
   function onPromptTabKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     const current = PROMPT_TABS.findIndex(([name]) => name === panel)
@@ -99,7 +117,7 @@ const Editor = observer(({ store }: { store: AppStore }) => {
         : event.key === 'Home' ? 0 : event.key === 'End' ? PROMPT_TABS.length - 1 : null
     if (next === null) return
     event.preventDefault()
-    setPanel(PROMPT_TABS[next][0])
+    changePanel(PROMPT_TABS[next][0])
     event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus()
   }
 
@@ -108,25 +126,28 @@ const Editor = observer(({ store }: { store: AppStore }) => {
         <div className="prompt-tabs" role="tablist" aria-label="提示词类型" aria-orientation="vertical" onKeyDown={onPromptTabKeyDown}>
           {PROMPT_TABS.map(([name, label]) => <button key={name} id={`prompt-tab-${name}`} type="button" role="tab"
             aria-selected={panel === name} aria-controls={`prompt-panel-${name}`} tabIndex={panel === name ? 0 : -1}
-            className={panel === name ? 'prompt-tab active' : 'prompt-tab'} onClick={() => setPanel(name)}>{label}</button>)}
+            className={panel === name ? 'prompt-tab active' : 'prompt-tab'} onClick={() => changePanel(name)}>{label}</button>)}
         </div>
         <div className="prompt-panel prompt-stack" id="prompt-panel-positive" role="tabpanel" aria-labelledby="prompt-tab-positive" hidden={panel !== 'positive'}>
           <div className="field prompt-field"><div className="style-prompt-heading"><label htmlFor="style-prompt">画风</label>
+            <div className="prompt-heading-actions"><SectionAssistantButton target={{ scope: 'style' }} label="画风" activeTarget={assistantValid ? assistant?.target ?? null : null} onOpen={openAssistant} />
             <button className="text-action" type="button" aria-expanded={experimentOpen} aria-controls="style-experiment-config"
-              onClick={() => setExperimentOpen(!experimentOpen)}><FlaskConical size={14} aria-hidden="true" /> 画风实验</button></div>
+              onClick={() => setExperimentOpen(!experimentOpen)}><FlaskConical size={14} aria-hidden="true" /> 画风实验</button></div></div>
             <PromptEditor id="style-prompt" label="画风" value={draft.style_prompt} rows={2} placeholder="画风、媒介与画质标签"
               onFocus={() => generation.setPositiveTagTarget('style_prompt')}
               onChange={value => generation.setField('style_prompt', value)} />
             <StyleExperimentConfig generation={generation} hidden={!experimentOpen} /></div>
-          <PromptSectionsEditor store={store} />
+          <PromptSectionsEditor store={store} assistantTarget={assistantValid ? assistant?.target ?? null : null} onAssistant={openAssistant} />
         </div>
         <div className="prompt-panel" id="prompt-panel-negative" role="tabpanel" aria-labelledby="prompt-tab-negative" hidden={panel !== 'negative'}>
-          <div className="field prompt-field"><label htmlFor="negative-prompt">负面提示词</label>
+          <div className="field prompt-field"><div className="style-prompt-heading"><label htmlFor="negative-prompt">负面提示词</label>
+            <SectionAssistantButton target={{ scope: 'negative' }} label="负面提示词" activeTarget={assistantValid ? assistant?.target ?? null : null} onOpen={openAssistant} /></div>
             <PromptEditor id="negative-prompt" label="负面提示词" value={draft.negative_prompt} rows={8} placeholder="排除的内容，应用于整张图像"
               onChange={value => generation.setField('negative_prompt', value)} /></div>
         </div>
       </div>
       <p className="prompt-hint prompt-weight-compatibility">数字权重适用于 V4 及更新模型。</p>
+      {assistantValid && assistant && <SectionAssistantPopover key={assistant.id} api={store.api} generation={generation} opening={assistant} onClose={() => setAssistant(null)} />}
   </div>
 })
 
@@ -472,7 +493,8 @@ const Workspace = observer(({ store }: { store: AppStore }) => {
   }
 
   function togglePrompts() {
-    if (promptsOpen && promptBodyRef.current?.contains(document.activeElement)) promptToggleRef.current?.focus({ preventScroll: true })
+    if (promptsOpen && (promptBodyRef.current?.contains(document.activeElement)
+      || document.getElementById('section-assistant-popover')?.contains(document.activeElement))) promptToggleRef.current?.focus({ preventScroll: true })
     setPromptsOpen(!promptsOpen)
   }
 
@@ -542,7 +564,7 @@ const Workspace = observer(({ store }: { store: AppStore }) => {
             <span className="prompt-disclosure-label">{promptsOpen ? '收起' : '展开'}{promptsOpen ? <ChevronDown size={16} aria-hidden="true" /> : <ChevronUp size={16} aria-hidden="true" />}</span>
           </button>
           <div ref={promptBodyRef} className="prompt-drawer-body" id="prompt-drawer-body" hidden={!promptsOpen}>
-            <form id="generation-form" onSubmit={submit}><Editor store={store} /></form>
+            <form id="generation-form" onSubmit={submit}><Editor store={store} active={promptsOpen} /></form>
           </div>
         </section>
         {store.generation.submitUncertain && <div className="uncertain-bar" role="alert">
