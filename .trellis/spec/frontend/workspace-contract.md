@@ -34,6 +34,10 @@ provider credentials, durable image storage, or backend authorization.
 
 ## Contracts
 
+- Use [Canvas Layout Contract](./canvas-layout-contract.md) for the main image
+  canvas and collapsible bottom prompt drawer. Generate and operation recovery/
+  Stop controls stay outside the collapsible prompt body. This prompt drawer
+  is independent of the left settings/history/tags/advice tools below.
 - Vite's `import.meta.env.BASE_URL` prefixes browser JSON and validated image
   fetches. Local `/api/*` and production `/novelai/api/*` both reach backend
   `/api/*`; the production proxy strips only `/novelai` on API requests.

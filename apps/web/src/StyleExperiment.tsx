@@ -146,9 +146,7 @@ export const StyleExperimentProgress = observer(({ generation, saved }: { genera
       {run && <>
         <span>已处理 {run.processed_count} / {run.total} 组</span>
         <span>成功 {run.succeeded_count} · 失败 {run.failed_count}</span>
-        <span>每组 {run.sample_count} 张 · 计划 {(BigInt(run.total) * BigInt(run.sample_count)).toString()} 张</span>
         {run.current_ordinal !== null && <span>当前第 {run.current_ordinal} 组</span>}
-        <span>统一请求种子 {run.seed}</span>
         {runs.running && !runs.connected && <span>进度连接中断，后台可能仍在运行</span>}
       </>}
       {runs.pendingId && <span>实验编号 {runs.pendingId}</span>}
@@ -172,7 +170,8 @@ export const StyleExperimentProgress = observer(({ generation, saved }: { genera
       }}>已核对历史，解除未知提交锁</button>}
     {run?.error_code && <p className="experiment-note">最近一组诊断：{errorText(new ApiFailure(0, run.error_code, '本组处理失败。'))}
       {run.status === 'running' && ' 服务器会继续处理后续组，不会重试这一组。'}</p>}
-    {run && <details className="result-parameters server-run-snapshot"><summary>本次实验固定配置</summary>
+    {run && <details className="result-parameters server-run-snapshot"><summary>实验信息与固定配置</summary>
+      <p>每组 {run.sample_count} 张 · 计划 {(BigInt(run.total) * BigInt(run.sample_count)).toString()} 张 · 统一请求种子 {run.seed}</p>
       <PromptSummary parameters={run.parameters} />
       {run.parameters.negative_prompt && <p>负向：{run.parameters.negative_prompt}</p>}
       <ul>{run.ranges.map(range => <li key={range.tag_index}>词条 {range.tag_index + 1} · {range.min} → {range.max} · 步长 {range.step}</li>)}</ul>
@@ -180,7 +179,7 @@ export const StyleExperimentProgress = observer(({ generation, saved }: { genera
       <p>{run.parameters.steps} 步 · CFG {run.parameters.cfg_scale} · 每组 {run.sample_count} 张 · {run.parameters.quality ? '高质量' : '标准质量'}</p>
       <p>原始请求种子 {run.parameters.seed ?? '随机'} · 统一实际种子 {run.seed}</p>
       <p>实验编号 {run.id} · {new Date(run.created_at * 1000).toLocaleString()}</p>
+      <p>服务器执行实验；离开页面或退出登录仅断开查看。单组失败会继续后续组，只有“停止实验”会阻止新的组。</p>
     </details>}
-    <p className="prompt-hint server-run-note">服务器执行实验；离开页面或退出登录仅断开查看。单组失败会继续后续组，只有“停止实验”会阻止新的组。</p>
   </div>
 })

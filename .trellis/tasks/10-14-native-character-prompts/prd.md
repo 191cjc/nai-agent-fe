@@ -360,3 +360,22 @@ Close/replacement/logout/session expiry/disposal clears URLs and memory;
 refreshing the browser starts fresh. No persistent/public/HTTP disk cache or
 whole-experiment download. Source/static verification and web-only publication
 follow existing authority; viewer-cache-design.md owns the detailed boundary.
+
+## Follow-up: Canvas-Centered Bottom Prompt Drawer (2026-10-16)
+
+The operator requests NovelAI's image-first layout: the main body is a canvas,
+prompt inputs move into a collapsible drawer below it, and Generate stays at
+the very bottom. Replace editor/results stacking with a shared main canvas for
+the current generation or selected historical comparison. Preserve the existing
+left tool drawers, all structured prompt/tag/character/position controls,
+generation locks, experiment Stop/reattachment and private image/cache lifecycle.
+
+Acceptance: images dominate the available center area; prompt drawer starts
+expanded and can collapse without losing edit/configuration state; Generate,
+uncertain-result actions and experiment controls remain reachable while it is
+closed. Multiple current images can be selected on the canvas without new
+downloads, and saved comparison arrows/cache continue working. History reuse
+opens the prompt drawer; history status opens the current result. Desktop and
+narrow/short mobile layouts keep the toggle/action bar reachable. Verify via
+source/static checks and a fresh build; existing no-browser/no-paid-call and
+web-only publication authority applies. See canvas-layout-design.md.

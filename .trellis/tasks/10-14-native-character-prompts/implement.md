@@ -361,3 +361,23 @@ owns the frozen shared API and supersedes earlier browser scheduling limits.
 - [x] Fresh build, commit b30250c and verified web-only release 20261015T145554;
   exact public hashes/health/retained old assets pass, API pointer/PID unchanged.
   See deployment-viewer-cache-2026-10-15.md. Operator interaction remains open.
+
+## Follow-up Execution: Canvas Layout (2026-10-16)
+
+1. Implementer owns App.tsx/styles.css and necessary SavedResults/StyleExperiment
+   visual integration only; follow canvas-layout-design.md. Keep all stores,
+   API/cache/generation operations intact. Run lint/types and freeze.
+2. Independent full affected frontend source/static check, including image
+   selection, drawer mount/focus/form guards and persistent operation controls;
+   review web build/release scripts. No frontend/helper/browser tests or paid
+   probes; no unchanged-backend test repeat.
+3. Parent syncs layout contracts, fresh explicit env-free locked web build,
+   scoped commits and web-only release; exact public assets/health/old resources
+   and unchanged live API pointer/PID, then evidence/journal.
+
+- [x] Layout implementation and independent full affected frontend gate GREEN.
+  Fixed saved-close side effects and image-height starvation; see
+  check-canvas-layout.md. Final fresh 19-input build passed; see
+  canvas-layout-build-verification.md.
+- [ ] Fresh build, commit and verified web-only deployment.
+- [ ] Operator visual/desktop/mobile acceptance; broader task stays in_progress.

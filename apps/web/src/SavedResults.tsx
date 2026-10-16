@@ -38,7 +38,7 @@ function jobStatus(status: string): string {
   return { queued: '排队中', running: '生成中', succeeded: '已完成', failed: '失败' }[status] ?? status
 }
 
-export const SavedResultViewer = observer(({ saved }: { saved: SavedResultsStore }) => {
+export const SavedResultViewer = observer(({ saved, onClose }: { saved: SavedResultsStore; onClose: () => void }) => {
   const viewerRef = useRef<HTMLDivElement>(null)
   const selection = saved.selection
   useEffect(() => {
@@ -63,20 +63,14 @@ export const SavedResultViewer = observer(({ saved }: { saved: SavedResultsStore
     viewerRef.current?.focus({ preventScroll: true })
   }
 
-  function close() {
-    saved.close()
-    document.getElementById('panel-toggle-history')?.focus({ preventScroll: true })
-  }
-
-  return <section id="saved-result-viewer" className="experiment-results saved-results" aria-labelledby="saved-result-title">
-    <div className="section-heading">
-      <div><span className="eyebrow">历史记录</span><h2 id="saved-result-title">{isExperiment ? '已保存的画风对比' : '已保存的图片'}</h2></div>
-      <button className="icon-button" type="button" title="关闭历史图片" aria-label="关闭历史图片" onClick={close}><X size={18} /></button>
+  return <section id="saved-result-viewer" className="canvas-view saved-results" aria-labelledby="saved-result-title">
+    <div className="canvas-toolbar">
+      <div className="canvas-title"><FlaskConical size={16} aria-hidden="true" /><h2 id="saved-result-title">{isExperiment ? '已保存的画风对比' : '已保存的图片'}</h2>
+        {job && <span className={`status status-${job.status}`}>{jobStatus(job.status)}</span>}
+      </div>
+      <button className="icon-button" type="button" title="关闭历史图片" aria-label="关闭历史图片" onClick={onClose}><X size={18} /></button>
     </div>
-    <p className="subtle">图片由服务器私有保存 7 天。关闭此视图只清除页面展示，不删除保存内容。</p>
-    {saved.summary && <p className="subtle">已提交 {saved.summary.group_count} / {saved.summary.total} 组 · 已结束 {saved.summary.completed_count} 组 · 曾生成 {saved.summary.image_count} 张</p>}
-    <article className="experiment-result-card">
-      <figure className="experiment-image-item">
+      <figure className="canvas-figure">
         <div className="experiment-image-viewer" role="group" aria-label="已保存图片切换" aria-describedby="saved-navigation-help"
           tabIndex={0} ref={viewerRef} onKeyDown={event => {
             if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
@@ -89,31 +83,32 @@ export const SavedResultViewer = observer(({ saved }: { saved: SavedResultsStore
             disabled={!saved.canPrevious} onClick={() => move(-1)}><ArrowLeft size={22} aria-hidden="true" /></button>
           <div className="experiment-image-frame" aria-busy={saved.loading || saved.imageLoading}>
             {image ? <img key={image.url} src={image.url} alt={`${groupLabel}，图像 ${image.index + 1}`} />
-              : <p className="subtle" role="status">{placeholder}</p>}
+              : <div className="canvas-placeholder" role="status"><FlaskConical size={32} aria-hidden="true" /><p>{placeholder}</p></div>}
           </div>
           <button className="icon-button experiment-image-arrow" type="button" title="下一个保存结果" aria-label="下一个保存结果"
             disabled={!saved.canNext} onClick={() => move(1)}><ArrowRight size={22} aria-hidden="true" /></button>
         </div>
-        <figcaption>
+        <figcaption className="canvas-caption">
           <span aria-live="polite" aria-atomic="true">{groupLabel}{job && (job.image_urls.length ? ` · 图像 ${saved.imageIndex + 1} / ${saved.imageSlots}` : ' · 无可用图片')}</span>
           {image && <a href={image.url} download={isExperiment ? `style-experiment-${image.filename}` : image.filename}
             className="icon-button" title="下载当前图片" aria-label="下载当前图片"><ArrowDownToLine size={17} aria-hidden="true" /></a>}
         </figcaption>
       </figure>
+    <div className="canvas-metadata">
       <p className="prompt-hint" id="saved-navigation-help">左右箭头依次切换本组图片和下一个已保存组，聚焦图像区域后可按 ← / →。这里只查看保存结果，不改变草稿或服务器实验。</p>
       {(saved.error || saved.imageError) && <p className="alert" role="alert">{saved.error || saved.imageError}</p>}
-      <div className="saved-result-actions"><button type="button" className="text-action" disabled={saved.loading || saved.imageLoading} onClick={() => void saved.retry()}>
+      <div className="saved-result-actions"><span className="prompt-hint">私有保存 7 天</span><button type="button" className="text-action" disabled={saved.loading || saved.imageLoading} onClick={() => void saved.retry()}>
         <RefreshCw size={15} aria-hidden="true" /> 刷新保存记录
       </button></div>
       {job && <>
         <div className="experiment-result-heading"><h3>{groupLabel}</h3>
-          <span className={`status status-${job.status}`}>{jobStatus(job.status)}</span>
           <span>请求种子 {job.parameters.seed ?? '随机'}</span><span>实际种子 {job.effective_seed}</span>
         </div>
         {context && <ul className="experiment-result-weights" aria-label="保存的实验权重">{context.weights.map(weight =>
           <li key={weight.tag_index}><span>{weight.tag_index + 1}. {weight.label}</span><strong>{weight.weight}</strong></li>)}</ul>}
         {job.result_expires_at !== null && <p className="subtle saved-expiry">私有图片保存至 {new Date(job.result_expires_at * 1000).toLocaleString()}，查看不会延长保存时间。</p>}
         <details className="result-parameters"><summary>保存的完整生成参数</summary>
+          {saved.summary && <p>已提交 {saved.summary.group_count} / {saved.summary.total} 组 · 已结束 {saved.summary.completed_count} 组 · 曾生成 {saved.summary.image_count} 张</p>}
           <PromptSummary parameters={job.parameters} />
           {job.parameters.negative_prompt && <p>负向：{job.parameters.negative_prompt}</p>}
           <p>{job.parameters.model} · {job.parameters.width}×{job.parameters.height} · {job.parameters.sampler}</p>
@@ -122,6 +117,6 @@ export const SavedResultViewer = observer(({ saved }: { saved: SavedResultsStore
         </details>
         {job.error_code && <p className="alert" role="alert">{errorText(new ApiFailure(0, job.error_code, '生成失败，请检查服务状态。'))}</p>}
       </>}
-    </article>
+    </div>
   </section>
 })
