@@ -173,3 +173,13 @@ zero-weight-design.md owns exact-zero omission, separator/span preservation,
 empty/length validation and internal plan-version compatibility. It supersedes
 only experiment zero rendering for new runs; ordinary prompt editing and
 existing version1 runs retain their previous behavior.
+
+
+## Follow-up Design: Automatic Position (2026-10-16)
+
+auto-character-position-design.md owns explicit automatic/manual placement,
+strict additive mode/default compatibility, MCP schema gating and persisted
+run identity. The operator subsequently authorized service restart; use the
+scoped design's independent checks, clean build and API-first publication
+gates. Historical centered-only claims are superseded by fresh
+configured-provider discovery.

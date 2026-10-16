@@ -389,3 +389,16 @@ unselected duplicates, and match browser/server rendering. Reject a plan
 that could leave both style and shared prompts empty before starting.
 Existing durable runs keep their frozen original semantics. See
 zero-weight-design.md for the scoped contract and release gate.
+
+
+## Follow-up: Automatic Character Position (2026-10-16)
+
+The operator reports new MCP automatic positioning: omit x/y or use the
+explicit auto_character_position flag. Add automatic/manual selection while
+preserving manual positions, history and frozen experiment mode. Ignore the
+external documentation path. The initial no-restart instruction was superseded
+by the operator's explicit "现在可以重启服务" authorization; complete checks,
+clean build and idle/backup preflight before API-first publication. See
+auto-character-position-design.md and the new configured-provider discovery
+snapshot. This supersedes earlier claims that the configured provider lacks
+automatic positioning. No paid verification calls.

@@ -1,5 +1,13 @@
 # Research: Native character provider contract
 
+> Superseded positioning boundary (2026-10-16): fresh configured-provider
+> discovery and operator report establish explicit automatic/manual support.
+> See ../auto-character-position-design.md and
+> deployed-mcp-auto-position-schema.json. The centered-only evidence below
+> describes the previous provider, not the updated automatic mode. After an
+> initial no-restart restriction, the operator explicitly authorized restart;
+> the scoped design records the coordinated publication gates.
+
 - Query: Does `xinvxueyuan/NovelAI-Image-MCP` accept native independent characters, and what are the exact child fields, ordering, positioning, limits and model constraints?
 - Scope: mixed — repository source and specs, public upstream source/docs, and the main session's separately authorized non-billable schema artifact.
 - Date: 2026-10-14

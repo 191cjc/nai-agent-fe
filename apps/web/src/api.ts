@@ -26,6 +26,7 @@ export interface GenerationRequest {
   positive_prompt: string
   style_prompt: string
   character_prompts: CharacterPrompt[]
+  auto_character_position?: boolean
   negative_prompt: string
   model: string
   width: number
@@ -165,6 +166,7 @@ function checkedRun(value: ExperimentRunState): ExperimentRunState {
     && parameters && typeof parameters.style_prompt === 'string' && typeof parameters.positive_prompt === 'string'
     && typeof parameters.negative_prompt === 'string' && typeof parameters.model === 'string' && typeof parameters.sampler === 'string'
     && typeof parameters.quality === 'boolean' && Number.isFinite(parameters.cfg_scale)
+    && (parameters.auto_character_position === undefined || typeof parameters.auto_character_position === 'boolean')
     && [parameters.width, parameters.height, parameters.steps, parameters.sample_count].every(Number.isInteger)
     && (parameters.seed === null || Number.isInteger(parameters.seed))
     && Array.isArray(parameters.character_prompts) && parameters.character_prompts.every(character => character && typeof character.prompt === 'string'
@@ -218,6 +220,7 @@ export function errorText(error: unknown): string {
       invalid_request: '图像服务拒绝了参数，请检查模型和采样器。',
       unsupported_setting: '模型或采样器不受支持，请修改后重试。',
       unsupported_character_prompts: '当前图像服务不支持独立人物提示词，请联系管理员。',
+      unsupported_auto_character_position: '当前图像服务不支持自动人物位置，请选择手动位置或联系管理员。',
       insufficient_balance: '图像服务余额不足，请联系管理员。',
       outcome_unknown: '任务结果未知，请先检查历史记录。',
       generation_failed: '生成失败，请检查服务状态。',

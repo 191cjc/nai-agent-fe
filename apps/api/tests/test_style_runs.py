@@ -94,6 +94,7 @@ def rewrite_legacy_definition(database: Database, user: str, run_id: str, *, sty
             (user, run_id),
         ).fetchone()[0])
         definition["plan_version"] = 1
+        definition["parameters"].pop("auto_character_position", None)
         if style_only:
             definition["parameters"]["positive_prompt"] = ""
         frozen = json.dumps(definition, sort_keys=True, separators=(",", ":"))
@@ -282,9 +283,65 @@ def test_definition_compatibility_does_not_ignore_unknown_version_or_other_keys(
         store.create(user, original)
 
 
+@pytest.mark.parametrize("version", [None, 1, 2])
+def test_legacy_omitted_mode_is_idempotent_only_for_manual_and_preserves_raw_definition(
+    database: Database, version: int | None,
+) -> None:
+    user = owner(database)
+    store = RunStore(database)
+    original = request(seed=77)
+    run = store.create(user, original)
+    with database.connect(write=True) as connection:
+        definition = json.loads(connection.execute(
+            "SELECT definition_json FROM style_experiment_runs WHERE user_id = ? AND id = ?",
+            (user, run.id),
+        ).fetchone()[0])
+        definition["parameters"].pop("auto_character_position")
+        if version is None:
+            definition.pop("plan_version")
+        else:
+            definition["plan_version"] = version
+        # Retain even historical whitespace, as well as renderer selection.
+        frozen = json.dumps(definition, indent=2)
+        connection.execute(
+            "UPDATE style_experiment_runs SET definition_json = ? WHERE user_id = ? AND id = ?",
+            (frozen, user, run.id),
+        )
+    attached = store.create(user, original)
+    assert attached.parameters.auto_character_position is False
+    assert attached.parameters.character_prompts == run.parameters.character_prompts
+    assert attached._plan_version == (version or 1)
+    for change in ({"auto_character_position": True}, {"width": 1024}):
+        changed = original.model_copy(deep=True)
+        changed.parameters = original.parameters.model_copy(update=change)
+        with pytest.raises(RunConflict, match="^experiment_run_conflict$"):
+            store.create(user, changed)
+    with database.connect() as connection:
+        assert connection.execute(
+            "SELECT definition_json FROM style_experiment_runs WHERE user_id = ? AND id = ?",
+            (user, run.id),
+        ).fetchone()[0] == frozen
+    assert RunStore(database).get(user, run.id).parameters.auto_character_position is False
+
+
+@pytest.mark.parametrize("automatic", [False, True])
+def test_new_saved_mode_changes_conflict_in_both_directions(database: Database, automatic: bool):
+    user = owner(database)
+    store = RunStore(database)
+    original = request(seed=77, auto_character_position=automatic)
+    run = store.create(user, original)
+    assert store.create(user, original).model_dump() == run.model_dump()
+    changed = original.model_copy(deep=True)
+    changed.parameters.auto_character_position = not automatic
+    with pytest.raises(RunConflict, match="^experiment_run_conflict$"):
+        store.create(user, changed)
+    assert store.get(user, run.id).parameters.auto_character_position is automatic
+
+
+@pytest.mark.parametrize("automatic", [False, True])
 @pytest.mark.parametrize("seed", [None, 77])
 def test_failures_continue_with_one_seed_frozen_settings_and_single_paid_executor(
-    database: Database, monkeypatch: pytest.MonkeyPatch, seed,
+    database: Database, monkeypatch: pytest.MonkeyPatch, seed, automatic: bool,
 ) -> None:
     user = owner(database)
     provider = ScriptedProvider(["outcome_unknown", "invalid_result", None])
@@ -294,11 +351,12 @@ def test_failures_continue_with_one_seed_frozen_settings_and_single_paid_executo
     monkeypatch.setattr("novelai_api.style_experiments.secrets.randbelow", random)
     manager.start()
     try:
-        original = request(seed=seed)
+        original = request(seed=seed, auto_character_position=automatic)
         run = service.store.create(user, original)
         # The persisted snapshot must not follow edits to the creator's model.
         original.parameters.character_prompts[0].x = 0.8
         original.parameters.width = 1024
+        original.parameters.auto_character_position = not automatic
         ended = pump(service, user, run.id)
         assert ended.status == "completed"
         assert (ended.processed_count, ended.succeeded_count, ended.failed_count) == ("3", "1", "2")
@@ -314,6 +372,8 @@ def test_failures_continue_with_one_seed_frozen_settings_and_single_paid_executo
         assert all(call.width == 512 and call.sample_count == 2 for call in provider.calls)
         assert all(call.character_prompts[0].x == 0.1 for call in provider.calls)
         assert all(call.character_prompts[1].y == 0.27 for call in provider.calls)
+        assert all(call.auto_character_position is automatic for call in provider.calls)
+        assert ended.parameters.auto_character_position is automatic
         assert ended.parameters.style_prompt == "artist:fixture"
         assert ended.parameters.seed == seed
         assert len(provider.threads) == 1
@@ -545,13 +605,17 @@ def test_stop_wins_before_claim_transaction_and_releases_admission(
         manager.stop()
 
 
+@pytest.mark.parametrize("automatic", [False, True])
 @pytest.mark.parametrize("window", ["queued", "running", "terminal", "settled", "unattached"])
 def test_restart_reconciles_each_crash_window_without_repeating_an_ordinal(
-    database: Database, window: str,
+    database: Database, window: str, automatic: bool,
 ) -> None:
     user = owner(database)
     store = RunStore(database)
-    run = store.create(user, request(seed=77))
+    definition = request(seed=77, auto_character_position=automatic)
+    run = store.create(user, definition)
+    definition.parameters.auto_character_position = not automatic
+    definition.parameters.character_prompts[0].x = 0.8
     first = group_parameters(run)
     if window == "unattached":
         with database.connect(write=True) as connection:
@@ -576,8 +640,14 @@ def test_restart_reconciles_each_crash_window_without_repeating_an_ordinal(
         assert ended.status == "completed" and ended.processed_count == "3"
         assert [call.experiment.ordinal for call in new_provider.calls] == ["2", "3"]
         assert all(call.seed == 77 for call in new_provider.calls)
+        assert all(call.auto_character_position is automatic for call in new_provider.calls)
+        assert all(call.character_prompts == first.character_prompts for call in new_provider.calls)
+        assert ended.parameters.auto_character_position is automatic
         assert len(old_provider.calls) <= 1
-        assert len(jobs.list(user, limit=100, offset=0).items) == 3
+        saved = jobs.list(user, limit=100, offset=0).items
+        assert len(saved) == 3
+        assert all(item.parameters.auto_character_position is automatic for item in saved)
+        assert all(item.parameters.character_prompts == first.character_prompts for item in saved)
         assert ended.failed_count == ("0" if window in ("terminal", "settled") else "1")
         service.tick()
         assert service.store.get(user, run.id).processed_count == "3"

@@ -1,0 +1,204 @@
+{
+  "status": "ok",
+  "methods": [
+    "initialize",
+    "notifications/initialized",
+    "tools/list"
+  ],
+  "paid_calls": 0,
+  "tool_names": [
+    "generate_image",
+    "image_to_image",
+    "inpaint",
+    "upscale_image",
+    "director_tool",
+    "annotate_image",
+    "suggest_tags",
+    "encode_vibe",
+    "get_subscription",
+    "get_user_data",
+    "estimate_anlas_cost"
+  ],
+  "generate_image_input_schema": {
+    "properties": {
+      "prompt": {
+        "type": "string"
+      },
+      "negative_prompt": {
+        "default": "",
+        "type": "string"
+      },
+      "model": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      },
+      "width": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      },
+      "height": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      },
+      "steps": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      },
+      "scale": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      },
+      "sampler": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      },
+      "seed": {
+        "default": 0,
+        "type": "integer"
+      },
+      "n_samples": {
+        "default": 1,
+        "type": "integer"
+      },
+      "quality": {
+        "default": true,
+        "type": "boolean"
+      },
+      "uc_preset": {
+        "default": 0,
+        "type": "integer"
+      },
+      "cfg_rescale": {
+        "default": 0,
+        "type": "number"
+      },
+      "smea": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      },
+      "smea_dynamic": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      },
+      "auto_smea": {
+        "default": false,
+        "type": "boolean"
+      },
+      "straight_alpha": {
+        "default": false,
+        "type": "boolean"
+      },
+      "prefer_brownian": {
+        "default": true,
+        "type": "boolean"
+      },
+      "noise_schedule": {
+        "default": "karras",
+        "type": "string"
+      },
+      "character_prompts": {
+        "anyOf": [
+          {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      },
+      "auto_character_position": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      },
+      "references": {
+        "anyOf": [
+          {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      }
+    },
+    "required": [
+      "prompt"
+    ],
+    "type": "object",
+    "additionalProperties": false
+  },
+  "observed_at": "2026-10-16T05:50:22.515Z",
+  "note": "Configured application provider, fresh MCP session, discovery only; no tools/call. User-supplied external documentation path intentionally ignored."
+}

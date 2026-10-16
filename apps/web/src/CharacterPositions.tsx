@@ -23,6 +23,7 @@ export const CharacterPositions = observer(({ generation }: { generation: Genera
   const boardRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<MarkerDrag | null>(null)
   const characters = generation.draft.character_prompts
+  const automatic = generation.draft.auto_character_position
   const characterIds = characters.map(character => character.id).join(',')
   const selected = characters.find(character => character.id === selectedId) ?? characters[0]
   const selectedIndex = characters.findIndex(character => character.id === selected?.id)
@@ -39,13 +40,13 @@ export const CharacterPositions = observer(({ generation }: { generation: Genera
 
   useEffect(() => {
     const drag = dragRef.current
-    if (drag && !characterIds.split(',').includes(drag.characterId)) endDrag()
-  }, [characterIds, endDrag])
+    if (automatic || (drag && !characterIds.split(',').includes(drag.characterId))) endDrag()
+  }, [automatic, characterIds, endDrag])
 
   useEffect(() => endDrag, [endDrag])
 
   function startDrag(event: PointerEvent<HTMLButtonElement>, id: string) {
-    if (event.button !== 0 || !event.isPrimary || dragRef.current) return
+    if (generation.draft.auto_character_position || event.button !== 0 || !event.isPrimary || dragRef.current) return
     const character = generation.draft.character_prompts.find(character => character.id === id)
     const board = boardRef.current?.getBoundingClientRect()
     if (!character || !board?.width || !board.height) return
@@ -63,7 +64,7 @@ export const CharacterPositions = observer(({ generation }: { generation: Genera
   function moveDrag(event: PointerEvent<HTMLButtonElement>) {
     const drag = dragRef.current
     if (!drag || drag.pointerId !== event.pointerId) return
-    if (!generation.draft.character_prompts.some(character => character.id === drag.characterId)) {
+    if (generation.draft.auto_character_position || !generation.draft.character_prompts.some(character => character.id === drag.characterId)) {
       endDrag()
       return
     }
@@ -80,7 +81,7 @@ export const CharacterPositions = observer(({ generation }: { generation: Genera
   }
 
   function adjustPosition(event: KeyboardEvent<HTMLButtonElement>, id: string) {
-    if (event.altKey || event.ctrlKey || event.metaKey) return
+    if (generation.draft.auto_character_position || event.altKey || event.ctrlKey || event.metaKey) return
     const dx = event.key === 'ArrowLeft' ? -0.01 : event.key === 'ArrowRight' ? 0.01 : 0
     const dy = event.key === 'ArrowUp' ? -0.01 : event.key === 'ArrowDown' ? 0.01 : 0
     if (!dx && !dy) return
@@ -95,8 +96,17 @@ export const CharacterPositions = observer(({ generation }: { generation: Genera
 
   return <section className="character-positions" aria-labelledby="character-positions-title">
     <div className="character-position-heading"><h4 id="character-positions-title">人物位置</h4>
-      <span>左上 → 右下</span></div>
-    <div className="character-position-body">
+      <label className="character-position-mode">定位方式
+        <select value={automatic ? 'auto' : 'manual'} onChange={event => {
+          endDrag()
+          generation.setField('auto_character_position', event.target.value === 'auto')
+        }}>
+          <option value="manual">手动</option>
+          <option value="auto">自动</option>
+        </select>
+      </label></div>
+    {automatic ? <p className="prompt-hint">由 NovelAI 自动安排人物位置。已保留手动坐标，切回手动可继续调整。</p>
+      : <div className="character-position-body">
       <div className="character-position-stage">
         <div className="character-position-board" ref={boardRef}
           style={{ aspectRatio, width: `min(100%, ${Math.min(300, 230 * aspectRatio)}px)` }}
@@ -125,6 +135,6 @@ export const CharacterPositions = observer(({ generation }: { generation: Genera
         </button>
         <p className="prompt-hint" id="character-position-help">拖动编号定位，重叠时先选择人物。聚焦编号后可用方向键微调，每次 0.01。坐标范围 0.1–0.9，仅引导人物位置。</p>
       </div>
-    </div>
+    </div>}
   </section>
 })

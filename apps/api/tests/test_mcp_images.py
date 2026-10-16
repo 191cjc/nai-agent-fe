@@ -61,6 +61,7 @@ CHARACTER_SCHEMA = {
     ],
     "default": None,
 }
+POSITION_SCHEMA = {"anyOf": [{"type": "boolean"}, {"type": "null"}], "default": None}
 
 
 def native_parameters() -> GenerationRequest:
@@ -528,6 +529,126 @@ def test_native_character_coordinates_are_forwarded_exactly_in_order() -> None:
     ]
 
 
+@pytest.mark.parametrize("automatic", [False, True])
+@pytest.mark.parametrize(
+    "position_schema",
+    [
+        {"type": "boolean"},
+        {"type": "boolean", "title": "Placement", "default": True, "description": "Mode"},
+        POSITION_SCHEMA,
+        {
+            "anyOf": [
+                {"type": "null", "title": "No override"},
+                {"type": "boolean", "default": False},
+            ],
+            "default": None, "$comment": "Updated optional mode",
+        },
+    ],
+)
+def test_explicit_placement_modes_map_exactly_without_mutating_saved_coordinates(
+    automatic: bool, position_schema: dict,
+) -> None:
+    parameters = GenerationRequest.model_validate({
+        **native_parameters().model_dump(), "auto_character_position": automatic,
+        "character_prompts": [
+            {"prompt": "left character", "x": 0.123, "y": 0.876},
+            {"prompt": "right character", "x": 0.9, "y": 0.1},
+        ],
+    })
+    saved = parameters.model_dump()
+    schema = {**SCHEMA, "properties": {
+        **SCHEMA["properties"], "character_prompts": CHARACTER_SCHEMA,
+        "auto_character_position": position_schema,
+    }}
+    transport, calls = mock_mcp(schema=schema)
+    assert [image.data for image in provider_for(transport).generate(parameters)] == [PNG, PNG]
+    assert [call["method"] for call in calls] == [
+        "initialize", "notifications/initialized", "tools/list", "tools/call",
+    ]
+    characters = [
+        {"prompt": "left character", "negative_prompt": "", "enabled": True},
+        {"prompt": "right character", "negative_prompt": "", "enabled": True},
+    ] if automatic else [
+        {
+            "prompt": "left character", "negative_prompt": "", "enabled": True,
+            "x": 0.123, "y": 0.876,
+        },
+        {
+            "prompt": "right character", "negative_prompt": "", "enabled": True,
+            "x": 0.9, "y": 0.1,
+        },
+    ]
+    assert calls[-1]["params"] == {"name": "generate_image", "arguments": {
+        "prompt": "watercolor, garden, 2girls", "negative_prompt": "blurry",
+        "model": "nai-diffusion-5-full", "width": 512, "height": 512, "steps": 28,
+        "scale": 5.0, "sampler": "fixture-sampler", "seed": 77, "n_samples": 2,
+        "quality": True, "auto_character_position": automatic, "character_prompts": characters,
+    }}
+    assert parameters.model_dump() == saved
+
+
+@pytest.mark.parametrize("automatic", [False, True])
+@pytest.mark.parametrize(
+    "position_schema",
+    [
+        None, {}, {"type": "string"}, {"type": ["boolean", "null"]},
+        {"type": "boolean", "const": False}, {"type": "boolean", "enum": [True]},
+        {"type": "boolean", "not": {"const": True}},
+        {"$ref": "#/$defs/mode"}, {"allOf": [{"type": "boolean"}]},
+        {"anyOf": [{"type": "boolean"}, {"type": "string"}]},
+        {"anyOf": [{"type": "boolean", "const": False}, {"type": "null"}]},
+        {"anyOf": [{"type": "boolean"}, {"type": "null"}], "enum": [None, False]},
+        {"anyOf": [{"type": "boolean"}, {"type": "null"}, {"type": "object"}]},
+        {"anyOf": [None, {"type": "boolean"}]}, {"anyOf": "boolean"},
+        {"anyOf": [{"type": "boolean"}, {"type": "null", "unknown": True}]},
+    ],
+)
+def test_unverified_placement_schema_refuses_auto_before_paid_call_but_keeps_legacy_manual(
+    automatic: bool, position_schema,
+) -> None:
+    parameters = GenerationRequest.model_validate({
+        **native_parameters().model_dump(), "auto_character_position": automatic,
+        "character_prompts": [{"prompt": "person", "x": 0.123, "y": 0.876}],
+    })
+    properties = {**SCHEMA["properties"], "character_prompts": CHARACTER_SCHEMA}
+    if position_schema is not None:
+        properties["auto_character_position"] = position_schema
+    transport, calls = mock_mcp(schema={**SCHEMA, "properties": properties})
+    if automatic:
+        with pytest.raises(ProviderFailure, match="^unsupported_auto_character_position$"):
+            provider_for(transport).generate(parameters)
+        assert [call["method"] for call in calls] == [
+            "initialize", "notifications/initialized", "tools/list",
+        ]
+    else:
+        provider_for(transport).generate(parameters)
+        arguments = calls[-1]["params"]["arguments"]
+        assert len(arguments) == 12
+        assert "auto_character_position" not in arguments
+        assert arguments["character_prompts"] == [{
+            "prompt": "person", "negative_prompt": "", "x": 0.123, "y": 0.876, "enabled": True,
+        }]
+
+
+def test_same_provider_refreshes_discovery_before_reconsidering_automatic_support() -> None:
+    schema = {**SCHEMA, "properties": {
+        **SCHEMA["properties"], "character_prompts": CHARACTER_SCHEMA,
+    }}
+    transport, calls = mock_mcp(schema=schema)
+    provider = provider_for(transport)
+    parameters = native_parameters().model_copy(update={"auto_character_position": True})
+    with pytest.raises(ProviderFailure, match="^unsupported_auto_character_position$"):
+        provider.generate(parameters)
+    schema["properties"]["auto_character_position"] = POSITION_SCHEMA
+    provider.generate(parameters)
+    assert [call["method"] for call in calls] == [
+        "initialize", "notifications/initialized", "tools/list",
+        "initialize", "notifications/initialized", "tools/list", "tools/call",
+    ]
+
+
+@pytest.mark.parametrize("automatic", [False, True])
+@pytest.mark.parametrize("advertised", [False, True])
 @pytest.mark.parametrize(
     ("style", "shared", "expected"),
     [
@@ -538,12 +659,16 @@ def test_native_character_coordinates_are_forwarded_exactly_in_order() -> None:
     ],
 )
 def test_flat_style_composition_retains_legacy_payload_and_editable_model(
-    style: str, shared: str, expected: str,
+    style: str, shared: str, expected: str, automatic: bool, advertised: bool,
 ) -> None:
     parameters = GenerationRequest.model_validate({
         **PARAMETERS.model_dump(), "style_prompt": style, "positive_prompt": shared,
+        "auto_character_position": automatic,
     })
-    transport, calls = mock_mcp()
+    schema = {**SCHEMA, "properties": {
+        **SCHEMA["properties"], "auto_character_position": POSITION_SCHEMA,
+    }} if advertised else SCHEMA
+    transport, calls = mock_mcp(schema=schema)
     provider_for(transport).generate(parameters)
     arguments = calls[-1]["params"]["arguments"]
     assert arguments["prompt"] == expected
@@ -611,14 +736,22 @@ def test_unsupported_character_schema_fails_before_paid_tool(character_schema) -
     ]
 
 
-def test_uncertain_native_paid_response_never_retries_or_falls_back_to_flat() -> None:
+@pytest.mark.parametrize("automatic", [False, True])
+def test_uncertain_native_paid_response_never_retries_or_falls_back_to_flat(
+    automatic: bool,
+) -> None:
     schema = {
         **SCHEMA,
-        "properties": {**SCHEMA["properties"], "character_prompts": CHARACTER_SCHEMA},
+        "properties": {
+            **SCHEMA["properties"], "character_prompts": CHARACTER_SCHEMA,
+            "auto_character_position": POSITION_SCHEMA,
+        },
     }
     transport, calls = mock_mcp(schema=schema, tool_status=503)
     with pytest.raises(ProviderFailure, match="^outcome_unknown$"):
-        provider_for(transport).generate(native_parameters())
+        provider_for(transport).generate(
+            native_parameters().model_copy(update={"auto_character_position": automatic})
+        )
     paid_calls = [call for call in calls if call["method"] == "tools/call"]
     assert len(paid_calls) == 1
     assert len(paid_calls[0]["params"]["arguments"]["character_prompts"]) == 2

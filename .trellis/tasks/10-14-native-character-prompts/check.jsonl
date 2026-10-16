@@ -28,3 +28,5 @@
 {"file": ".trellis/tasks/10-14-native-character-prompts/canvas-layout-design.md", "reason": "Canvas-centered main image, mounted collapsible bottom prompt drawer, persistent Generate and operation controls; frontend-only boundary."}
 {"file": ".trellis/spec/frontend/canvas-layout-contract.md", "reason": "Executable canvas/current-vs-saved, mounted bottom prompt disclosure, persistent submission/Stop and responsive focus contract."}
 {"file": ".trellis/tasks/10-14-native-character-prompts/zero-weight-design.md", "reason": "Newest experiment-only exact-zero omission, preflight and frozen legacy-run compatibility contract."}
+{"file": ".trellis/tasks/10-14-native-character-prompts/auto-character-position-design.md", "reason": "Latest explicit auto/manual placement contract and later restart authorization; independent checks, clean build and API-first idle/backup publication gates."}
+{"file": ".trellis/tasks/10-14-native-character-prompts/research/deployed-mcp-auto-position-schema.json", "reason": "Fresh configured-provider discovery confirms nullable boolean auto_character_position without tools/call."}

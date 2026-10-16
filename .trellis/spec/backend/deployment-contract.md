@@ -76,6 +76,11 @@ see [Image Retention](./image-retention-contract.md) and
   activation, keep the new API during web fallback for already-open tabs,
   and preserve provider configuration. Back up privately and inspect active
   jobs before restarting; this additive change needs no DB restore/migration.
+- Automatic-position upgrades also require API-first publication: an older API
+  ignores auto_character_position and sends saved x/y as manual placement.
+  Verify the additive strict-boolean/default-false OpenAPI before switching
+  the web. Keep the new API on web fallback for already-open tabs and accepted
+  automatic-mode history/run snapshots; never restore the live database.
 
 - Retained images live under /var/lib/novelai/generation-images/, service-owned
   with 0700 directories/0600 files, outside the immutable release/web trees.

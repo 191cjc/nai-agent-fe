@@ -245,10 +245,38 @@ def test_invalid_native_prompts_rejected_before_submission(
         assert provider.calls == []
 
 
-def test_structured_and_legacy_history_survive_restart_backup_and_reuse(
-    database: Database,
+def test_omitted_placement_mode_defaults_to_manual_without_changing_coordinates() -> None:
+    parameters = GenerationRequest.model_validate(NATIVE_INPUT)
+    assert parameters.auto_character_position is False
+    assert parameters.model_dump()["character_prompts"] == NATIVE_INPUT["character_prompts"]
+    assert GenerationRequest.model_validate(INPUT).auto_character_position is False
+
+
+@pytest.mark.parametrize("mode", [None, 0, 1, "true", "false", "0", "1", [], {}])
+def test_placement_mode_rejects_coercion_before_job_or_provider_work(
+    database: Database, mode,
 ) -> None:
     provider = FakeProvider()
+    with client_for(database, provider) as client:
+        login(client, database, "alice")
+        response = client.post(
+            "/api/generations", json={**NATIVE_INPUT, "auto_character_position": mode},
+            headers=ORIGIN,
+        )
+        assert response.status_code == 422
+        assert response.json() == {
+            "code": "validation_error", "message": "Invalid request", "retryable": False,
+        }
+        assert client.get("/api/generations").json()["items"] == []
+        assert provider.calls == []
+
+
+@pytest.mark.parametrize("automatic", [False, True])
+def test_structured_and_legacy_history_survive_restart_backup_and_reuse(
+    database: Database, automatic: bool,
+) -> None:
+    provider = FakeProvider()
+    native = {**NATIVE_INPUT, "auto_character_position": automatic}
     legacy = {**INPUT, "positive_prompt": "  original flat prompt  ", "seed": 77}
     old_native = {
         **NATIVE_INPUT,
@@ -257,17 +285,17 @@ def test_structured_and_legacy_history_survive_restart_backup_and_reuse(
     with client_for(database, provider) as client:
         _token, alice_id, session = login(client, database, "alice")
         native_id = client.post(
-            "/api/generations", json=NATIVE_INPUT, headers=ORIGIN,
+            "/api/generations", json=native, headers=ORIGIN,
         ).json()["id"]
-        assert wait_finished(client, native_id)["parameters"] == NATIVE_INPUT
-        assert provider.calls[0].model_dump() == NATIVE_INPUT
+        assert wait_finished(client, native_id)["parameters"] == native
+        assert provider.calls[0].model_dump() == native
         old_native_id = JobStore(database).create(alice_id, GenerationRequest(**old_native))
         legacy_id = JobStore(database).create(alice_id, GenerationRequest(**legacy))
         with database.connect(write=True) as connection:
             persisted = connection.execute(
                 "SELECT settings_json FROM generation_jobs WHERE id = ?", (native_id,),
             ).fetchone()
-            assert json.loads(persisted["settings_json"]) == NATIVE_INPUT
+            assert json.loads(persisted["settings_json"]) == native
             # Simulate saved JSON from before positions and before native characters.
             connection.executemany(
                 "UPDATE generation_jobs SET settings_json = ?, status = 'succeeded' WHERE id = ?",
@@ -283,14 +311,17 @@ def test_structured_and_legacy_history_survive_restart_backup_and_reuse(
         database.backup(target)
 
     expected = {
-        native_id: NATIVE_INPUT,
+        native_id: native,
         old_native_id: {
             **old_native,
+            "auto_character_position": False,
             "character_prompts": [
                 {**character, "x": 0.5, "y": 0.5} for character in old_native["character_prompts"]
             ],
         },
-        legacy_id: {**legacy, "style_prompt": "", "character_prompts": []},
+        legacy_id: {
+            **legacy, "style_prompt": "", "character_prompts": [], "auto_character_position": False,
+        },
     }
     for stored_database in (database, Database(target)):
         reusable_provider = FakeProvider()

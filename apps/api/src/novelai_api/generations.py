@@ -87,6 +87,7 @@ class GenerationRequest(BaseModel):
     positive_prompt: str = Field(max_length=3000)
     style_prompt: str = Field(default="", max_length=3000)
     character_prompts: list[CharacterPrompt] = Field(default_factory=list, max_length=6)
+    auto_character_position: bool = Field(default=False, strict=True)
     negative_prompt: str = Field(default="", max_length=3000)
     model: str = Field(min_length=1, max_length=80)
     width: int = Field(ge=64, le=2048, multiple_of=64)

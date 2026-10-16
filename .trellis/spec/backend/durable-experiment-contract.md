@@ -51,6 +51,11 @@ This replaces earlier browser-only/no-continuation contracts.
   the conservative rendered bound; preserve raw/trimmed field limits.
 - Persist one effective seed at run creation (random once if blank) and use
   it even when the first or a later group fails. Never read later draft edits.
+- Freeze auto_character_position alongside coordinates and other settings.
+  Old saved definitions omit it and retain the new request model's manual
+  false default. Canonical same-id comparison may supply only that missing
+  false mode for compatibility; do not rewrite raw definitions, drop unknown
+  keys or equate a changed true mode. Preserve plan_version1/2 semantics.
 - Single lifecycle scheduler uses GenerationManager's existing single-worker
   bounded executor/reservations. At most one group per run in flight. Queue
   contention waits without consuming a group. Rotate the starting owner across

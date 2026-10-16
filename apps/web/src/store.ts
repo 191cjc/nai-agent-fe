@@ -39,7 +39,7 @@ export interface CharacterDraft {
 
 export type PositiveTagTarget = 'style_prompt' | 'positive_prompt' | `character:${string}`
 
-export type GenerationDraft = Omit<GenerationRequest, 'width' | 'height' | 'steps' | 'cfg_scale' | 'seed' | 'sample_count' | 'character_prompts' | 'experiment'> & {
+export type GenerationDraft = Omit<GenerationRequest, 'width' | 'height' | 'steps' | 'cfg_scale' | 'seed' | 'sample_count' | 'character_prompts' | 'auto_character_position' | 'experiment'> & {
   width: string
   height: string
   steps: string
@@ -47,6 +47,7 @@ export type GenerationDraft = Omit<GenerationRequest, 'width' | 'height' | 'step
   seed: string
   sample_count: string
   character_prompts: CharacterDraft[]
+  auto_character_position: boolean
 }
 
 let characterSequence = 0
@@ -65,7 +66,7 @@ export function supportsNativeCharacters(model: string): boolean {
 
 export function emptyDraft(): GenerationDraft {
   return {
-    positive_prompt: '', style_prompt: '', character_prompts: [newCharacter()],
+    positive_prompt: '', style_prompt: '', character_prompts: [newCharacter()], auto_character_position: false,
     negative_prompt: '', model: '', width: '1024', height: '1024',
     steps: '28', cfg_scale: '5', sampler: '', seed: '', sample_count: '1', quality: true,
   }
@@ -105,6 +106,7 @@ export function requestFromDraft(draft: GenerationDraft): GenerationRequest {
     positive_prompt: draft.positive_prompt,
     style_prompt: draft.style_prompt,
     character_prompts: characters.map(character => ({ prompt: character.prompt, x: character.x, y: character.y })),
+    auto_character_position: draft.auto_character_position,
     negative_prompt: draft.negative_prompt,
     model: draft.model.trim(),
     width: integer(draft.width, '宽度', 64, 2048, 64),
@@ -344,6 +346,7 @@ export class GenerationStore {
     this.draft = {
       ...parameters,
       style_prompt: item.parameters.style_prompt ?? '',
+      auto_character_position: item.parameters.auto_character_position ?? false,
       character_prompts: item.parameters.character_prompts?.length
         ? item.parameters.character_prompts.map(character => newCharacter(character.prompt, character.x, character.y)) : [newCharacter()],
       width: String(item.parameters.width), height: String(item.parameters.height),

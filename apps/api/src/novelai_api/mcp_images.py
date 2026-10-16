@@ -48,6 +48,29 @@ SCHEMA_ANNOTATIONS = frozenset(
 )
 
 
+def _accepts_boolean(schema: Any) -> bool:
+    """Recognize only the verified boolean or nullable boolean forms."""
+    if not isinstance(schema, dict):
+        return False
+    validation_keys = set(schema) - SCHEMA_ANNOTATIONS
+    if validation_keys == {"type"}:
+        return schema["type"] == "boolean"
+    if validation_keys != {"anyOf"}:
+        return False
+    alternatives = schema["anyOf"]
+    return (
+        isinstance(alternatives, list)
+        and len(alternatives) == 2
+        and all(
+            isinstance(option, dict)
+            and set(option) - SCHEMA_ANNOTATIONS == {"type"}
+            and option["type"] in ("boolean", "null")
+            for option in alternatives
+        )
+        and {option["type"] for option in alternatives} == {"boolean", "null"}
+    )
+
+
 def _accepts_character_objects(schema: Any, count: int) -> bool:
     """Recognize the deployed untyped object contract; reject unverified constraints."""
     if not isinstance(schema, dict):
@@ -231,13 +254,19 @@ class NovelAiMcpProvider:
                     properties.get("character_prompts"), len(parameters.character_prompts)
                 ):
                     raise ProviderFailure("unsupported_character_prompts")
+                supports_position_mode = _accepts_boolean(properties.get("auto_character_position"))
+                if parameters.auto_character_position and not supports_position_mode:
+                    raise ProviderFailure("unsupported_auto_character_position")
+                if supports_position_mode:
+                    arguments["auto_character_position"] = parameters.auto_character_position
                 arguments["character_prompts"] = [
                     {
                         "prompt": character.prompt,
                         "negative_prompt": "",
-                        "x": character.x,
-                        "y": character.y,
                         "enabled": True,
+                        **({} if parameters.auto_character_position else {
+                            "x": character.x, "y": character.y,
+                        }),
                     }
                     for character in parameters.character_prompts
                 ]

@@ -130,7 +130,7 @@ const Editor = observer(({ store }: { store: AppStore }) => {
                   if (id) requestAnimationFrame(() => document.getElementById(`character-prompt-${id}`)?.focus())
                 }}><Plus size={15} aria-hidden="true" /> 添加人物</button>
             </div>
-            <p className="prompt-hint">分别填写每个人物的特征，拖动下方编号调整位置。留空的人物不会提交。</p>
+            <p className="prompt-hint">分别填写每个人物的特征，可选择自动安排或手动调整位置。留空的人物不会提交。</p>
             <CharacterPositions generation={generation} />
             <div className="character-list">{draft.character_prompts.map((character, index) => <div className="character-card" key={character.id}>
               <div className="character-card-heading"><label htmlFor={`character-prompt-${character.id}`}>人物 {index + 1}</label>

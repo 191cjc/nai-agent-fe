@@ -138,6 +138,8 @@ h1, h2, h3 { letter-spacing: 0; }
 .character-position-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
 .character-position-heading h4 { margin: 0; color: #c6b5dc; font-size: 12px; font-weight: 650; }
 .character-position-heading > span { color: var(--muted); font-size: 10px; }
+.character-position-mode { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; }
+.character-position-mode select { width: auto; min-width: 72px; }
 .character-position-body { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 18px; min-width: 0; }
 .character-position-stage { display: flex; justify-content: center; align-items: center; flex: 1 1 180px; min-width: 0; min-height: 110px; padding: 22px; border-radius: 4px; background: #14161e; }
 .character-position-board { position: relative; flex: 0 1 auto; outline: 1px solid #666276; background-color: #242632; background-image: linear-gradient(to right, #4b4b5c55 1px, transparent 1px), linear-gradient(to bottom, #4b4b5c55 1px, transparent 1px); background-size: 33.333333% 33.333333%; }

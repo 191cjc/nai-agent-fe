@@ -407,3 +407,25 @@ owns the frozen shared API and supersedes earlier browser scheduling limits.
   deployment-zero-weight-2026-10-16.md.
 - [ ] Operator real-provider zero-omission/interaction acceptance; broader task
   remains in_progress.
+
+
+## Follow-up Execution: Automatic Position (2026-10-16)
+
+1. Native implementer follows auto-character-position-design.md for typed
+   mode/UI/MCP/history/run compatibility and fake-only regressions.
+2. Independent full affected-layer review and full offline backend/static web
+   quality gate, then executable spec sync.
+3. Fresh env-free build and scoped commits, then matched staging and API-first
+   publication following the operator's subsequent restart authorization.
+   Verify private online backup, idle state, running OpenAPI, public hashes,
+   health, retained assets and unchanged provider configuration. No paid probe.
+4. Record release evidence and progress; real-provider appearance and operator
+   interaction remain acceptance checks.
+
+- [x] Implementation and independent full affected-layer quality gate GREEN:
+  462 offline backend tests, frozen sync/lock, Ruff, additive OpenAPI snapshot,
+  web ESLint/TypeScript and source review. The checker corrected the character
+  hint for automatic/manual mode; final source is frozen. See
+  check-auto-character-position.md.
+- [ ] Fresh final build, scoped commit and coordinated API-first release.
+- [ ] Operator real-provider placement and desktop/mobile interaction checks.

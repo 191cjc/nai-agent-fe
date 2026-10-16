@@ -114,6 +114,9 @@ class RunStore:
                     raise RunConflict("experiment_run_conflict")
                 saved.pop("plan_version", None)
                 requested.pop("plan_version", None)
+                # Older snapshots omitted the mode and always used manual coordinates.
+                # Normalize only the comparison copy; never rewrite their definition.
+                saved["parameters"].setdefault("auto_character_position", False)
                 if saved != requested:
                     raise RunConflict("experiment_run_conflict")
                 return self._state(existing)

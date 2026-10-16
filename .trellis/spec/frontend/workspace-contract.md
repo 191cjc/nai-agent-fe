@@ -105,6 +105,18 @@ provider credentials, durable image storage, or backend authorization.
   markers reachable. Distinguish empty cards, which stay draft-only.
   Focused arrow keys adjust by 0.01; retain focus, Tab order and center reset.
   Dragging never submits. Shared history/result summaries show saved positions.
+- A global automatic/manual position selector controls draft
+  auto_character_position (required boolean, default false). Wire mode is
+  optional for legacy responses; absent history mode restores manual. Keep
+  draft coordinates and stable IDs across switches/reuse/reset, and increment
+  the entry-restore draft revision on mode changes. Automatic mode cancels
+  pointer capture/drag and hides/disables manual positioning controls; describe
+  NovelAI's automatic arrangement. Switching back restores manual coordinates.
+  Snapshots freeze the selected mode; later draft changes cannot alter a run.
+  PromptSummary shows automatic placement for true and coordinates for
+  manual/legacy records. Product copy explains the choice, not MCP fields.
+  Publish only after the compatible API is running; preserve that API during
+  web fallback for saved automatic-mode snapshots and already-open new tabs.
 - The prompt editor's compact side tabs replace positive/negative panels in
   the same content area. Hidden negative content reserves no horizontal
   column; tab switching does not reset draft state. Keep visibility local to

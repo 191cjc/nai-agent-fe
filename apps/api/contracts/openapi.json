@@ -333,6 +333,11 @@
       },
       "GenerationRequest": {
         "properties": {
+          "auto_character_position": {
+            "default": false,
+            "title": "Auto Character Position",
+            "type": "boolean"
+          },
           "cfg_scale": {
             "maximum": 20.0,
             "minimum": 0.0,
