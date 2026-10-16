@@ -17,7 +17,10 @@ script advisory did not prevent the successful build.
 
 Frozen-source build passed on2026-10-16. Final independent full affected-layer
 review passed with no web source correction; this build remains current.
-Committed-input equality is verified again by release staging before activation.
+Release staging verified all22 committed/working/build input hashes equal for
+source commit9f445e5; API source/lock hashes also match the staged committed
+release. Matched release20261016T064813 was activated after the API/schema4
+readiness checks; exact public HTML/JS/CSS hashes match the artifacts below.
 
 - Inputs:22 files.
 - Source-map SHA-256:

@@ -457,5 +457,10 @@ owns the frozen shared API and supersedes earlier browser scheduling limits.
   frozen sync/lock, Ruff, exact additive OpenAPI, frontend ESLint/TypeScript
   and source review. No web corrections; clean22-input build remains current.
   Executable sections/snapshots and deployment contracts synchronized.
-- [ ] Fresh build, scoped commit and verified matched schema4 publication.
+- [x] Fresh22-input build, source commit9f445e5 and matched API-first release
+  20261016T064813 at2026-10-16T06:48:40Z. Idle checks, verified private schema3
+  online backup, schema4 preserved records, exact OpenAPI/public asset hashes,
+  config continuity and loopback/public401/no-store pass. All72 unexpired
+  manifest/PNG sets retain exact bytes/expiry. See
+  deployment-prompt-sections-2026-10-16.md.
 - [ ] Operator real interaction and resulting image appearance checks.
