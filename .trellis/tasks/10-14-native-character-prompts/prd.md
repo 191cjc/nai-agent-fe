@@ -28,6 +28,25 @@ editor task and retained implementation/publication authority.
 - Verify lint/TypeScript, source review and a fresh env-free build; no
   frontend/helper/browser automated tests or paid advice/generation probes.
 
+## Follow-up: NovelAI-aware Advice (2026-10-16)
+
+The operator requests that advice explicitly targets NovelAI prompts, prefers
+tags compatible with NovelAI, and explains the selected section's role so
+section suggestions are usable in that destination. Apply this to common AI
+advice and all section helpers, including style/negative and both distinct
+shared/character other sections. The editable section consultation must visibly
+name NovelAI, its exact destination and appropriate content scope. Preserve
+only-current-section context, explicit submission/application, existing settings
+questions, plain-text suggestion and all runtime restrictions.
+
+Acceptance: common advice has NovelAI/Danbooru-oriented instructions; each
+section's consultation asks for relevant English comma-separated tags with no
+headings/explanations inside the suggestion. Avoid unsupported claims that tags
+were searched/verified. No implicit other sections/images/history, API/schema/
+DB/runtime/dependency changes or paid acceptance probe. Existing offline backend
+checks and static web/source/build validation, then matched API-first release
+after idle/backup checks under existing authorization. See novelai-advice-design.md.
+
 ## Goal
 
 Let users compose style, shared scene content and multiple independent

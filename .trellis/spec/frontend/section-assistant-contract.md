@@ -6,7 +6,8 @@ Use for the prompt-section 助手 trigger/popover, local advice/search state,
 exact prompt-target application and related AppStore/GenerationStore/API
 wrapper lifecycle. Left unified advice and tag search remain independent.
 The helper edits browser drafts only; existing server endpoints/schema4 and
-provider adapters remain unchanged.
+image-provider adapters remain unchanged. Shared advice guidance follows the
+backend [Codex Advice Contract](../backend/codex-advice-contract.md).
 
 ## Signatures
 
@@ -44,8 +45,17 @@ anchors to its trigger and stays within the visual viewport. AI 建议 and
 Opening/switching has no network or generation side effect; close discards
 local state. Existing section actions and style-experiment controls stay usable.
 
-Opening AI seeds an editable consultation from only the exact opening label
-and section text, asking for directly usable prompt tags. No other sections,
+Opening AI seeds an editable consultation from fixed NovelAI/tag guidance,
+the exact opening label, a typed destination scope and current section text.
+Prefer established English NovelAI/Danbooru-compatible tags, comma-separated
+and directly usable in that destination with no headings/Markdown/explanations.
+Do not imply live tag lookup/verification. Resolve scopes from target.scope
+and target.section, never translated labels/person numbering. Cover style,
+negative, shared scene/other and all7 character sections; distinguish shared
+global other from character-local other. For example upper_clothing requests
+upper garments/sleeves/material/color, while action requests pose/expression/
+gaze/interactions. Broad tags/special/other follow current text and intent.
+No other sections,
 settings, images or advice history become implicit input. Only explicit
 获取建议 sends that visible consultation. Render returned suggestion as plain
 editable text for user review, never markup/code, and apply only upon explicit

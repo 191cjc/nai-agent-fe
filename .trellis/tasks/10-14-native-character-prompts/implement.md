@@ -509,3 +509,21 @@ owns the frozen shared API and supersedes earlier browser scheduling limits.
   pass. All72 images retain original bytes/expiry. No paid probe. See
   deployment-account-balance-2026-10-16.md.
 - [ ] Operator header interaction acceptance; broader task remains in_progress.
+
+## Follow-up Execution: NovelAI-aware Advice (2026-10-16)
+
+1. Native implementer owns codex_advice.py INSTRUCTIONS, SectionAssistant.tsx
+   section seed and App.tsx unified advice explanation, following
+   novelai-advice-design.md. No literal-copy tests or paid probes.
+2. Independent full affected-layer review, full offline backend/frozen/lock/
+   Ruff/unchanged OpenAPI and web lint/types/source scope review; sync specs.
+3. Fresh env-free exact-input build, scoped commit, matched API-first schema4
+   publication after private-backup/idle/config/image preservation gates.
+4. Record release/journal; real model suggestion quality is operator acceptance.
+
+- [x] Three-file product change and independent full affected-layer review
+  GREEN:639 offline fake backend tests, frozen sync/lock, Ruff, unchanged
+  OpenAPI and web ESLint/TypeScript/source review. No fixes or new literal-copy
+  tests; all11 typed section scopes covered. Fresh25-input env-free build passes.
+  See check-novelai-advice.md and novelai-advice-build-verification.md.
+- [ ] Matched API-first publication and operator suggestion-quality acceptance.

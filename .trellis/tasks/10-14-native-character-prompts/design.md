@@ -201,3 +201,9 @@ the schema4-compatible API before the web and retain it on fallback.
 account-balance-design.md freezes the allowlisted authenticated Anlas endpoint,
 isolated read-only MCP query, short cache/coalescing and protected header/store
 lifecycle. It deliberately does not classify actual per-request cost.
+
+## Follow-up: NovelAI-aware Advice (2026-10-16)
+
+novelai-advice-design.md scopes shared model instructions and editable per-section
+consultations to NovelAI/Danbooru-compatible tags. No API/runtime change; retain
+explicit current-section context and plain tag text inside the JSON envelope.

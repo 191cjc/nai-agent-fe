@@ -24,8 +24,16 @@ proof that every tool is unavailable before execution.
 - Each explicit request creates a fresh private work directory and
   `CODEX_HOME`; a per-turn `codex login --with-api-key` receives the key on
   stdin. Do not inherit a host CLI login, project files or broad process
-  environment. Only the submitted advice text becomes model input; no chat
-  thread is reused or persisted.
+  environment. Alongside fixed NovelAI-oriented instructions, only submitted
+  advice text becomes dynamic model input; no chat thread is reused or persisted.
+- Fixed INSTRUCTIONS explicitly targets NovelAI image prompts and relevant
+  settings. Prefer established English NovelAI/Danbooru-compatible tags,
+  translating Chinese intent as needed; concise English descriptors can fill
+  gaps without claiming a tag was searched or verified. Preserve requested
+  intent/subject/section. Section-specific prompt suggestions contain only
+  relevant comma-separated tags inside the suggestion value, without headings,
+  Markdown or explanations. Keep the strict outer JSON envelope. Relevant
+  generation-setting questions may still receive concise explanations.
 - Match AiQQ's read-only sandbox, network/search disabled, approvals `never`,
   named capability switches off, and immediate rejection of observed tool
   events. The pinned CLI still reports `unified_exec=true` despite a `false`
@@ -57,6 +65,8 @@ proof that every tool is unavailable before execution.
 
 - Good: authenticated explicit text produces one schema-valid suggestion;
   the private turn directory disappears afterwards.
+- Good: an upper-clothing consultation requests NovelAI-compatible shirt/sleeve
+  tags for that person; its suggestion is directly usable in that section.
 - Base: no key configured leaves the endpoint unavailable without spawning a
   CLI or reading `.env.local`.
 - Bad: an observed `command_execution` or other non-message item aborts the
@@ -71,6 +81,10 @@ proof that every tool is unavailable before execution.
   shutdown stop the child before temporary-directory cleanup.
 - Verify `apps/api/contracts/openapi.json` contains no key, CLI path or
   private runtime directory, and check the package locks offline.
+- Prompt/copy-only changes use the existing runtime suite and source review;
+  do not add tests that merely match new literal instruction strings. No paid
+  model query is required to verify prompt construction; actual suggestion
+  quality remains operator acceptance.
 
 ## Wrong vs Correct
 

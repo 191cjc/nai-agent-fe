@@ -386,10 +386,11 @@ const TagSearch = observer(({ store }: { store: AppStore }) => {
 const Advice = observer(({ store }: { store: AppStore }) => {
   const advice = store.advice
   return <div className="tool-content">
+    <p className="subtle">为 NovelAI 编写和优化提示词，优先使用兼容 Danbooru 的英文标签，也可咨询生成参数。</p>
     <form onSubmit={event => { event.preventDefault(); void advice.submit() }}>
       <label className="field" htmlFor="advice-input"><span>咨询内容</span>
         <textarea id="advice-input" value={advice.input} maxLength={4000} rows={6}
-          placeholder="输入提示词或参数问题" onChange={event => advice.setInput(event.target.value)} /></label>
+          placeholder="描述想要的 NovelAI 画面、要优化的标签或生成参数问题" onChange={event => advice.setInput(event.target.value)} /></label>
       <div className="tool-submit"><button className="primary" type="submit" disabled={advice.loading}><Send size={16} />{advice.loading ? '正在等待...' : '获取建议'}</button></div>
     </form>
     <Alert text={advice.error} />

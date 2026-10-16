@@ -35,3 +35,4 @@
 {"file": ".trellis/tasks/10-14-native-character-prompts/section-assistant-design.md", "reason": "Newest per-section AI/search popover, explicit stable target append/replace, independent requests, lifecycle and web-only no-restart contract."}
 {"file": ".trellis/spec/frontend/section-assistant-contract.md", "reason": "Executable per-section helper/current-only explicit AI/search input, stable atomic application and disclosure/session race contracts."}
 {"file": ".trellis/tasks/10-14-native-character-prompts/research/account-balance.md", "reason": "Verified subscription shape, cost limitations and refresh races"}
+{"file": ".trellis/spec/backend/codex-advice-contract.md", "reason": "NovelAI-specific guidance must preserve isolated advice runtime and JSON envelope"}
