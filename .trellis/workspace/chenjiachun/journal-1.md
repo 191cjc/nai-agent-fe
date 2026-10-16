@@ -617,3 +617,26 @@ Added explicit automatic/manual character placement, preserved legacy history an
 ### Next Steps
 
 - Operator validates real NovelAI placement and desktop/mobile interaction; broader native-character task remains in_progress.
+
+
+## Session 18: Prompt sections and private snapshots deployed
+<!-- trellis-session: v=2 fp=fbcf6705378f488b -->
+
+**Date**: 2026-10-16
+**Task**: Prompt sections and private snapshots deployed
+**Branch**: `feat/native-character-prompts`
+
+### Summary
+
+Implemented shared scene/other and seven per-character sections, hidden effective projection with complete private metadata, named multi-section private snapshots, ordered batch imports with explicit person mapping and atomic append/default or replace. Independent full-scope review passed 559 offline backend tests, Ruff/frozen sync/lock/OpenAPI, frontend ESLint/TypeScript and a clean 22-input env-free build. Deployed matched API-first schema4 release 20261016T064813 after idle checks and a verified private online backup. Running schema/public hashes/auth-no-store/health/config continuity passed; all 72 unexpired manifest/PNG sets retained exact bytes and expiry. No paid probes or frontend/helper/browser automated tests. Broader task stays in_progress for operator visual/interaction and provider acceptance; unrelated tasks untouched.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9f445e5` | feat: add prompt sections and private snapshots |
+| `6b6c040` | docs: record prompt sections deployment |
+
+### Status
+
+[OK] **Completed**
