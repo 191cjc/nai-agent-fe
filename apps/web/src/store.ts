@@ -17,6 +17,7 @@ import {
 import { SavedResultsStore } from './saved-results'
 import { StyleRunStore } from './style-run-store'
 import { PromptSnapshotStore } from './prompt-snapshots'
+import { BalanceStore } from './balance-store'
 import {
   CHARACTER_SECTION_KEYS, SHARED_SECTION_KEYS, SECTION_LABELS, characterPrompt, sharedPrompt,
   emptyCharacterSections, emptySharedSections, metadataFromDraft, restoredSections, sectionAt,
@@ -861,6 +862,7 @@ export class AppStore {
   readonly savedResults: SavedResultsStore
   readonly styleRuns: StyleRunStore
   readonly promptSnapshots: PromptSnapshotStore
+  readonly balance: BalanceStore
   private workspaceUser: UserInfo | null = null
   private workspaceEntryVersion = 0
 
@@ -872,16 +874,18 @@ export class AppStore {
       this.styleRuns.detach()
       this.savedResults.reset()
       this.promptSnapshots.reset()
+      this.balance.reset()
     })
+    this.balance = new BalanceStore(this.api)
     this.savedResults = new SavedResultsStore(this.api)
     this.promptSnapshots = new PromptSnapshotStore(this.api)
     this.history = new HistoryStore(this.api)
-    this.styleRuns = new StyleRunStore(this.api, () => this.history.refresh())
+    this.styleRuns = new StyleRunStore(this.api, () => { this.history.refresh(); this.balance.noteActivity() })
     this.generation = new GenerationStore(
       this.api,
       this.styleRuns,
       () => { void this.history.load(0) },
-      () => this.history.refresh(),
+      () => { this.history.refresh(); this.balance.noteActivity() },
     )
     this.tags = new TagStore(this.api)
     this.advice = new AdviceStore(this.api)
@@ -890,6 +894,8 @@ export class AppStore {
   async enterWorkspace(): Promise<void> {
     const user = this.auth.user
     if (this.auth.status !== 'ready' || this.auth.loggingOut || !user) return
+    if (this.workspaceUser !== user) this.balance.reset()
+    this.balance.enterWorkspace()
     // Failed logout remounts must reconnect the observer without restoring drafts again.
     this.styleRuns.enterWorkspace()
     if (this.workspaceUser === user) return
@@ -916,6 +922,7 @@ export class AppStore {
     this.savedResults.reset()
     this.promptSnapshots.reset()
     this.styleRuns.reset()
+    this.balance.reset()
   }
 
   dispose(): void {
@@ -926,5 +933,6 @@ export class AppStore {
     this.tags.reset()
     this.savedResults.reset()
     this.promptSnapshots.reset()
+    this.balance.reset()
   }
 }

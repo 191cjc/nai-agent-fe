@@ -52,9 +52,28 @@ h1, h2, h3 { letter-spacing: 0; }
 
 .app-shell { height: 100dvh; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .app-header { height: 56px; flex: 0 0 56px; padding: 0 20px; border-bottom: 1px solid var(--line); background: #191b24; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.brand { font-size: 16px; min-width: 0; }
+.brand { font-size: 16px; min-width: 0; flex-shrink: 0; }
 .brand-sub { padding-left: 12px; border-left: 1px solid #4c4a4c; color: #c6c1bc; font-size: 12px; font-weight: 500; }
 .header-actions { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.account-balance { display: flex; align-items: center; gap: 3px; min-width: 0; }
+.account-balance-details { position: relative; min-width: 0; }
+.account-balance-summary { display: flex; align-items: center; gap: 7px; min-width: 0; min-height: 32px; padding: 4px 7px; border: 1px solid #4d493e; border-radius: 5px; color: #d9d3c7; cursor: pointer; list-style: none; }
+.account-balance-summary::-webkit-details-marker { display: none; }
+.account-balance-summary:hover, .account-balance-details[open] > summary { background: #302d28; }
+.account-balance-summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.account-balance-summary > svg { flex: 0 0 12px; color: var(--muted); }
+.account-balance-label { flex-shrink: 0; font-size: 10px; color: #b6afa3; white-space: nowrap; }
+.account-balance-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--gold); font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.account-balance-stale { flex-shrink: 0; color: #f1bc91; font-size: 10px; white-space: nowrap; }
+.account-balance .account-balance-refresh { width: 30px; height: 32px; flex-basis: 30px; }
+.account-balance-panel { position: fixed; top: 50px; right: 12px; z-index: 20; width: min(300px, calc(100vw - 24px)); max-height: min(60dvh, 300px); overflow: auto; overscroll-behavior: contain; padding: 14px; border: 1px solid #5a5347; border-radius: 6px; background: #24242c; box-shadow: 0 8px 24px #090a10aa; color: #d2ced0; font-size: 12px; line-height: 1.5; }
+.account-balance-panel > strong { font-size: 12px; color: var(--gold); }
+.account-balance-panel dl { display: grid; gap: 5px; margin: 10px 0; }
+.account-balance-panel dl > div { display: flex; justify-content: space-between; gap: 15px; }
+.account-balance-panel dt { color: var(--muted); }
+.account-balance-panel dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.account-balance-panel p { margin: 8px 0 0; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+.account-balance-panel .account-balance-error { color: #f1bc91; }
 .user-label { font-size: 12px; font-weight: 650; color: #c3c1c8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; }
 .auth-alert { padding: 0 20px; background: #191b24; }
 .auth-alert .alert { margin: 0; }
@@ -392,10 +411,13 @@ h1, h2, h3 { letter-spacing: 0; }
   .settings-panel { position: absolute; top: 0; bottom: 0; left: 52px; z-index: 5; width: min(310px, calc(100vw - 52px)); box-shadow: 12px 0 28px #08091180; }
 }
 @media (max-width: 600px) {
-  .app-header { padding: 0 12px; }
-  .brand { font-size: 14px; }
+  .app-header { padding: 0 12px; gap: 8px; }
+  .brand { font-size: 14px; gap: 6px; }
   .brand-sub { display: none; }
-  .user-label { max-width: 90px; }
+  .header-actions { justify-content: flex-end; flex: 1; gap: 4px; }
+  .header-actions .user-label { display: none; }
+  .account-balance-details { flex: 1; }
+  .account-balance-summary { gap: 5px; padding-right: 5px; padding-left: 5px; }
   .side-rail { width: 48px; flex-basis: 48px; padding: 10px 2px; }
   .rail-button { width: 42px; height: 42px; flex-basis: 42px; }
   .settings-panel { left: 48px; width: min(310px, calc(100vw - 48px)); }
@@ -432,8 +454,12 @@ h1, h2, h3 { letter-spacing: 0; }
   .uncertain-bar .secondary { min-height: 30px; padding: 5px 8px; font-size: 11px; }
   .login-shell { padding: 20px; }
 }
+@media (max-width: 420px) {
+  .brand > span { display: none; }
+}
 @media (max-height: 500px) {
   .app-header { height: 44px; flex-basis: 44px; }
+  .account-balance-panel { top: 42px; }
   .settings-header { height: 42px; flex-basis: 42px; }
   .side-rail { padding-top: 5px; padding-bottom: 5px; gap: 4px; }
   .canvas-toolbar { min-height: 32px; }

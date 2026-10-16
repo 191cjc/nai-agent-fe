@@ -21,6 +21,7 @@ This directory contains guidelines for frontend development. Fill in each file w
 | [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | To fill |
 | [Type Safety](./type-safety.md) | Type patterns, validation | To fill |
 | [Web Workspace Contract](./workspace-contract.md) | Same-origin paths, auth state and retained-result viewing | In use |
+| [Image-service Balance](../backend/account-balance-contract.md) | Protected Anlas header, truthful freshness, coalesced refresh and session cleanup | In use |
 | [Prompt Sections and Snapshots](../backend/prompt-sections-contract.md) | Cross-layer fixed sections, hidden states, private snapshots and atomic append/replace import | In use |
 | [Per-section Assistant](./section-assistant-contract.md) | Anchored AI/search tabs, explicit current-section requests and stable validated append/replace | In use |
 | [Style Experiment Contract](./style-experiment-contract.md) | Exact Cartesian weights, sequential runs, seeds and result ownership | In use |

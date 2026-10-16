@@ -44,6 +44,7 @@ def test_openapi_contract_matches_snapshot_without_database_or_provider_calls(
         ("/api/auth/session", "post"): {401, 403, 422, 429, 503},
         ("/api/auth/session", "get"): {401, 422, 503},
         ("/api/auth/session", "delete"): {401, 403, 422, 503},
+        ("/api/account/balance", "get"): {401, 422, 429, 502, 503, 504},
         ("/api/generations", "post"): {401, 403, 409, 422, 429, 503},
         ("/api/generations", "get"): {401, 422, 503},
         ("/api/generations/{job_id}", "get"): {401, 404, 422, 503},
@@ -98,6 +99,14 @@ def test_openapi_contract_matches_snapshot_without_database_or_provider_calls(
         "/api/generation-results/{job_id}/images/{image_id}"
     ]["get"]["responses"]
     assert set(image_responses["200"]["content"]) == {"image/png"}
+    balance_schema = schema["components"]["schemas"]["AccountBalance"]
+    assert balance_schema["additionalProperties"] is False
+    assert set(balance_schema["properties"]) == {"fixed", "purchased", "total", "fetched_at"}
+    assert set(balance_schema["required"]) == set(balance_schema["properties"])
+    for field in balance_schema["properties"].values():
+        assert field["type"] == "integer"
+        assert field["minimum"] == 0
+        assert field["maximum"] == 9_007_199_254_740_991
     generation_fields = schema["components"]["schemas"]["GenerationRequest"]["properties"]
     assert "enum" not in generation_fields["model"]
     assert "enum" not in generation_fields["sampler"]

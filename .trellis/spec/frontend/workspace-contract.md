@@ -22,8 +22,12 @@ explicit atomic append/replace import with visible character target mapping.
 - `WorkspaceApi(fetcher = fetch, onUnauthorized = () => {})` owns all browser
   requests. Its methods call typed backend `/api/*` routes and `image(path)`
   accepts only returned `/api/generation-results/{id}/images/{index}` paths.
-- `AppStore` owns `auth`, `generation`, `history`, `tags`, and `advice` stores.
+- `AppStore` owns `auth`, `generation`, `history`, `tags`, `advice`, and `balance` stores.
   `resetProtected()` clears them on logout or session expiry.
+- `BalanceStore` observes read-only image-service Anlas in the top header;
+  [Balance](../backend/account-balance-contract.md) owns cache/freshness,
+  coalesced activity refresh and logout-start/reset/disposal cleanup. Preserve
+  existing history callbacks when composing balance activity notifications.
 - `GenerationStore(api, onSubmitted, onTerminal)` reports accepted submissions
   separately from the first terminal observation of the tracked job.
 - `setPromptTagWeight(source, tag, weight)` updates one validated source span;

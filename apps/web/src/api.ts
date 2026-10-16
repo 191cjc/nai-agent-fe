@@ -6,6 +6,13 @@ export interface UserInfo {
   label: string
 }
 
+export interface AccountBalance {
+  fixed: number
+  purchased: number
+  total: number
+  fetched_at: number
+}
+
 export interface CharacterPrompt {
   prompt: string
   x?: number
@@ -233,6 +240,11 @@ export function errorText(error: unknown): string {
       unsupported_character_prompts: '当前图像服务不支持独立人物提示词，请联系管理员。',
       unsupported_auto_character_position: '当前图像服务不支持自动人物位置，请选择手动位置或联系管理员。',
       insufficient_balance: '图像服务余额不足，请联系管理员。',
+      balance_unavailable: '图像服务余额暂不可用，请稍后刷新。',
+      balance_auth_error: '余额查询认证失败，请联系管理员。',
+      balance_rate_limited: '余额查询过于频繁，请稍后刷新。',
+      balance_timeout: '余额查询超时，请稍后刷新。',
+      balance_bad_response: '余额查询响应无效，请稍后刷新。',
       outcome_unknown: '任务结果未知，请先检查历史记录。',
       generation_failed: '生成失败，请检查服务状态。',
       not_found: '任务或图像不存在，可能已过期。',
@@ -309,6 +321,20 @@ export class WorkspaceApi {
 
   logout(): Promise<void> {
     return this.request('/api/auth/session', { method: 'DELETE' })
+  }
+
+  async balance(signal?: AbortSignal): Promise<AccountBalance> {
+    const value = await this.request<unknown>('/api/account/balance', { signal })
+    if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+      const fields = value as Record<string, unknown>
+      const count = (field: unknown): field is number => typeof field === 'number' && Number.isSafeInteger(field) && field >= 0
+      if (Object.keys(fields).length === 4 && count(fields.fixed) && count(fields.purchased)
+        && count(fields.total) && count(fields.fetched_at)
+        && Number.isSafeInteger(fields.fixed + fields.purchased) && fields.total === fields.fixed + fields.purchased) {
+        return { fixed: fields.fixed, purchased: fields.purchased, total: fields.total, fetched_at: fields.fetched_at }
+      }
+    }
+    throw new ApiFailure(0, 'balance_bad_response', '余额查询响应无效，请稍后刷新。')
   }
 
   submit(parameters: GenerationRequest): Promise<GenerationAccepted> {

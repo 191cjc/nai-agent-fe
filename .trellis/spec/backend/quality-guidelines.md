@@ -83,6 +83,7 @@ tests. The current test modules own these boundaries:
 | `tests/test_prompt_sections.py` | Strict hidden editor metadata, effective projection, history/backup/restart, frozen run metadata and legacy omission |
 | `tests/test_prompt_snapshots.py` | Private immutable snapshot CRUD, owner/Origin/no-store, pagination/idempotency, schema4 migration and backup/restart |
 | `tests/test_mcp_images.py` | Schema compatibility, PNG validation, safe errors and no retry of uncertain paid outcomes |
+| `tests/test_account_balance.py` | Strict Anlas allowlist, read-only MCP/deadline/caps, cache singleflight/cancellation and authenticated no-store route |
 | `tests/test_tags.py` | NSFW normalization, deadlines, decoded-size caps, concurrency and validated upstream `Retry-After` |
 | `tests/test_advice.py` | Explicit input only, structured output, observed tool rejection and child cleanup |
 | `tests/test_api_contract.py` | Deterministic snapshot, documented errors and secret-free schema |

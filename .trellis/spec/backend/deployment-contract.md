@@ -96,6 +96,13 @@ and [Prompt Sections](./prompt-sections-contract.md) (current schema4).
   manifest/PNG SHA-256 inventory while the API is stopped, then verify exact
   bytes and original expiry for every still-unexpired result after startup.
   Root-directory existence/permissions alone do not verify retained images.
+- Account-balance rollout adds a read-only authenticated route at existing
+  schema4. Publish the API before web, preserving private state/config/images
+  and idle/backup gates; no migration is needed. A configured adapter probe
+  verifies only read-only get_subscription normalization, not authenticated
+  browser-route success. Keep real-route401/no-store checks separate from
+  fake authenticated-route tests; never create a token or paid probe just to
+  verify a header balance. Cached fetched_at remains the original fetch time.
 
 - Retained images live under /var/lib/novelai/generation-images/, service-owned
   with 0700 directories/0600 files, outside the immutable release/web trees.

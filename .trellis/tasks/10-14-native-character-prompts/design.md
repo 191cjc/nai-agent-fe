@@ -195,3 +195,9 @@ strict additive private composition metadata and schema4 owner-scoped reusable
 snapshots. The original effective provider fields remain the paid boundary.
 The user confirmed selectable append/replace import, default append. Publish
 the schema4-compatible API before the web and retain it on fallback.
+
+## Follow-up: Image-service Balance (2026-10-16)
+
+account-balance-design.md freezes the allowlisted authenticated Anlas endpoint,
+isolated read-only MCP query, short cache/coalescing and protected header/store
+lifecycle. It deliberately does not classify actual per-request cost.

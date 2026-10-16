@@ -35,3 +35,5 @@
 {"file": ".trellis/spec/backend/prompt-sections-contract.md", "reason": "Executable exact section projection and hidden-state, private snapshot API/schema4, atomic import and compatibility test contract."}
 {"file": ".trellis/tasks/10-14-native-character-prompts/section-assistant-design.md", "reason": "Newest per-section AI/search popover, explicit stable target append/replace, independent requests, lifecycle and web-only no-restart contract."}
 {"file": ".trellis/spec/frontend/section-assistant-contract.md", "reason": "Executable per-section helper/current-only explicit AI/search input, stable atomic application and disclosure/session race contracts."}
+{"file": ".trellis/tasks/10-14-native-character-prompts/research/account-balance.md", "reason": "Read-only account contract and strict freshness/lifecycle review"}
+{"file": ".trellis/spec/backend/account-balance-contract.md", "reason": "Cross-layer normalized Anlas and freshness contract"}

@@ -487,3 +487,21 @@ owns the frozen shared API and supersedes earlier browser scheduling limits.
   manifest/PNG sets retain exact bytes/expiry. See
   deployment-prompt-sections-2026-10-16.md.
 - [ ] Operator real interaction and resulting image appearance checks.
+
+## Follow-up Execution: Image-service Balance (2026-10-16)
+
+1. Backend/frontend implementers own disjoint package sources; follow frozen
+   account-balance-design.md and research/account-balance.md. No paid probes.
+2. Independent full affected-layer check: fake-only full backend/frozen/lock/
+   Ruff/OpenAPI plus web lint/types/source lifecycle review. Sync specs.
+3. Fresh env-free matched build, scoped commit, schema4 API-first release with
+   idle/private-backup/config/image-preservation gates. No paid verification.
+4. Record release/journal; broader operator acceptance stays open.
+
+- [x] Balance implementation and independent full affected-layer gate GREEN:
+  639 fake-only offline backend tests, frozen sync/lock, Ruff, exact additive
+  OpenAPI and frontend ESLint/TypeScript/source review. No product corrections;
+  paid image transport unchanged. Fresh25-input env-free web build passed.
+  See check-account-balance.md and account-balance-build-verification.md.
+- [ ] Matched API-first schema4 publication and read-only configured-adapter
+  probe; operator header interaction acceptance.

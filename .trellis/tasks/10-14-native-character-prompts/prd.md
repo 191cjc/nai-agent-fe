@@ -377,6 +377,29 @@ not duplicate a run, and another owner cannot see/control its data.
 
 Technical interface: durable-experiment-design.md; no unresolved product choices.
 
+## Follow-up: Visible Image-service Balance (2026-10-16)
+
+The operator requests a warning when a request costs credits, or at least the
+current remaining balance at the top. Implement the reliable minimum: NovelAI
+image-service Anlas in the header, with fixed/purchased breakdown, successful
+update time, manual refresh and independent refresh on entry, ordinary terminal
+results and experiment progress. The operator explicitly confirmed NovelAI
+image Anlas, rather than advice API billing.
+
+Never label a request free/paid from an estimate or attribute shared account
+changes to one local user/request. Actual per-request charges are not exposed;
+V5 estimates can be zero while exhausted free capacity causes billing. Keep
+last known balance with visible error/freshness, render true zero and clear
+protected data on session cleanup. Account errors cannot block/retry generation.
+
+Acceptance: authenticated users see normalized Anlas at the top, including
+narrow screens. Coalesced refresh observes later deductions even if activity
+overlaps an old query. Invalid/missing data never becomes zero or fresh cached
+success. Unauthenticated requests cannot query the provider. Preserve existing
+generation/experiments; fake-only backend/static web checks, then API-first
+publication after idle/private-backup checks under existing authority. See
+account-balance-design.md.
+
 ## Follow-up: Faster Comparison Revisit (2026-10-15)
 
 The operator asks about browser image caching because arrow navigation reloads

@@ -1,6 +1,43 @@
 {
   "components": {
     "schemas": {
+      "AccountBalance": {
+        "additionalProperties": false,
+        "properties": {
+          "fetched_at": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Fetched At",
+            "type": "integer"
+          },
+          "fixed": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Fixed",
+            "type": "integer"
+          },
+          "purchased": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Purchased",
+            "type": "integer"
+          },
+          "total": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "fixed",
+          "purchased",
+          "total",
+          "fetched_at"
+        ],
+        "title": "AccountBalance",
+        "type": "object"
+      },
       "ActiveRun": {
         "properties": {
           "run": {
@@ -1305,6 +1342,102 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/account/balance": {
+      "get": {
+        "operationId": "account_balance_api_account_balance_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "__Host-nai_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "  Host-Nai Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountBalance"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Gateway Timeout"
+          }
+        },
+        "summary": "Account Balance"
+      }
+    },
     "/api/advice": {
       "post": {
         "operationId": "advise_api_advice_post",

@@ -15,6 +15,7 @@ import { PromptEditor } from './PromptEditor'
 import { StyleExperimentConfig, StyleExperimentProgress } from './StyleExperiment'
 import { PromptSummary } from './PromptSummary'
 import { SavedExperimentList, SavedResultViewer } from './SavedResults'
+import { AccountBalance } from './AccountBalance'
 
 const SOURCE_URL = 'https://huggingface.co/spaces/SAkizuki/DanbooruSearch'
 const RESOLUTION_PRESETS = [
@@ -531,7 +532,7 @@ const Workspace = observer(({ store }: { store: AppStore }) => {
     }
   }}>
     <header className="app-header"><div className="brand"><ImageIcon size={21} aria-hidden="true" /><span>NovelAI</span><span className="brand-sub">图像工作台</span></div>
-      <div className="header-actions"><span className="user-label">{store.auth.user?.label}</span>
+      <div className="header-actions"><AccountBalance store={store.balance} /><span className="user-label">{store.auth.user?.label}</span>
         <button className="icon-button" type="button" title="退出登录" aria-label="退出登录" disabled={store.auth.loggingOut}
           onClick={() => void store.auth.logout()}><LogOut size={19} /></button></div>
     </header>

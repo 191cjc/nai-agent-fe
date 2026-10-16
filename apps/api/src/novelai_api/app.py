@@ -15,6 +15,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from .account_balance import AccountBalance, BalanceFailure, BalanceProvider, BalanceService
 from .advice import AdviceFailure, AdviceRequest, AdviceResult, AdviceRunner, AdviceService
 from .auth import current_user, issue_session, revoke_session
 from .codex_advice import CodexAdviceRunner
@@ -33,6 +34,7 @@ from .generations import (
     ResultStorageUnavailable,
     ResultStore,
 )
+from .mcp_account import NovelAiMcpBalanceProvider
 from .mcp_images import NovelAiMcpProvider
 from .prompt_snapshots import (
     PromptSnapshot,
@@ -117,6 +119,7 @@ def create_app(
     result_cache: ResultStore | None = None,
     tag_search: TagSearch | None = None,
     advice_runner: AdviceRunner | None = None,
+    balance_provider: BalanceProvider | None = None,
 ) -> FastAPI:
     settings = settings or Settings.from_env()
     database = database or Database(settings.sqlite_path)
@@ -132,6 +135,11 @@ def create_app(
     if advice_runner is None and settings.codex_api_key:
         advice_runner = CodexAdviceRunner(settings.codex_api_key)
     advice_service = AdviceService(advice_runner)
+    if balance_provider is None and settings.novelai_mcp_token:
+        balance_provider = NovelAiMcpBalanceProvider(
+            settings.novelai_mcp_url, settings.novelai_mcp_token,
+        )
+    balance_service = BalanceService(balance_provider)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -143,6 +151,7 @@ def create_app(
         finally:
             await asyncio.to_thread(experiments.stop)
             await asyncio.to_thread(manager.stop)
+            await balance_service.close()
             if isinstance(advice_runner, CodexAdviceRunner):
                 await advice_runner.close()
 
@@ -150,6 +159,7 @@ def create_app(
     app.state.database = database
     app.state.generations = manager
     app.state.experiments = experiments
+    app.state.balance = balance_service
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(
@@ -204,6 +214,24 @@ def create_app(
     @app.get("/api/health/live", response_model=HealthStatus)
     def live() -> HealthStatus:
         return HealthStatus(status="ok")
+
+    @app.get(
+        "/api/account/balance",
+        response_model=AccountBalance,
+        responses={
+            401: {"model": ApiError}, 422: {"model": ApiError}, 429: {"model": ApiError},
+            502: {"model": ApiError}, 503: {"model": ApiError}, 504: {"model": ApiError},
+        },
+    )
+    async def account_balance(
+        _user: Annotated[UserInfo, Depends(require_user)],
+    ) -> AccountBalance | JSONResponse:
+        try:
+            return await balance_service.get()
+        except BalanceFailure as exception:
+            return error(
+                exception.status, exception.code, exception.message, retryable=exception.retryable,
+            )
 
     @app.get("/api/health/ready", response_model=HealthStatus, responses={503: {"model": ApiError}})
     def ready() -> HealthStatus | JSONResponse:

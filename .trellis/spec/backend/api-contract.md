@@ -18,6 +18,9 @@ and review how the web app consumes the change.
   the route catches this type, not its general RuntimeError base class.
 - `GET /api/health/ready` checks database readiness; it does not assert image
   provider configuration, upstream credentials or successful paid output.
+- GET `/api/account/balance` exposes only authenticated normalized image-service
+  Anlas and actual successful-fetch time; see [Balance](./account-balance-contract.md).
+  It is independent of generation acceptance and cannot classify request cost.
 - `GET /api/generations?limit=&offset=` returns parameter-only history;
   `limit` defaults to 20 and accepts 1-100. `offset` starts at 0 and accepts
   JavaScript-safe nonnegative integers so `next_offset` remains usable beyond
