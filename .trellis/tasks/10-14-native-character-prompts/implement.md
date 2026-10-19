@@ -551,4 +551,9 @@ owns the frozen shared API and supersedes earlier browser scheduling limits.
   env-free build passes. See check-hidden-tags.md and
   hidden-tags-build-verification.md. No paid/live provider calls or
   frontend/helper/browser automated tests.
-- [ ] Matched API-first schema4 publication and operator interaction acceptance.
+- [x] Source commitb643e47 and matched API-first schema4 release
+  20261019T023651 published on2026-10-19 at10:37 China time. Private
+  backup/idle/config/record/image gates, exact running OpenAPI/public hashes,
+  health and401/no-store pass. All72 image sets retain exact bytes/expiry.
+  See deployment-hidden-tags-2026-10-19.md. No paid/live provider calls.
+- [ ] Operator interaction acceptance; broader task remains in_progress.
