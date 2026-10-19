@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 21
-- **Last Active**: 2026-10-16
+- **Total Sessions**: 22
+- **Last Active**: 2026-10-19
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~711 | Active |
+| `journal-1.md` | ~734 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 22 | 2026-10-19 | Individual hidden prompt tags and API-first release | `b643e47`, `737811e` | `feat/native-character-prompts` |
 | 21 | 2026-10-16 | NovelAI-aware advice and section scopes | `14ff663`, `6344a67` | `feat/native-character-prompts` |
 | 20 | 2026-10-16 | Image-service Anlas balance header | `377a634`, `2fd539b` | `feat/native-character-prompts` |
 | 19 | 2026-10-16 | Per-section AI and tag-search assistant deployed | `a2fb618`, `4ed4e80` | `feat/native-character-prompts` |

@@ -709,3 +709,26 @@ Strengthened fixed advice guidance for NovelAI/Danbooru-compatible English tags;
 ### Status
 
 [OK] **Completed**
+
+
+## Session 22: Individual hidden prompt tags and API-first release
+<!-- trellis-session: v=2 fp=d26d63987733cd5e -->
+
+**Date**: 2026-10-19
+**Task**: Individual hidden prompt tags and API-first release
+**Branch**: `feat/native-character-prompts`
+
+### Summary
+
+Implemented per-tag hide/restore using whole-line comments and guarded blur formatting; persisted raw history/snapshots while effective generation excludes hidden text. Added strict opt-in compatibility flag, safe appends and frozen experiment compatibility. Independent699 fake backend tests, Ruff/frozen lock, web lint/types and env-free build passed. Deployed matched20261019T023651 API-first after idle/private backup; schema4/config/records and all72 retained images/expiry preserved. No paid/live provider calls. Broader task remains in_progress for operator acceptance.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b643e47` | feat: hide individual prompt tags with line comments |
+| `737811e` | docs: record individual hidden tags deployment |
+
+### Status
+
+[OK] **Completed**
