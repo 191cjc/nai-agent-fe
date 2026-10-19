@@ -532,3 +532,23 @@ owns the frozen shared API and supersedes earlier browser scheduling limits.
   preserve original bytes/expiry. No paid AI/advice/image/provider probe. See
   deployment-novelai-advice-2026-10-16.md.
 - [ ] Operator suggestion-quality acceptance; broader task remains in_progress.
+
+## Follow-up Execution: Individual Hidden Tags (2026-10-16)
+
+1. Backend/frontend native implementers own disjoint packages and implement
+   hidden-tags-design.md. Freeze matching parser index semantics together;
+   no nested delegation, no paid or frontend/helper/browser tests.
+2. Independent full affected-layer checker with fake backend tests, frozen
+   sync/lock/Ruff/reviewed OpenAPI and web lint/types/source review; sync specs.
+3. Fresh env-free build, scoped commit and matched API-first schema4 release
+   after idle/private-backup/config/image-preservation checks.
+4. Record release/journal; broader operator acceptance remains in_progress.
+
+- [x] Hidden tags implementation and independent full affected-layer gate GREEN:
+  699 offline fake backend tests (60 new), frozen sync/lock, Ruff src/tests,
+  exact reviewed additive OpenAPI and frontend ESLint/TypeScript/source review.
+  No product corrections; assistant append spec synchronized. Fresh25-input
+  env-free build passes. See check-hidden-tags.md and
+  hidden-tags-build-verification.md. No paid/live provider calls or
+  frontend/helper/browser automated tests.
+- [ ] Matched API-first schema4 publication and operator interaction acceptance.

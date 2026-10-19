@@ -207,3 +207,10 @@ lifecycle. It deliberately does not classify actual per-request cost.
 novelai-advice-design.md scopes shared model instructions and editable per-section
 consultations to NovelAI/Danbooru-compatible tags. No API/runtime change; retain
 explicit current-section context and plain tag text inside the JSON envelope.
+
+## Follow-up: Individual Hidden Tags (2026-10-16)
+
+hidden-tags-design.md defines whole-line comments, conservative formatting,
+strict opt-in syntax, raw persistence/effective compilation and unchanged
+frozen experiment semantics. This supersedes the earlier no-rewrite-on-blur
+rule only for explicit textarea blur; view/history restoration stays verbatim.

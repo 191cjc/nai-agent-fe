@@ -70,7 +70,7 @@ const SaveSnapshot = observer(({ store, entries, onClose }: { store: AppStore; e
 
   return <Modal title="保存提示词快照" onClose={onClose}>
     <div className="snapshot-dialog-scroll">
-      <p className="prompt-hint">保存所选分区的文字与分类，隐藏状态和生成设置不会保存。快照仅对当前账号可见。</p>
+      <p className="prompt-hint">保存所选分区的文字与分类，保留 // 标签注释；分区隐藏状态和生成设置不会保存。快照仅对当前账号可见。</p>
       <label className="field"><span>快照名称</span><input value={name} maxLength={100} autoComplete="off" autoFocus
         disabled={submitted} onChange={event => setName(event.target.value)} onKeyDown={event => {
           if (event.key === 'Enter') { event.preventDefault(); void save() }

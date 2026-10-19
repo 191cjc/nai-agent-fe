@@ -13,6 +13,10 @@ must exactly project to the unchanged effective fields below. Fully hidden
 people stay in metadata; they never relax CharacterPrompt nonblank validation
 or enter MCP. Old unsplit text restores in 其他 without semantic inference.
 
+Whole-line per-tag comments and raw/effective projections follow
+[Individual Hidden Tags](./prompt-comments-contract.md). Syntax is opt-in per frozen request;
+absent/false preserves the legacy contracts below.
+
 ## Signatures
 
 - `GenerationRequest` retains `positive_prompt` as shared scene text and adds

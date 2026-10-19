@@ -16,6 +16,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .db import Database
+from .prompt_comments import compile_prompt_comments
 from .prompt_sections import PromptSections
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
@@ -89,6 +90,7 @@ class GenerationRequest(BaseModel):
     style_prompt: str = Field(default="", max_length=3000)
     character_prompts: list[CharacterPrompt] = Field(default_factory=list, max_length=6)
     auto_character_position: bool = Field(default=False, strict=True)
+    prompt_comments: bool = Field(default=False, strict=True, exclude_if=lambda value: not value)
     prompt_sections: PromptSections | None = Field(
         default=None, exclude_if=lambda value: value is None,
     )
@@ -114,26 +116,60 @@ class GenerationRequest(BaseModel):
         return value
 
     @property
+    def effective_style_prompt(self) -> str:
+        return (
+            compile_prompt_comments(self.style_prompt)
+            if self.prompt_comments else self.style_prompt
+        )
+
+    @property
+    def effective_positive_prompt(self) -> str:
+        # Section fields already contain the independently compiled projection.
+        if self.prompt_comments and self.prompt_sections is None:
+            return compile_prompt_comments(self.positive_prompt)
+        return self.positive_prompt
+
+    @property
+    def effective_negative_prompt(self) -> str:
+        return (
+            compile_prompt_comments(self.negative_prompt)
+            if self.prompt_comments else self.negative_prompt
+        )
+
+    @property
+    def effective_character_prompts(self) -> list[CharacterPrompt]:
+        if not self.prompt_comments or self.prompt_sections is not None:
+            return self.character_prompts
+        return [
+            character.model_copy(update={"prompt": prompt})
+            for character in self.character_prompts
+            if (prompt := compile_prompt_comments(character.prompt)).strip()
+        ]
+
+    @property
     def base_prompt(self) -> str:
-        if not self.style_prompt.strip():
-            return self.positive_prompt
+        style, positive = self.effective_style_prompt, self.effective_positive_prompt
+        if not style.strip():
+            return positive
         return ", ".join(
-            part.strip() for part in (self.style_prompt, self.positive_prompt) if part.strip()
+            part.strip() for part in (style, positive) if part.strip()
         )
 
     @model_validator(mode="after")
     def valid_prompt_structure(self) -> Self:
         if self.prompt_sections is not None:
-            if self.positive_prompt != self.prompt_sections.shared.compose():
+            if self.positive_prompt != self.prompt_sections.shared.compose(
+                prompt_comments=self.prompt_comments,
+            ):
                 raise ValueError("Shared prompt differs from section metadata")
             if [character.model_dump() for character in self.character_prompts] != (
-                self.prompt_sections.effective_characters()
+                self.prompt_sections.effective_characters(prompt_comments=self.prompt_comments)
             ):
                 raise ValueError("Character prompts differ from section metadata")
         base = self.base_prompt
         if not base.strip() or len(base) > 3000:
             raise ValueError("Combined style and shared prompt must contain 1 to 3000 characters")
-        if self.character_prompts and self.model not in NATIVE_CHARACTER_MODELS:
+        if self.effective_character_prompts and self.model not in NATIVE_CHARACTER_MODELS:
             raise ValueError("Model does not support native character prompts")
         return self
 

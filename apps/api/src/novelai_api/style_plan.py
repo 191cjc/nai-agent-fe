@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from .generations import ExperimentContext, ExperimentWeight, GenerationRequest
+from .prompt_comments import compile_prompt_comments, prompt_lines
 
 NUMBER = re.compile(r"^[+-]?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)$")
 PREFIX = re.compile(r"[+-]?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)::")
@@ -70,9 +71,13 @@ class PromptTag:
     text: str
     weight: str | None
     weight_end: int | None
+    hidden: bool = False
+    manual_only: bool = False
+    block_start: int = 0
+    block_end: int = 0
 
 
-def parse_prompt_tags(source: str) -> list[PromptTag]:
+def _parse_legacy_prompt_tags(source: str) -> list[PromptTag]:
     """Port the browser grammar using Python offsets, selected by occurrence only."""
     tags: list[PromptTag] = []
     scopes: list[tuple[str, _Numeric | None]] = []
@@ -152,8 +157,71 @@ def parse_prompt_tags(source: str) -> list[PromptTag]:
     return tags
 
 
+def parse_prompt_tags(source: str, *, prompt_comments: bool = False) -> list[PromptTag]:
+    """Keep frozen legacy occurrence indexes; modern indexes also include hidden tags."""
+    legacy = _parse_legacy_prompt_tags(source)
+    if not prompt_comments:
+        return legacy
+    lines = list(prompt_lines(source))
+
+    def manual_source() -> list[PromptTag]:
+        start, end = 0, len(source)
+        while start < end and _space(source[start]):
+            start += 1
+        while end > start and _space(source[end - 1]) and not _escaped(source, end - 1):
+            end -= 1
+        raw = source[start:end]
+        return [PromptTag(start, end, raw, raw, None, None, manual_only=True)] if raw else []
+
+    # A scope crossing active/comment lines cannot be edited or split reliably.
+    for tag in legacy:
+        if "\n" in tag.source or "\r" in tag.source:
+            modes = {hidden for start, end, hidden in lines
+                     if start < tag.end and end > tag.start}
+            if len(modes) > 1:
+                return manual_source()
+    tags: list[PromptTag] = []
+    line_index = 0
+    while line_index < len(lines):
+        first = line_index
+        hidden = lines[first][2]
+        while line_index + 1 < len(lines) and lines[line_index + 1][2] == hidden:
+            line_index += 1
+        block_start, block_end = lines[first][0], lines[line_index][1]
+        positions: list[int] = []
+        for start, end, _hidden in lines[first:line_index + 1]:
+            if hidden:
+                while source[start] in " \t":
+                    start += 1
+                start += 2
+                if start < end and source[start] == " ":
+                    start += 1
+            positions.extend(range(start, end))
+        virtual = "".join(source[index] for index in positions)
+        for tag in _parse_legacy_prompt_tags(virtual):
+            start, end = positions[tag.start], positions[tag.end - 1] + 1
+            literal_marker = tag.source.lstrip(" \t").startswith("//")
+            literal_body = tag.text.lstrip(" \t").startswith("//")
+            # Removing a previous tag, or a numeric wrapper, could activate this marker.
+            if not hidden and (literal_marker or literal_body):
+                return manual_source()
+            manual = "\r" in tag.source or "\n" in tag.source or literal_marker
+            tags.append(PromptTag(
+                start, end, source[start:end], tag.text,
+                None if manual else tag.weight,
+                positions[tag.weight_end]
+                if not hidden and not manual and tag.weight_end is not None else None,
+                hidden, manual, block_start, block_end,
+            ))
+        line_index += 1
+    return tags
+
+
 def set_tag_weight(source: str, tag: PromptTag, weight: str) -> str:
-    if tag.weight is None or source[tag.start:tag.end] != tag.source:
+    if (
+        tag.weight is None or tag.hidden or tag.manual_only
+        or source[tag.start:tag.end] != tag.source
+    ):
         raise ValueError("Stale or unsupported style tag")
     if weight == "1.0":
         return (
@@ -166,11 +234,28 @@ def set_tag_weight(source: str, tag: PromptTag, weight: str) -> str:
 
 
 def _omission_ranges(
-    source: str, tags: list[PromptTag], omitted: set[int],
+    source: str, tags: list[PromptTag], omitted: set[int], *, prompt_comments: bool = False,
 ) -> list[tuple[int, int]]:
     """Remove adjacent occurrences and their separators without touching survivors."""
     if not omitted:
         return []
+    if prompt_comments:
+        ranges = []
+        blocks = {(tag.block_start, tag.block_end) for tag in tags if not tag.hidden}
+        for block_start, block_end in sorted(blocks):
+            members = [(index, tag) for index, tag in enumerate(tags)
+                       if not tag.hidden and tag.block_start == block_start]
+            local_tags = [PromptTag(
+                tag.start - block_start, tag.end - block_start, tag.source,
+                tag.text, tag.weight, None,
+            ) for _index, tag in members]
+            local_omitted = {index for index, (original, _tag) in enumerate(members)
+                             if original in omitted}
+            ranges.extend(
+                (block_start + start, block_start + end) for start, end in
+                _omission_ranges(source[block_start:block_end], local_tags, local_omitted)
+            )
+        return ranges
     if len(omitted) == len(tags):
         return [(0, len(source))]
     ranges = []
@@ -214,6 +299,7 @@ class StylePlan:
     total: int
     max_style_length: int
     plan_version: Literal[1, 2] = 2
+    prompt_comments: bool = False
 
     def combination(self, index: int) -> tuple[str, list[ExperimentWeight]]:
         if not 0 <= index < self.total:
@@ -235,7 +321,8 @@ class StylePlan:
                 tag_index=dimension.range.tag_index, label=dimension.tag.text, weight=weight,
             ))
         edits.extend((start, end, None, "") for start, end in _omission_ranges(
-            self.source, parse_prompt_tags(self.source), omitted,
+            self.source, parse_prompt_tags(self.source, prompt_comments=self.prompt_comments),
+            omitted, prompt_comments=self.prompt_comments,
         ))
         for start, end, tag, weight in sorted(edits, key=lambda edit: edit[0], reverse=True):
             source = (
@@ -253,13 +340,13 @@ def create_style_plan(
         raise ValueError("Unsupported style plan version")
     if not 1 <= len(ranges) <= 1500:
         raise ValueError("Select between one and 1500 style tags")
-    tags = parse_prompt_tags(parameters.style_prompt)
+    tags = parse_prompt_tags(parameters.style_prompt, prompt_comments=parameters.prompt_comments)
     selected = set()
     dimensions = []
     for supplied in ranges:
         if (
             supplied.tag_index >= len(tags) or supplied.tag_index in selected
-            or tags[supplied.tag_index].weight is None
+            or tags[supplied.tag_index].weight is None or tags[supplied.tag_index].hidden
         ):
             raise ValueError("Invalid or unsupported style tag selection")
         selected.add(supplied.tag_index)
@@ -286,7 +373,9 @@ def create_style_plan(
         if plan_version == 2 and dimension.count == 1 and dimension.min_units == 0
     }
     maximum_length = len(parameters.style_prompt) - sum(
-        end - start for start, end in _omission_ranges(parameters.style_prompt, tags, fixed_zeros)
+        end - start for start, end in _omission_ranges(
+            parameters.style_prompt, tags, fixed_zeros, prompt_comments=parameters.prompt_comments,
+        )
     )
     total = 1
     for dimension in dimensions:
@@ -308,8 +397,8 @@ def create_style_plan(
             weight_length - (dimension.tag.weight_end - dimension.tag.start)
             if dimension.tag.weight_end is not None else weight_length + 4
         )
-    shared = parameters.positive_prompt.strip()
-    can_be_empty = len(dimensions) == len(tags) and all(
+    shared = parameters.effective_positive_prompt.strip()
+    can_be_empty = len(dimensions) == len([tag for tag in tags if not tag.hidden]) and all(
         dimension.min_units <= 0
         and -dimension.min_units % dimension.step_units == 0
         and -dimension.min_units // dimension.step_units < dimension.count
@@ -317,15 +406,25 @@ def create_style_plan(
     )
     if plan_version == 2 and can_be_empty and not shared:
         raise ValueError("Zero weights can remove all style tags; add a shared prompt")
-    outer_space = len(parameters.style_prompt) - len(parameters.style_prompt.strip())
-    combined_length = (
-        maximum_length - outer_space + (len(shared) + 2 if shared else 0)
-        if maximum_length else len(parameters.positive_prompt)
-    )
+    if parameters.prompt_comments:
+        hidden_length = len(parameters.style_prompt) - len(
+            compile_prompt_comments(parameters.style_prompt),
+        )
+        effective_maximum = maximum_length - hidden_length
+        combined_length = effective_maximum + (len(shared) + 2 if shared else 0)
+        if not effective_maximum:
+            combined_length = len(parameters.effective_positive_prompt)
+    else:
+        outer_space = len(parameters.style_prompt) - len(parameters.style_prompt.strip())
+        combined_length = (
+            maximum_length - outer_space + (len(shared) + 2 if shared else 0)
+            if maximum_length else len(parameters.positive_prompt)
+        )
     if maximum_length > 3000 or combined_length > 3000:
         raise ValueError("Experiment prompt exceeds limit")
     plan = StylePlan(
         parameters.style_prompt, tuple(dimensions), total, maximum_length, plan_version,
+        parameters.prompt_comments,
     )
     # Validate the exact shared saved-metadata bounds before any accepted run.
     _source, weights = plan.combination(0)

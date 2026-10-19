@@ -141,8 +141,10 @@ explicit atomic append/replace import with visible character target mapping.
   column; tab switching does not reset draft state. Keep visibility local to
   the component and draft content in GenerationStore.
 - `PromptEditor` renders all generation prompt sections (never advice) from
-  the controlled draft string. Textarea blur switches to tag view without
-  changing that string; only the bottom-right `手动编辑` button reopens and
+  the controlled draft string. Textarea blur formats safe expressions one per
+  line under
+  [Individual Hidden Tags](../backend/prompt-comments-contract.md), then switches
+  to tag view; only the bottom-right `手动编辑` button reopens and
   focuses the textarea. Tag/container clicks and weight controls never enter
   text mode. Blank new fields may start as text inputs. Capture the textarea's
   actual height on blur and retain footer space; scroll tags inside that
@@ -160,8 +162,9 @@ explicit atomic append/replace import with visible character target mapping.
   selected numeric group's body without its outer `1.0::...::` wrapper.
   Preserve body whitespace, escapes, nested emphasis and surrounding source.
   The shared absolute setter owns this rule for both prompt buttons and style
-  experiments. Plain 1.0 needs no wrapper; blur/manual view changes alone
-  still leave source unchanged. Other weights retain numeric serialization
+  experiments. Plain 1.0 needs no wrapper; manual view changes preserve source.
+  Explicit blur only reflows safe expressions under the comment contract. Other
+  weights retain numeric serialization
   in ordinary prompt editing. New style experiments omit selected exact-zero
   occurrences under style-experiment-contract.md; do not change the shared
   ordinary-editor setter to implement that experiment-only rule.

@@ -1,4 +1,5 @@
 import type { GenerationRequest } from './api'
+import { appendPromptText, compilePromptComments } from './prompt-weights'
 
 export const SHARED_SECTION_KEYS = ['scene', 'other'] as const
 export const CHARACTER_SECTION_KEYS = ['character', 'upper_clothing', 'lower_clothing', 'action', 'tags', 'special', 'other'] as const
@@ -41,12 +42,13 @@ export function copySharedSections(sections: SharedSections): SharedSections {
 export function copyCharacterSections(sections: CharacterSections): CharacterSections {
   return Object.fromEntries(CHARACTER_SECTION_KEYS.map(key => [key, { ...sections[key] }])) as CharacterSections
 }
-export function composeSections<Key extends string>(sections: Record<Key, PromptSection>, keys: readonly Key[]): string {
-  const parts = keys.map(key => sections[key]).filter(section => section.enabled && section.text.trim()).map(section => section.text)
+export function composeSections<Key extends string>(sections: Record<Key, PromptSection>, keys: readonly Key[], comments = true): string {
+  const parts = keys.map(key => sections[key]).filter(section => section.enabled)
+    .map(section => comments ? compilePromptComments(section.text) : section.text).filter(text => text.trim())
   return parts.length === 1 ? parts[0] : parts.map(text => text.trim()).join(', ')
 }
-export const sharedPrompt = (sections: SharedSections): string => composeSections(sections, SHARED_SECTION_KEYS)
-export const characterPrompt = (sections: CharacterSections): string => composeSections(sections, CHARACTER_SECTION_KEYS)
+export const sharedPrompt = (sections: SharedSections, comments = true): string => composeSections(sections, SHARED_SECTION_KEYS, comments)
+export const characterPrompt = (sections: CharacterSections, comments = true): string => composeSections(sections, CHARACTER_SECTION_KEYS, comments)
 
 export function metadataFromDraft(draft: SectionDraft): PromptSections {
   return {
@@ -70,7 +72,8 @@ export function validateSectionBudgets(draft: SectionDraft, target?: PromptTextT
   if (allSections.some(section => section.text.length > 3000)) throw new Error('每个分区不能超过 3000 字符，草稿未修改。')
   if (checkShared) {
     const shared = sharedPrompt(draft.shared_sections)
-    const base = draft.style_prompt.trim() ? [draft.style_prompt.trim(), shared.trim()].filter(Boolean).join(', ') : shared
+    const style = compilePromptComments(draft.style_prompt)
+    const base = style.trim() ? [style.trim(), shared.trim()].filter(Boolean).join(', ') : shared
     if (draft.style_prompt.length > 3000 || shared.length > 3000 || base.length > 3000) {
       throw new Error('画风和公共提示词合计不能超过 3000 字符（含分隔符），草稿未修改。')
     }
@@ -98,13 +101,16 @@ export function isPromptSections(value: unknown): value is PromptSections {
 }
 /** New metadata is a strict payload projection, never a best-effort fallback. */
 export function validRequestSections(parameters: GenerationRequest): boolean {
+  if (parameters.prompt_comments !== undefined && typeof parameters.prompt_comments !== 'boolean') return false
   const metadata = parameters.prompt_sections
   if (metadata === undefined || metadata === null) return true
   if (!isPromptSections(metadata) || typeof parameters.style_prompt !== 'string') return false
-  const shared = sharedPrompt(metadata.shared)
-  const base = parameters.style_prompt.trim() ? [parameters.style_prompt.trim(), shared.trim()].filter(Boolean).join(', ') : shared
+  const comments = parameters.prompt_comments === true
+  const shared = sharedPrompt(metadata.shared, comments)
+  const style = comments ? compilePromptComments(parameters.style_prompt) : parameters.style_prompt
+  const base = style.trim() ? [style.trim(), shared.trim()].filter(Boolean).join(', ') : shared
   if (parameters.positive_prompt !== shared || shared.length > 3000 || parameters.style_prompt.length > 3000 || base.length > 3000 || !base.trim()) return false
-  const characters = metadata.characters.map(person => ({ prompt: characterPrompt(person.sections), x: person.x, y: person.y })).filter(person => person.prompt.trim())
+  const characters = metadata.characters.map(person => ({ prompt: characterPrompt(person.sections, comments), x: person.x, y: person.y })).filter(person => person.prompt.trim())
   if (characters.some(person => person.prompt.length > 3000)) return false
   return Array.isArray(parameters.character_prompts) && characters.length === parameters.character_prompts.length
     && characters.every((person, index) => {
@@ -207,7 +213,7 @@ export function projectSnapshotImport(draft: SectionDraft, snapshots: PromptSnap
       if (!section) throw new Error('目标分区已失效，草稿未修改。')
       // Preserve exact replacement/single text; append never deduplicates tags.
       section.text = mode === 'replace' ? entry.text
-        : [section.text, entry.text].filter(text => text.trim()).join(', ')
+        : appendPromptText(section.text, entry.text)
     }
   }
   validateSectionBudgets(next)

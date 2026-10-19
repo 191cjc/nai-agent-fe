@@ -19,6 +19,10 @@ export interface PromptTag extends SourceRange {
   text: string
   weight: string | null
   weightRange: SourceRange | null
+  hidden?: boolean
+  manualOnly?: boolean
+  blockStart?: number
+  blockEnd?: number
 }
 
 const NUMBER_PREFIX = /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)::/
@@ -71,7 +75,7 @@ function normalizedWeight(value: string): string {
  * refer to the original string: viewing tags must never rewrite a prompt.
  * Unknown/incomplete emphasis stays visible but is not guessed or converted.
  */
-export function parsePromptTags(source: string): PromptTag[] {
+function parseLegacyPromptTags(source: string): PromptTag[] {
   const tags: PromptTag[] = []
   const scopes: Scope[] = []
   let groups: NumericGroup[] = []
@@ -156,6 +160,97 @@ export function parsePromptTags(source: string): PromptTag[] {
   return tags
 }
 
+interface PromptLine extends SourceRange { bodyStart: number; hidden: boolean }
+
+function promptLines(source: string): PromptLine[] {
+  const lines: PromptLine[] = []
+  const pattern = /([^\r\n]*)(\r\n|\r|\n|$)/g
+  for (const match of source.matchAll(pattern)) {
+    if (!match[0]) continue
+    const start = match.index
+    const prefix = /^[ \t]*\/\/ ?/.exec(match[1])
+    lines.push({ start, end: start + match[0].length,
+      bodyStart: start + (prefix?.[0].length ?? 0), hidden: prefix !== null })
+  }
+  return lines
+}
+
+/** Whole physical line comments are editor syntax; surviving text stays literal. */
+export function compilePromptComments(source: string): string {
+  return promptLines(source).filter(line => !line.hidden).map(line => source.slice(line.start, line.end)).join('')
+}
+
+/** Start appended content on a fresh line, even after a hidden final tag. */
+export function appendPromptText(current: string, text: string): string {
+  return [current, text].filter(part => part.trim()).join(',\n')
+}
+
+/**
+ * Hidden occurrences share the same index space as active occurrences. Mapping
+ * uses raw source offsets, never offsets from the decommented virtual source.
+ * A scope crossing active/comment blocks is conservatively one manual entry.
+ */
+export function parsePromptTags(source: string, comments = false): PromptTag[] {
+  const legacy = parseLegacyPromptTags(source)
+  if (!comments) return legacy
+  const lines = promptLines(source)
+  const manualField = (): PromptTag[] => {
+    const range = trimRange(source, 0, source.length)
+    const raw = source.slice(range.start, range.end)
+    return raw ? [{ ...range, source: raw, text: raw, weight: null, weightRange: null, hidden: false, manualOnly: true }] : []
+  }
+  const crossesModes = legacy.some(tag => /[\r\n]/.test(tag.source)
+    && new Set(lines.filter(line => line.start < tag.end && line.end > tag.start).map(line => line.hidden)).size > 1)
+  if (crossesModes) return manualField()
+  const tags: PromptTag[] = []
+  for (let index = 0; index < lines.length;) {
+    const first = index
+    const hidden = lines[index].hidden
+    while (index < lines.length && lines[index].hidden === hidden) index += 1
+    const block = lines.slice(first, index)
+    let virtual = ''
+    const offsets: number[] = []
+    for (const line of block) {
+      const start = hidden ? line.bodyStart : line.start
+      for (let position = start; position < line.end; position += 1) {
+        offsets.push(position)
+        virtual += source[position]
+      }
+    }
+    for (const tag of parseLegacyPromptTags(virtual)) {
+      const start = offsets[tag.start]
+      const end = offsets[tag.end - 1] + 1
+      // Moving a literal inline // onto its own line would turn it into a
+      // comment. A doubled hidden marker likewise cannot be restored safely.
+      const manualOnly = /[\r\n]/.test(tag.source) || /^[ \t]*\/\//.test(tag.source)
+      tags.push({ ...tag, start, end, source: source.slice(start, end),
+        weight: manualOnly ? null : tag.weight,
+        weightRange: !hidden && !manualOnly && tag.weightRange
+          ? { start: offsets[tag.weightRange.start], end: offsets[tag.weightRange.end - 1] + 1 } : null,
+        hidden, manualOnly, blockStart: block[0].start, blockEnd: block.at(-1)!.end })
+    }
+  }
+  // A sibling's zero omission or an outer neutral unwrap could promote an
+  // inline literal marker to a comment. Keep its whole context unchanged.
+  if (tags.some(tag => !tag.hidden && (/^[ \t]*\/\//.test(tag.source) || /^[ \t]*\/\//.test(tag.text)))) return manualField()
+  return tags
+}
+
+/** Formatting is explicit on blur; ambiguous multiline source is never reflowed. */
+export function formatPromptTags(source: string): string {
+  const tags = parsePromptTags(source, true)
+  if (tags.some(tag => tag.manualOnly)) return source
+  return tags.map(tag => `${tag.hidden ? '// ' : ''}${tag.source}`).join(',\n')
+}
+
+/** Reflow before toggling, so one comment cannot accidentally hide a sibling. */
+export function togglePromptTagHidden(source: string, tag: PromptTag): string | null {
+  const tags = parsePromptTags(source, true)
+  const index = tags.findIndex(current => current.start === tag.start && current.end === tag.end && current.source === tag.source)
+  if (index < 0 || tags.some(current => current.manualOnly)) return null
+  return tags.map((current, position) => `${(position === index ? !current.hidden : current.hidden) ? '// ' : ''}${current.source}`).join(',\n')
+}
+
 /** Replace only the selected source span, preserving every other character. */
 export function adjustPromptTagWeight(source: string, tag: PromptTag, direction: -1 | 1): string | null {
   if (tag.weight === null || source.slice(tag.start, tag.end) !== tag.source) return null
@@ -166,7 +261,7 @@ export function adjustPromptTagWeight(source: string, tag: PromptTag, direction:
 
 /** Set an absolute exact weight without changing the tag body or its siblings. */
 export function setPromptTagWeight(source: string, tag: PromptTag, weight: string): string | null {
-  if (tag.weight === null || source.slice(tag.start, tag.end) !== tag.source) return null
+  if (tag.hidden || tag.manualOnly || tag.weight === null || source.slice(tag.start, tag.end) !== tag.source) return null
   let nextWeight: string
   try {
     nextWeight = normalizedWeight(weight)

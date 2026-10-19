@@ -7,6 +7,10 @@ history/reuse, section tag targets or the private reusable snapshot library.
 The original effective prompt fields remain the provider boundary. Editor
 metadata belongs only to the authenticated workspace and frozen history/runs.
 
+Whole-line per-tag comments and raw/effective projections follow
+[Individual Hidden Tags](./prompt-comments-contract.md). Syntax is opt-in per frozen request;
+absent/false preserves the legacy contracts below.
+
 ## Signatures
 
 - `GenerationRequest.prompt_sections: PromptSections | None = None`, excluded

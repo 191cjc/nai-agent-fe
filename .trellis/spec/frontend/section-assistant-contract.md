@@ -68,7 +68,10 @@ each candidate's explicit 追加/覆盖 edits the exact opening section. Do not
 route through global positiveTagTarget or modify the left tag/advice stores.
 
 Append preserves duplicate tags and existing source text, joining nonblank
-parts with ', '. Replace changes only the destination text. Both preserve
+parts with a comma plus newline using appendPromptText, so the new content
+cannot join a final // comment line. Follow
+[Individual Hidden Tags](../backend/prompt-comments-contract.md) for comment
+compilation and source limits. Replace changes only the destination text. Both preserve
 enabled/hidden flags, coordinates, sibling sections, settings and frozen run
 definitions. Hidden sections remain editable without enabling them.
 Check destination3000 and the relevant shared+style or person's composed3000

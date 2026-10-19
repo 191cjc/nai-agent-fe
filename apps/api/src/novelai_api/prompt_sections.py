@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from .prompt_comments import compile_prompt_comments
+
 SharedSectionKey = Literal["scene", "other"]
 CharacterSectionKey = Literal[
     "character",
@@ -24,8 +26,13 @@ class PromptSection(BaseModel):
     enabled: bool = Field(default=True, strict=True)
 
 
-def compose_sections(sections: Iterable[PromptSection]) -> str:
-    parts = [section.text for section in sections if section.enabled and section.text.strip()]
+def compose_sections(sections: Iterable[PromptSection], *, prompt_comments: bool = False) -> str:
+    parts = [
+        text for section in sections if section.enabled
+        if (text := (
+            compile_prompt_comments(section.text) if prompt_comments else section.text
+        )).strip()
+    ]
     if len(parts) == 1:
         return parts[0]
     return ", ".join(part.strip() for part in parts)
@@ -37,8 +44,8 @@ class SharedSections(BaseModel):
     scene: PromptSection
     other: PromptSection
 
-    def compose(self) -> str:
-        return compose_sections((self.scene, self.other))
+    def compose(self, *, prompt_comments: bool = False) -> str:
+        return compose_sections((self.scene, self.other), prompt_comments=prompt_comments)
 
 
 class CharacterSections(BaseModel):
@@ -52,7 +59,7 @@ class CharacterSections(BaseModel):
     special: PromptSection
     other: PromptSection
 
-    def compose(self) -> str:
+    def compose(self, *, prompt_comments: bool = False) -> str:
         return compose_sections(
             (
                 self.character,
@@ -62,7 +69,7 @@ class CharacterSections(BaseModel):
                 self.tags,
                 self.special,
                 self.other,
-            )
+            ), prompt_comments=prompt_comments,
         )
 
 
@@ -88,9 +95,11 @@ class PromptSections(BaseModel):
             raise ValueError("Section metadata version must be an integer")
         return value
 
-    def effective_characters(self) -> list[dict[str, str | float]]:
+    def effective_characters(
+        self, *, prompt_comments: bool = False,
+    ) -> list[dict[str, str | float]]:
         return [
             {"prompt": prompt, "x": character.x, "y": character.y}
             for character in self.characters
-            if (prompt := character.sections.compose()).strip()
+            if (prompt := character.sections.compose(prompt_comments=prompt_comments)).strip()
         ]

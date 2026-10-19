@@ -486,3 +486,14 @@ only changes selected destination text. Existing unsplit text restores
 verbatim in 其他. History/reuse preserve hidden sections and character positions;
 active experiments retain their frozen prompts. See prompt-sections-design.md
 for exact contracts, atomic application, compatibility and acceptance checks.
+
+## Follow-up: Individual Hidden Tags (2026-10-16)
+
+The operator requests per-tag temporary hiding in addition to section hiding.
+They explicitly selected whole-line // comments and one tag per line on blur.
+Each tag can hide/restore without losing its weight; hidden chips remain visible
+and recoverable. Manual text shows comment markers, and blur safely formats
+expressions. Hidden text is excluded from generation and experiment candidates,
+but retained in history and snapshots. Appended search/advice/import text stays
+outside prior comment lines. Preserve exact legacy frozen runs. See
+hidden-tags-design.md for bounded syntax, persistence and release contracts.

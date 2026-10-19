@@ -33,6 +33,7 @@ export interface ExperimentContext {
 }
 
 export interface GenerationRequest {
+  prompt_comments?: boolean
   positive_prompt: string
   style_prompt: string
   character_prompts: CharacterPrompt[]

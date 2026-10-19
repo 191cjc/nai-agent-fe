@@ -118,10 +118,14 @@ def test_openapi_contract_matches_snapshot_without_database_or_provider_calls(
     assert generation_fields["auto_character_position"] == {
         "default": False, "title": "Auto Character Position", "type": "boolean",
     }
+    assert generation_fields["prompt_comments"] == {
+        "default": False, "title": "Prompt Comments", "type": "boolean",
+    }
     required = schema["components"]["schemas"]["GenerationRequest"]["required"]
     assert "style_prompt" not in required
     assert "character_prompts" not in required
     assert "auto_character_position" not in required
+    assert "prompt_comments" not in required
     character_schema = schema["components"]["schemas"]["CharacterPrompt"]
     assert character_schema["required"] == ["prompt"]
     for coordinate in ("x", "y"):

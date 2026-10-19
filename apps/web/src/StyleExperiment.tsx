@@ -23,10 +23,10 @@ function sampleCount(value: string): bigint | null {
   return count >= 1n && count <= 8n ? count : null
 }
 
-function planPreview(source: string, ranges: StyleExperimentRange[]): { plan: StyleExperimentPlan | null; error: string } {
+function planPreview(source: string, ranges: StyleExperimentRange[], comments: boolean): { plan: StyleExperimentPlan | null; error: string } {
   if (!ranges.length) return { plan: null, error: '' }
   try {
-    return { plan: createStyleExperimentPlan(source, ranges), error: '' }
+    return { plan: createStyleExperimentPlan(source, ranges, comments), error: '' }
   } catch (error) {
     return { plan: null, error: error instanceof Error ? error.message : '实验范围无效。' }
   }
@@ -44,8 +44,9 @@ export const StyleExperimentConfig = observer(({ generation, hidden }: { generat
     ranges: snapshot.ranges.map(range => ({ tagIndex: range.tag_index, min: range.min, max: range.max, step: range.step })),
     sampleCount: String(snapshot.parameters.sample_count),
   } : { source, ranges: liveRanges, sampleCount: generation.draft.sample_count }
-  const tags = parsePromptTags(displayed.source)
-  const { plan, error: planError } = planPreview(displayed.source, displayed.ranges)
+  const comments = snapshot ? snapshot.parameters.prompt_comments === true : true
+  const tags = parsePromptTags(displayed.source, comments)
+  const { plan, error: planError } = planPreview(displayed.source, displayed.ranges, comments)
   const error = planError || (!frozen && plan?.canBeEmpty && !sharedPrompt(generation.draft.shared_sections).trim()
     ? '权重为 0 时可能移除全部画风词条，请填写公共提示词，或调整范围以保留至少一个画风词条。' : '')
   const samples = sampleCount(displayed.sampleCount)
@@ -86,18 +87,18 @@ export const StyleExperimentConfig = observer(({ generation, hidden }: { generat
     onKeyDown={event => { if (event.key === 'Enter' && event.target instanceof HTMLInputElement) event.preventDefault() }}>
     <h3 id="style-experiment-config-title"><FlaskConical size={15} aria-hidden="true" /> 画风实验</h3>
     <p className="prompt-hint">选择要模糊测试的画风词条，为每个词条设置下限、上限和步长，依次尝试所有权重组合。</p>
-    <p className="prompt-hint">新实验中，权重为 0 时移除该词条。</p>
+    <p className="prompt-hint">新实验中，权重为 0 时移除该词条。已隐藏的词条不参与实验。</p>
     {frozen && <p className="experiment-note" role="status">这里展示本次实验固定的画风和范围。编辑草稿不会改变服务器实验。</p>}
     {!frozen && notice && <p className="experiment-note" role="status">{notice}</p>}
     <fieldset className="experiment-tag-options" disabled={frozen}>
       <legend>模糊画风词条</legend>
-      {tags.length ? tags.map((tag, tagIndex) => <label className={tag.weight === null ? 'experiment-tag-option original' : 'experiment-tag-option'} key={tagIndex}>
-        <input type="checkbox" checked={displayed.ranges.some(range => range.tagIndex === tagIndex)} disabled={tag.weight === null}
+      {tags.length ? tags.map((tag, tagIndex) => <label className={`experiment-tag-option${tag.weight === null ? ' original' : ''}${tag.hidden ? ' muted' : ''}`} key={tagIndex}>
+        <input type="checkbox" checked={displayed.ranges.some(range => range.tagIndex === tagIndex)} disabled={tag.hidden || tag.manualOnly || tag.weight === null}
           onChange={event => select(tagIndex, event.target.checked)} />
         <span className="experiment-occurrence">{tagIndex + 1}.</span>
         <span className="experiment-tag-label">{tag.text}</span>
-        <span className="experiment-current-weight" title={tag.weight === null ? '原文 · 仅手动编辑' : `当前 ${tag.weight}`}>
-          {tag.weight === null ? '原文 · 仅手动编辑' : `当前 ${tag.weight}`}</span>
+        <span className="experiment-current-weight" title={tag.hidden ? '已隐藏 · 不参与实验' : tag.weight === null ? '原文 · 仅手动编辑' : `当前 ${tag.weight}`}>
+          {tag.hidden ? '已隐藏' : tag.weight === null ? '原文 · 仅手动编辑' : `当前 ${tag.weight}`}</span>
       </label>) : <p className="prompt-hint">先在画风中填写词条，再选择需要测试的词条。</p>}
     </fieldset>
     <div className="experiment-ranges">{[...displayed.ranges].sort((left, right) => left.tagIndex - right.tagIndex).map(range => {

@@ -18,6 +18,7 @@ import { SavedResultsStore } from './saved-results'
 import { StyleRunStore } from './style-run-store'
 import { PromptSnapshotStore } from './prompt-snapshots'
 import { BalanceStore } from './balance-store'
+import { appendPromptText, compilePromptComments } from './prompt-weights'
 import {
   CHARACTER_SECTION_KEYS, SHARED_SECTION_KEYS, SECTION_LABELS, characterPrompt, sharedPrompt,
   emptyCharacterSections, emptySharedSections, metadataFromDraft, restoredSections, sectionAt,
@@ -42,7 +43,7 @@ export const NATIVE_CHARACTER_MODELS = [
 export type CharacterDraft = SectionCharacterDraft
 export type PositiveTagTarget = 'style_prompt' | `shared:${typeof SHARED_SECTION_KEYS[number]}` | `character:${string}:${typeof CHARACTER_SECTION_KEYS[number]}`
 
-export type GenerationDraft = Omit<GenerationRequest, 'positive_prompt' | 'prompt_sections' | 'width' | 'height' | 'steps' | 'cfg_scale' | 'seed' | 'sample_count' | 'character_prompts' | 'auto_character_position' | 'experiment'> & {
+export type GenerationDraft = Omit<GenerationRequest, 'positive_prompt' | 'prompt_sections' | 'prompt_comments' | 'width' | 'height' | 'steps' | 'cfg_scale' | 'seed' | 'sample_count' | 'character_prompts' | 'auto_character_position' | 'experiment'> & {
   shared_sections: SharedSections
   width: string
   height: string
@@ -87,8 +88,9 @@ function integer(value: string, label: string, min: number, max: number, multipl
 export function requestFromDraft(draft: GenerationDraft): GenerationRequest {
   validateSectionBudgets(draft)
   const positive = sharedPrompt(draft.shared_sections)
-  const basePrompt = draft.style_prompt.trim()
-    ? [draft.style_prompt.trim(), positive.trim()].filter(Boolean).join(', ')
+  const style = compilePromptComments(draft.style_prompt)
+  const basePrompt = style.trim()
+    ? [style.trim(), positive.trim()].filter(Boolean).join(', ')
     : positive
   if (!basePrompt.trim()) throw new Error('请填写画风或公共提示词。')
   if (draft.negative_prompt.length > 3000) throw new Error('负面提示词不能超过 3000 字符。')
@@ -102,6 +104,7 @@ export function requestFromDraft(draft: GenerationDraft): GenerationRequest {
   const cfgScale = Number(draft.cfg_scale)
   if (!draft.cfg_scale.trim() || !Number.isFinite(cfgScale) || cfgScale < 0 || cfgScale > 20) throw new Error('CFG 系数须为 0-20。')
   return {
+    prompt_comments: true,
     positive_prompt: positive,
     prompt_sections: metadataFromDraft(draft),
     style_prompt: draft.style_prompt,
@@ -325,7 +328,7 @@ export class GenerationStore {
     const current = this.promptTextAt(target)
     if (current === undefined) throw new Error('目标分区已移除，草稿未修改。')
     if (mode !== 'append' && mode !== 'replace') throw new Error('请选择追加或覆盖。')
-    const value = mode === 'replace' ? text : [current, text].filter(part => part.trim()).join(', ')
+    const value = mode === 'replace' ? text : appendPromptText(current, text)
     if (value.length > 3000) throw new Error('当前分区不能超过 3000 字符，草稿未修改。')
     const next: GenerationDraft = {
       ...this.draft, shared_sections: copySharedSections(this.draft.shared_sections),
@@ -375,10 +378,7 @@ export class GenerationStore {
   }
 
   insertTag(tag: string, target: 'positive' | 'negative'): void {
-    const append = (value: string) => {
-      const current = value.trim()
-      return current ? `${current.replace(/,\s*$/, '')}, ${tag}` : tag
-    }
+    const append = (value: string) => appendPromptText(value, tag)
     if (target === 'negative' || this.positiveTagTarget === 'style_prompt') {
       const key = target === 'negative' ? 'negative_prompt' : 'style_prompt'
       const next = append(this.draft[key])
@@ -457,12 +457,12 @@ export class GenerationStore {
       if (source !== this.draft.style_prompt) throw new Error('画风已变化，请重新选择实验词条。')
       parameters = requestFromDraft(this.draft)
       if (!supportsNativeCharacters(parameters.model)) throw new Error('画风实验需要列表中的 V4 / V4.5 / V5 模型。')
-      plan = createStyleExperimentPlan(source, ranges)
+      plan = createStyleExperimentPlan(source, ranges, true)
       validateExperimentMetadata(plan)
       const shared = parameters.positive_prompt.trim()
       if (plan.canBeEmpty && !shared) throw new Error('权重为 0 时可能移除全部画风词条，请填写公共提示词，或调整范围以保留至少一个画风词条。')
-      const combinedLength = plan.maxStyleLength
-        ? plan.maxStyleLength - (source.length - source.trim().length) + (shared ? 2 + shared.length : 0)
+      const combinedLength = plan.maxEffectiveStyleLength
+        ? plan.maxEffectiveStyleLength + (shared ? 2 + shared.length : 0)
         : parameters.positive_prompt.length
       if (plan.maxStyleLength > 3000 || combinedLength > 3000) {
         throw new Error('实验权重可能使画风和公共提示词超过 3000 字符，请缩短提示词或权重范围。')

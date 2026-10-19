@@ -238,7 +238,7 @@ class NovelAiMcpProvider:
                 raise ProviderFailure("incompatible_mcp_server")
             arguments = {
                 "prompt": parameters.base_prompt,
-                "negative_prompt": parameters.negative_prompt,
+                "negative_prompt": parameters.effective_negative_prompt,
                 "model": parameters.model,
                 "width": parameters.width,
                 "height": parameters.height,
@@ -249,9 +249,10 @@ class NovelAiMcpProvider:
                 "n_samples": parameters.sample_count,
                 "quality": parameters.quality,
             }
-            if parameters.character_prompts:
+            characters = parameters.effective_character_prompts
+            if characters:
                 if not _accepts_character_objects(
-                    properties.get("character_prompts"), len(parameters.character_prompts)
+                    properties.get("character_prompts"), len(characters)
                 ):
                     raise ProviderFailure("unsupported_character_prompts")
                 supports_position_mode = _accepts_boolean(properties.get("auto_character_position"))
@@ -268,7 +269,7 @@ class NovelAiMcpProvider:
                             "x": character.x, "y": character.y,
                         }),
                     }
-                    for character in parameters.character_prompts
+                    for character in characters
                 ]
             for field in ("model", "sampler"):
                 field_schema = properties[field]

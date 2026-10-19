@@ -7,6 +7,10 @@ saved comparisons. Experiments are server-owned durable runs. Browser close,
 refresh, logout and connection failure detach observation, not server work.
 See backend/durable-experiment-contract.md for the owning API/schema contract.
 
+Whole-line per-tag comments and raw/effective projections follow
+[Individual Hidden Tags](../backend/prompt-comments-contract.md). Syntax is opt-in per frozen request;
+absent/false preserves the legacy contracts below.
+
 ## Signatures
 
 - createStyleExperimentPlan(source, ranges) validates occurrence-based decimal

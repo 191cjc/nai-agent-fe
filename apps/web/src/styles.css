@@ -192,6 +192,14 @@ h1, h2, h3 { letter-spacing: 0; }
 .prompt-tag-weight { align-self: center; min-width: 0; max-width: 110px; padding: 3px 7px; margin-left: auto; overflow: hidden; text-overflow: ellipsis; color: var(--gold); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .prompt-tag.original { border-style: dashed; }
 .prompt-tag.original .prompt-tag-weight { color: var(--muted); }
+.prompt-tag.muted { border-color: #464652; background: #272833; color: #9c9eab; }
+.prompt-tag.muted .prompt-tag-text { text-decoration: line-through; text-decoration-color: #777a8b; }
+.prompt-tag.muted .prompt-tag-weight { color: #a6a2a9; }
+.prompt-tag-hidden-label { align-self: center; flex-shrink: 0; color: #9c9eab; font-size: 10px; }
+.prompt-tag-visibility { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 27px; min-height: 28px; padding: 0; border: 0; border-left: 1px solid #52505d; border-radius: 0 3px 3px 0; background: #383743; color: #bdb5cb; }
+.prompt-tag-visibility:hover:not(:disabled) { color: #f4d798; background: #514a40; }
+.prompt-tag-visibility:focus-visible { position: relative; z-index: 1; outline-offset: 0; }
+.experiment-tag-option.muted { color: #9c9eab; }
 .prompt-weight-controls { display: flex; flex: 0 0 24px; flex-direction: column; border-left: 1px solid #52505d; }
 .prompt-weight-button { display: flex; align-items: center; justify-content: center; flex: 1 0 18px; width: 24px; min-height: 18px; padding: 0; border: 0; border-radius: 0 3px 0 0; background: #383743; color: #d6c298; }
 .prompt-weight-button + .prompt-weight-button { border-top: 1px solid #52505d; border-radius: 0 0 3px 0; }

@@ -7,6 +7,10 @@ schema changes affecting server-owned style experiments. The operator requires
 failure continuation and background execution independent of browser lifetime.
 This replaces earlier browser-only/no-continuation contracts.
 
+Whole-line per-tag comments and raw/effective projections follow
+[Individual Hidden Tags](./prompt-comments-contract.md). Syntax is opt-in per frozen request;
+absent/false preserves the legacy contracts below.
+
 ## Signatures
 
 - POST /api/style-experiment-runs: `{id: UUID, parameters: GenerationRequest,

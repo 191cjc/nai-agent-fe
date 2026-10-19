@@ -502,6 +502,11 @@
             "title": "Positive Prompt",
             "type": "string"
           },
+          "prompt_comments": {
+            "default": false,
+            "title": "Prompt Comments",
+            "type": "boolean"
+          },
           "prompt_sections": {
             "anyOf": [
               {

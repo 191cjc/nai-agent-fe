@@ -96,6 +96,13 @@ and [Prompt Sections](./prompt-sections-contract.md) (current schema4).
   manifest/PNG SHA-256 inventory while the API is stopped, then verify exact
   bytes and original expiry for every still-unexpired result after startup.
   Root-directory existence/permissions alone do not verify retained images.
+- Individual tag comments require an API-first release at unchanged schema4.
+  Old APIs ignore prompt_comments and may submit hidden style/negative source.
+  Verify the strict optional boolean in exact running OpenAPI before web
+  activation. Once the modern API has started, keep it during web fallback or
+  use a forward fix: even pre-validation startup may have accepted flagged
+  history/runs. SQLite schema compatibility alone cannot authorize a downgrade.
+  Preserve idle/backup/config/image/expiry gates and never restore the live DB.
 - Account-balance rollout adds a read-only authenticated route at existing
   schema4. Publish the API before web, preserving private state/config/images
   and idle/backup gates; no migration is needed. A configured adapter probe
