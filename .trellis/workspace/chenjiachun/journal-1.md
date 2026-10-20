@@ -732,3 +732,26 @@ Implemented per-tag hide/restore using whole-line comments and guarded blur form
 ### Status
 
 [OK] **Completed**
+
+
+## Session 23: Experiment image preload
+<!-- trellis-session: v=2 fp=bef79ab521582fcd -->
+
+**Date**: 2026-10-20
+**Task**: Experiment image preload
+**Branch**: `feat/native-character-prompts`
+
+### Summary
+
+Added explicit saved-experiment image preloading with progress, cancellation, cached reuse, per-image failure continuation and bounded 256-image/256-MiB session memory. Independent frontend review, ESLint/TypeScript and fresh 25-input env-free locked build passed. Published web-only release 20261020T055052; exact public assets and readiness verified, old assets retained, API release/PID 207197 unchanged. No API restart, private-state mutation, frontend/helper/browser tests or provider calls. Broader task stays in_progress for operator acceptance.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c61e96c` | feat: preload saved experiment images on demand |
+| `79528ff` | docs: record experiment image preload deployment |
+
+### Status
+
+[OK] **Completed**
