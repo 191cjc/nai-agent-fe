@@ -554,21 +554,23 @@ const Workspace = observer(({ store }: { store: AppStore }) => {
             mode={historyMode} onModeChange={setHistoryMode} /> : name === 'tags' ? <TagSearch store={store} /> : <Advice store={store} />}
         </SidePanel>)}
       <div className="main-column">
-        <div className="canvas-region" aria-label="图像画布">
-          <Result store={store} hidden={store.savedResults.selection !== null} />
-          <SavedResultViewer saved={store.savedResults} onClose={closeSavedResult} />
+        <div className="canvas-stage">
+          <div className="canvas-region" aria-label="图像画布">
+            <Result store={store} hidden={store.savedResults.selection !== null} />
+            <SavedResultViewer saved={store.savedResults} onClose={closeSavedResult} />
+          </div>
+          <section className="prompt-dock" aria-label="提示词抽屉">
+            <button ref={promptToggleRef} className="prompt-drawer-toggle" id="prompt-drawer-toggle" type="button"
+              aria-expanded={promptsOpen} aria-controls="prompt-drawer-body" onClick={togglePrompts}>
+              <span><WandSparkles size={15} aria-hidden="true" /><strong>提示词</strong><span className="prompt-drawer-summary">画风 · 公共 · 人物</span></span>
+              <span className="prompt-disclosure-label">{promptsOpen ? '收起' : '展开'}{promptsOpen ? <ChevronDown size={16} aria-hidden="true" /> : <ChevronUp size={16} aria-hidden="true" />}</span>
+            </button>
+            <div ref={promptBodyRef} className="prompt-drawer-body" id="prompt-drawer-body" hidden={!promptsOpen}>
+              <form id="generation-form" onSubmit={submit}><Editor store={store} active={promptsOpen} /></form>
+            </div>
+          </section>
         </div>
         <div className="workspace-operations"><StyleExperimentProgress generation={store.generation} saved={store.savedResults} /></div>
-        <section className="prompt-dock" aria-label="提示词抽屉">
-          <button ref={promptToggleRef} className="prompt-drawer-toggle" id="prompt-drawer-toggle" type="button"
-            aria-expanded={promptsOpen} aria-controls="prompt-drawer-body" onClick={togglePrompts}>
-            <span><WandSparkles size={15} aria-hidden="true" /><strong>提示词</strong><span className="prompt-drawer-summary">画风 · 公共 · 人物</span></span>
-            <span className="prompt-disclosure-label">{promptsOpen ? '收起' : '展开'}{promptsOpen ? <ChevronDown size={16} aria-hidden="true" /> : <ChevronUp size={16} aria-hidden="true" />}</span>
-          </button>
-          <div ref={promptBodyRef} className="prompt-drawer-body" id="prompt-drawer-body" hidden={!promptsOpen}>
-            <form id="generation-form" onSubmit={submit}><Editor store={store} active={promptsOpen} /></form>
-          </div>
-        </section>
         {store.generation.submitUncertain && <div className="uncertain-bar" role="alert">
           <span>提交结果未知，请核对历史记录。</span>
           <button className="secondary" type="button" onClick={() => { setHistoryMode('generations'); openPanel('history'); void store.history.load(0) }}>查看历史</button>

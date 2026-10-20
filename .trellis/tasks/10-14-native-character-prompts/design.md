@@ -221,3 +221,10 @@ preload-images-design.md owns the explicit bulk-read exception, selection-owned
 preload lifecycle, enlarged bounded cache and truthful progress/cancel semantics.
 This is frontend-only; default browsing remains lazy and publication preserves
 the existing API process and private data.
+
+## Follow-up: Overlay Prompt Drawer (2026-10-20)
+
+overlay-prompt-drawer-design.md replaces the in-flow expanded prompt dock with
+a bounded overlay anchored to the main canvas stage. Disclosure must preserve
+canvas dimensions and existing prompt/form/focus/operation ownership. This
+supersedes earlier canvas-growth-on-collapse layout choices.

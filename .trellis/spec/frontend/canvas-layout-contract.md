@@ -3,8 +3,8 @@
 ## Scope / Trigger
 
 Use for App.tsx, SavedResults.tsx, StyleExperiment.tsx and styles.css layout
-changes. The workspace centers one image canvas above a collapsible prompt
-drawer and persistent bottom Generate controls. Left tool drawers are separate.
+changes. The workspace centers one image canvas with a collapsible prompt
+overlay and persistent bottom Generate controls. Left tool drawers are separate.
 See workspace-contract.md for operations/auth and viewer-cache-contract.md for
 saved image ownership; layout must preserve those contracts.
 
@@ -20,12 +20,24 @@ saved image ownership; layout must preserve those contracts.
   even when its prompt inputs are inside the hidden drawer body.
 - SavedResultsStore.selection determines saved versus current canvas visibility.
   Ordinary current-image selection uses already-loaded generation.images only.
+- Workspace's local canvas-stage contains the canvas-region and prompt-dock.
+  The stage owns their positioning/stacking; operation/recovery/footer controls
+  are normal-flow siblings outside this stage.
+- canvas-stage defines --prompt-toggle-height (40px, or34px at heights<=500px)
+  for both the toggle's fixed basis and constant bottom padding plus1px border.
 
 ## Contracts
 
-- Use the remaining viewport height for the canvas. Prompt content scrolls in
-  a bounded bottom drawer; Generate stays outside its collapsible body at the
-  bottom. Main canvas, tool panel and prompt content own local scrolling.
+- Use the remaining viewport height for the canvas stage. Reserve only a
+  constant collapsed-toggle strip in both disclosure states. Anchor the dock
+  absolutely to the stage bottom, with max-height:100% and local scrolling;
+  its expanded body occludes the lower canvas without resizing/recentering
+  the canvas or image. Never allocate the expanded body in normal flow.
+  Generate, operation progress/Stop and recovery/errors stay outside the
+  overlay. Main canvas, tool panel and prompt content own local scrolling.
+  Use local stacking below the narrow left scrim/panel/rail; preserve the
+  body-portaled section assistant and native snapshot dialog. No viewport-fixed
+  bottom offsets, JavaScript footer measurement or modal/backdrop is needed.
 - Render current generation or selected saved comparison as the main view,
   never stack two image sections. Closing saved viewing reveals current work;
   rendering/hiding alone must not clear stores, revoke URLs or trigger generation.
@@ -44,12 +56,13 @@ saved image ownership; layout must preserve those contracts.
   metadata's auto-sized flex basis must not consume the entire canvas. Review
   combined progress + expanded prompts + metadata states at intermediate heights
   above the short-screen breakpoint, as well as very short/narrow viewports.
-  Current CSS uses figure/metadata flex weights 3:1 with zero bases, bounded
-  scrollable metadata, and a canvas minimum min(140px, calc(30dvh + 12px)).
+  Figure/metadata use flex weights 3:1 with zero bases and bounded scrollable
+  metadata. A prompt disclosure change alone leaves their allocation unchanged.
   Keep the thumbnail strip in metadata, outside the figure's reserved image/
   caption space. Arrow height is capped at 100% of the available viewer height.
-  At heights <=500px, expanded prompts retain a 47px dock minimum and nonempty
-  operations retain 12px, leaving positive local scroll regions on short screens.
+  On short screens, cap the dock to its stage, keep its toggle reachable and
+  shrink/scroll its body. Do not reintroduce an expanded normal-flow dock
+  minimum. Nonempty operations keep their independent bounded scroll region.
 - Prompt drawer begins expanded and uses a native named disclosure button with
   aria-expanded/aria-controls. Keep editors/configuration mounted while hidden
   so tab/manual-edit/range state and characters survive. Hidden content cannot
@@ -74,7 +87,7 @@ saved image ownership; layout must preserve those contracts.
 
 | Condition | Required behavior |
 | --- | --- |
-| Toggle prompt drawer | Preserve content/configuration; no requests |
+| Toggle prompt drawer | Same canvas/image size; overlay expands; preserve content/configuration; no requests |
 | Generate with drawer closed | Same guarded form submit, current canvas visible |
 | Active/uncertain operation | Existing locks, recovery and Stop remain reachable |
 | Select another ordinary image | Reuse existing URL; index/download stay aligned |
@@ -85,23 +98,25 @@ saved image ownership; layout must preserve those contracts.
 
 ## Good / Base / Bad Cases
 
-- Good: collapse prompts while comparing saved experiment images; the canvas
-  grows and arrows reuse retained cached PNGs. Stop remains available separately.
+- Good: expand prompts while comparing saved experiment images; prompts cover
+  the lower unchanged canvas and arrows reuse retained cached PNGs. Stop remains
+  available separately. Collapse reveals the same canvas at the same size.
 - Base: empty workspace shows a canvas placeholder and the open prompt dock.
 - Bad: unmounting prompt fields on collapse, placing Stop inside hidden content,
-  or keeping a fixed 55vh image frame above an additional bottom editor.
+  or shrinking the canvas to allocate the expanded editor in normal flow.
 
 ## Verification Required
 
 Run ESLint/TypeScript, source review of all affected frontend interfaces and a
 fresh env-free locked build. Review new/partial/multiple results, download/index,
-drawer disclosure/focus/form semantics, history reuse/resume, saved cache races,
+drawer overlay/unchanged canvas bounds, disclosure/focus/form semantics,
+history reuse/resume, saved cache races,
 all active/uncertain/failed/logout states and narrow/short scrolling. Respect
 the operator restriction against frontend/helper/browser automated tests or
 paid probes. Visual/desktop/mobile interaction remains operator acceptance.
 
 ## Wrong vs Correct
 
-- Wrong: prompts occupy the first screen while generated images sit below them.
-- Correct: the image canvas owns the main area, prompts occupy a bounded bottom
-  disclosure, and Generate remains at the bottom in either disclosure state.
+- Wrong: expanded prompt content takes height away from the image canvas.
+- Correct: a local bottom-anchored prompt overlay occludes the unchanged canvas,
+  while Generate and operation controls stay reachable below its stage.

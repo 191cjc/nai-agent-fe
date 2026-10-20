@@ -579,3 +579,21 @@ owns the frozen shared API and supersedes earlier browser scheduling limits.
   old-asset checks pass. API release/PID207197 remain unchanged; no API restart
   or private-state mutation. See deployment-preload-images-2026-10-20.md.
 - [ ] Operator interaction/performance acceptance; broader task in_progress.
+
+## Follow-up Execution: Overlay Prompt Drawer (2026-10-20)
+
+1. Native implementer owns App.tsx and styles.css; follow
+   overlay-prompt-drawer-design.md and preserve mounted editor/form behavior.
+2. Independent full affected-frontend source review and ESLint/TypeScript;
+   synchronize canvas-layout spec. No frontend/helper/browser tests.
+3. Fresh env-free locked build, scoped commit and web-only publication with
+   exact source/assets and unchanged API release/PID verification.
+4. Record release/journal; keep broader task in_progress for visual acceptance.
+
+- [x] Two-file implementation and independent full affected-frontend check
+  GREEN: ESLint, TypeScript and diff --check, no product corrections. Overlay,
+  constant canvas allocation, short/narrow bounds, stacking, form/focus/history
+  and independent operations reviewed. Fresh25-input isolated env-free locked
+  production build passes. See check-overlay-prompt-drawer.md and
+  overlay-prompt-drawer-build-verification.md. No frontend/helper/browser tests
+  or provider/private-image calls; backend unchanged.

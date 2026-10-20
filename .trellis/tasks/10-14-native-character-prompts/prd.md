@@ -506,3 +506,12 @@ loading with progress, cancel, cached reuse and continuation after individual
 image failure; skipped/expired/capacity outcomes remain visible. Keep comparison
 usable and retain the live server experiment. Session-only bounded memory and
 raw server expiry remain unchanged in principle. See preload-images-design.md.
+
+## Follow-up: Overlay Prompt Drawer (2026-10-20)
+
+The expanded bottom prompt drawer must cover the main canvas rather than
+compress it. Canvas/image sizing stays the same when opening/closing the
+drawer; prompt content scrolls within the overlay. Keep the toggle, Generate,
+operation recovery/progress/Stop and left tools reachable, with unchanged
+editor/form/focus behavior. See overlay-prompt-drawer-design.md. Publish only
+the frontend and retain the running API.

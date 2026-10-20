@@ -98,7 +98,8 @@ h1, h2, h3 { letter-spacing: 0; }
 .quality-toggle input { width: 16px; height: 16px; accent-color: var(--gold); }
 
 .main-column { min-width: 0; min-height: 0; flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-.canvas-region { display: flex; flex: 1 1 0; min-width: 0; min-height: min(140px, calc(30dvh + 12px)); overflow: hidden; background: #11131a; }
+.canvas-stage { --prompt-toggle-height: 40px; position: relative; isolation: isolate; display: flex; flex-direction: column; flex: 1 1 0; min-width: 0; min-height: min(140px, calc(30dvh + 12px)); padding-bottom: calc(var(--prompt-toggle-height) + 1px); overflow: hidden; }
+.canvas-region { display: flex; flex: 1 1 0; min-width: 0; min-height: 0; overflow: hidden; background: #11131a; }
 .canvas-view { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; padding: 0 clamp(12px, 2vw, 28px) 7px; overflow: hidden; }
 .canvas-toolbar { display: flex; align-items: center; justify-content: space-between; flex: 0 0 auto; gap: 10px; min-height: 44px; }
 .canvas-title { display: flex; align-items: center; gap: 8px; min-width: 0; color: #aaa9b6; }
@@ -122,8 +123,8 @@ h1, h2, h3 { letter-spacing: 0; }
 .image-selection-strip img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .image-selection-strip span { position: absolute; right: 1px; bottom: 1px; min-width: 14px; padding: 0 3px; border-radius: 2px; background: #11131add; font-size: 9px; line-height: 15px; font-variant-numeric: tabular-nums; }
 .image-selection-strip button.selected { border-color: var(--gold); box-shadow: 0 0 0 1px #d7b87866; color: var(--gold); }
-.prompt-dock { display: flex; flex-direction: column; flex: 0 1 auto; min-height: 40px; overflow: hidden; border-top: 1px solid #44404a; background: #20222c; }
-.prompt-drawer-toggle { display: flex; align-items: center; justify-content: space-between; flex: 0 0 40px; width: 100%; min-width: 0; gap: 10px; padding: 0 clamp(14px, 2vw, 28px); border: 0; background: #242630; color: #d9d3c7; font-size: 12px; text-align: left; }
+.prompt-dock { position: absolute; right: 0; bottom: 0; left: 0; z-index: 1; display: flex; flex-direction: column; max-height: 100%; min-height: 0; overflow: hidden; border-top: 1px solid #44404a; background: #20222c; }
+.prompt-drawer-toggle { display: flex; align-items: center; justify-content: space-between; flex: 0 0 var(--prompt-toggle-height); width: 100%; min-width: 0; gap: 10px; padding: 0 clamp(14px, 2vw, 28px); border: 0; background: #242630; color: #d9d3c7; font-size: 12px; text-align: left; }
 .prompt-drawer-toggle:hover { background: #2b2d37; }
 .prompt-drawer-toggle > span { display: flex; align-items: center; gap: 9px; min-width: 0; }
 .prompt-drawer-toggle svg { flex-shrink: 0; color: var(--gold); }
@@ -485,9 +486,7 @@ h1, h2, h3 { letter-spacing: 0; }
   .canvas-placeholder { flex-direction: row; padding: 8px; gap: 8px; }
   .canvas-placeholder > svg { width: 22px; height: 22px; }
   .image-selection-strip button { width: 32px; height: 26px; flex-basis: 32px; }
-  .prompt-dock { min-height: 34px; }
-  .prompt-dock:has(> .prompt-drawer-body:not([hidden])) { min-height: 47px; }
-  .prompt-drawer-toggle { flex-basis: 34px; }
+  .canvas-stage { --prompt-toggle-height: 34px; }
   .prompt-drawer-body { height: 23dvh; }
   .workspace-operations { max-height: 23dvh; }
   .workspace-operations:has(> .experiment-progress) { min-height: 12px; }
