@@ -574,3 +574,8 @@ owns the frozen shared API and supersedes earlier browser scheduling limits.
   production build passes. See check-preload-images.md and
   preload-images-build-verification.md. No frontend/helper/browser tests or
   private/paid/provider requests; backend remains unchanged.
+- [x] Source commitc61e96c published as web-only release20261020T055052 on
+  2026-10-20 at13:50 China time. Exact source/assets/public health and retained
+  old-asset checks pass. API release/PID207197 remain unchanged; no API restart
+  or private-state mutation. See deployment-preload-images-2026-10-20.md.
+- [ ] Operator interaction/performance acceptance; broader task in_progress.
