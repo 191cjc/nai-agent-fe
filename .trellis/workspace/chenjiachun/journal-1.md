@@ -755,3 +755,26 @@ Added explicit saved-experiment image preloading with progress, cancellation, ca
 ### Status
 
 [OK] **Completed**
+
+
+## Session 24: Overlay prompt drawer
+<!-- trellis-session: v=2 fp=eddb9c4369664454 -->
+
+**Date**: 2026-10-20
+**Task**: Overlay prompt drawer
+**Branch**: `feat/native-character-prompts`
+
+### Summary
+
+Changed the bottom prompt drawer to a bounded absolute overlay within a local canvas stage. A constant toggle strip preserves canvas/image size across disclosure; operation/recovery/Generate controls remain outside. Independent affected-frontend review, ESLint/TypeScript and fresh 25-input env-free locked build passed. Published web-only release 20261020T073033; exact public assets, retained previous assets and readiness verified; API release/PID 603374 unchanged. No API restart, private-state mutation, frontend/helper/browser tests or provider calls. Broader task remains in_progress for visual acceptance.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8217b40` | fix: overlay prompt drawer without resizing canvas |
+| `dd282e7` | docs: record overlay prompt drawer deployment |
+
+### Status
+
+[OK] **Completed**
