@@ -21,7 +21,8 @@ absent/false preserves the legacy contracts below.
   GET /{id} and POST /{id}/stop. Components delegate to stores.
 - SavedResultsStore owns paginated /api/style-experiments metadata and lazy
   authenticated PNGs, independently of the run. Follow viewer-cache-contract.md
-  for its 32-entry/64-MiB in-page cache and metadata/expiry/URL lifecycle.
+  for its default32-entry/64-MiB in-page cache, explicit256-entry/256-MiB
+  preload mode and metadata/expiry/URL lifecycle.
 
 ## Contracts
 
@@ -74,7 +75,9 @@ absent/false preserves the legacy contracts below.
   Observation/saved viewing never mutates draft or a normal generation owner.
 - Use independent lazy comparison for server runs, while active and terminal.
   Read bounded group metadata, load only the current PNG on a cache miss; never
-  prefetch or accumulate entire run Blobs. Metadata/parameters outlive seven-day
+  automatically prefetch or accumulate entire run Blobs. The explicit
+  experiment-viewer preload action is the bounded exception described in
+  viewer-cache-contract.md. Metadata/parameters outlive seven-day
   images; cached PNGs retain their original expiry. Explicit refresh may
   discover later groups; retain the selected group/image when possible.
 - Left/right order traverses group images then the next saved group. Failed,
@@ -117,7 +120,8 @@ absent/false preserves the legacy contracts below.
 - Base: one style tag at zero and shared `scene` renders an empty style and
   submits base `scene`. Signed `-0.000` has the same behavior.
 - Bad: an effect resubmits paid groups after reconnect, or a late GET overrides
-  a new session/draft. Bad: navigation loads an entire experiment into memory.
+  a new session/draft. Bad: navigation implicitly loads an entire experiment
+  or explicit preloading evicts earlier images while reporting all as cached.
 
 ## Verification Required
 

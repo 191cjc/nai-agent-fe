@@ -497,3 +497,12 @@ expressions. Hidden text is excluded from generation and experiment candidates,
 but retained in history and snapshots. Appended search/advice/import text stays
 outside prior comment lines. Preserve exact legacy frozen runs. See
 hidden-tags-design.md for bounded syntax, persistence and release contracts.
+
+## Follow-up: Load All Experiment Images (2026-10-20)
+
+The operator requests one button to begin loading every experiment-result image
+so arrow comparison avoids individual image downloads. Add explicit background
+loading with progress, cancel, cached reuse and continuation after individual
+image failure; skipped/expired/capacity outcomes remain visible. Keep comparison
+usable and retain the live server experiment. Session-only bounded memory and
+raw server expiry remain unchanged in principle. See preload-images-design.md.

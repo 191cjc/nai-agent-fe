@@ -557,3 +557,20 @@ owns the frozen shared API and supersedes earlier browser scheduling limits.
   health and401/no-store pass. All72 image sets retain exact bytes/expiry.
   See deployment-hidden-tags-2026-10-19.md. No paid/live provider calls.
 - [ ] Operator interaction acceptance; broader task remains in_progress.
+
+## Follow-up Execution: Experiment Image Preload (2026-10-20)
+
+1. Native implementer owns saved-results.ts, SavedResults.tsx and necessary CSS,
+   implementing preload-images-design.md; no frontend/helper/browser tests.
+2. Independent full affected-frontend review and ESLint/TypeScript; sync specs.
+3. Fresh explicit env-free build, scoped commit and web-only publication with
+   exact source/assets and unchanged API release/PID verification.
+4. Record release/journal; broader operator acceptance remains in_progress.
+
+- [x] Three-file frontend implementation and independent full affected-frontend
+  check GREEN: ESLint, TypeScript and diff --check; no product corrections.
+  Pagination, fixed initial count, cache/URL budgets, progress, navigation,
+  cancellation and protected cleanup reviewed. Fresh25-input env-free locked
+  production build passes. See check-preload-images.md and
+  preload-images-build-verification.md. No frontend/helper/browser tests or
+  private/paid/provider requests; backend remains unchanged.

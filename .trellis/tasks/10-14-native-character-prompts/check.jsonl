@@ -1,14 +1,8 @@
-{"file": ".trellis/spec/backend/prompt-comments-contract.md", "reason": "Current follow-up syntax, persistence, validation and rollback contract"}
-{"file": ".trellis/spec/frontend/workspace-contract.md", "reason": "Controlled editors, revisions, history and no frontend tests"}
-{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Full fake-only backend validation"}
-{"file": ".trellis/spec/backend/api-contract.md", "reason": "Reviewed deterministic OpenAPI and browser boundary"}
-{"file": ".trellis/spec/backend/native-character-contract.md", "reason": "Effective provider prompts and native coordinates"}
-{"file": ".trellis/spec/backend/prompt-sections-contract.md", "reason": "Raw section metadata, private snapshots and atomic imports"}
-{"file": ".trellis/spec/backend/durable-experiment-contract.md", "reason": "Frozen request identity and no replay"}
-{"file": ".trellis/spec/frontend/style-experiment-contract.md", "reason": "Exact occurrence/zero/weight and frozen preview behavior"}
-{"file": ".trellis/spec/frontend/section-assistant-contract.md", "reason": "Targeted append/replace and stale session guards"}
-{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Trace raw-to-effective transformations"}
-{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Reuse shared parsers and append boundaries"}
-{"file": ".trellis/tasks/10-14-native-character-prompts/hidden-tags-design.md", "reason": "Confirmed latest follow-up implementation boundary"}
-{"file": ".trellis/tasks/10-14-native-character-prompts/research/hidden-prompt-tags.md", "reason": "Parser, source-span, persistence and legacy compatibility evidence"}
-{"file": ".trellis/tasks/10-14-native-character-prompts/hidden-tags-review-matrix.md", "reason": "Latest follow-up final review assertion points"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Affected frontend layer quality routing"}
+{"file": ".trellis/spec/frontend/viewer-cache-contract.md", "reason": "Current cache URL lifecycle, bounds and freshness; latest design explicitly extends bulk mode"}
+{"file": ".trellis/spec/frontend/style-experiment-contract.md", "reason": "Independent server execution and comparison ownership"}
+{"file": ".trellis/spec/frontend/canvas-layout-contract.md", "reason": "Canvas space/keyboard and operation controls"}
+{"file": ".trellis/spec/frontend/workspace-contract.md", "reason": "Protected session/cleanup and no frontend tests"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Reuse cache and existing authenticated image API"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Metadata/blob/cache ownership boundary"}
+{"file": ".trellis/tasks/10-14-native-character-prompts/preload-images-design.md", "reason": "Latest confirmed explicit-all-image loading boundary"}

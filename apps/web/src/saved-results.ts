@@ -2,6 +2,7 @@ import { makeAutoObservable, runInAction } from 'mobx'
 import { ApiFailure, errorText, type ExperimentSummary, type GenerationView, WorkspaceApi } from './api'
 
 type SavedSelection = { kind: 'generation' | 'experiment'; id: string }
+type PreloadStatus = 'idle' | 'reading' | 'loading' | 'completed' | 'cancelled' | 'capacity' | 'error'
 
 interface SavedImage {
   url: string
@@ -15,8 +16,18 @@ interface CachedImage {
   expiresAt: number
 }
 
+interface TransientImage {
+  path: string
+  url: string
+  size: number
+  expiresAt: number | null
+}
+
 const IMAGE_CACHE_LIMIT = 32
 const IMAGE_CACHE_BYTES = 64 * 1024 * 1024
+const PRELOAD_CACHE_LIMIT = 256
+const PRELOAD_CACHE_BYTES = 256 * 1024 * 1024
+const PRELOAD_PAGE_SIZE = 20
 
 /** Read-only archive access, independent of the paid generation owner. */
 export class SavedResultsStore {
@@ -37,14 +48,25 @@ export class SavedResultsStore {
   imageLoading = false
   error = ''
   imageError = ''
+  preloadStatus: PreloadStatus = 'idle'
+  preloadGroupLimit: number | null = null
+  preloadProcessedGroups = 0
+  preloadProcessedImages = 0
+  preloadSkippedGroups = 0
+  preloadFailedImages = 0
+  preloadError = ''
+  preloadImageError = ''
   private listEpoch = 0
   private viewerEpoch = 0
+  private preloadEpoch = 0
   private requestedImage: number | 'last' = 0
   private listController: AbortController | null = null
   private viewerController: AbortController | null = null
+  private preloadController: AbortController | null = null
+  private preloadCacheEnabled = false
   private readonly imageCache = new Map<string, CachedImage>()
   private imageCacheBytes = 0
-  private transientImageUrl: string | null = null
+  private transientImage: TransientImage | null = null
 
   constructor(private readonly api: WorkspaceApi) {
     makeAutoObservable(this, undefined, { autoBind: true })
@@ -96,6 +118,129 @@ export class SavedResultsStore {
   get canNext(): boolean {
     return !this.loading && this.job !== null && (this.imageIndex + 1 < this.imageSlots
       || (this.selection?.kind === 'experiment' && this.nextGroupOffset !== null))
+  }
+
+  get preloading(): boolean {
+    return this.preloadStatus === 'reading' || this.preloadStatus === 'loading'
+  }
+
+  get cachedImageCount(): number {
+    return this.imageCache.size
+  }
+
+  get cachedImageBytes(): number {
+    return this.imageCacheBytes
+  }
+
+  private get cacheLimit(): number {
+    return this.preloadCacheEnabled ? PRELOAD_CACHE_LIMIT : IMAGE_CACHE_LIMIT
+  }
+
+  private get cacheByteLimit(): number {
+    return this.preloadCacheEnabled ? PRELOAD_CACHE_BYTES : IMAGE_CACHE_BYTES
+  }
+
+  /** An explicit, read-only pass bounded to the groups recorded at its start. */
+  async preloadImages(): Promise<void> {
+    const selection = this.selection
+    if (selection?.kind !== 'experiment' || this.preloading) return
+    const epoch = ++this.preloadEpoch
+    const controller = new AbortController()
+    this.preloadController = controller
+    this.preloadCacheEnabled = true
+    this.pruneExpiredImages()
+    this.preloadStatus = 'reading'
+    this.preloadGroupLimit = null
+    this.preloadProcessedGroups = 0
+    this.preloadProcessedImages = 0
+    this.preloadSkippedGroups = 0
+    this.preloadFailedImages = 0
+    this.preloadError = ''
+    this.preloadImageError = ''
+    try {
+      let groupLimit: number | null = null
+      for (let offset = 0; groupLimit === null || offset < groupLimit; offset += PRELOAD_PAGE_SIZE) {
+        runInAction(() => { this.preloadStatus = 'reading' })
+        const page = await this.api.experiment(selection.id, offset, PRELOAD_PAGE_SIZE, controller.signal)
+        if (!this.isCurrentPreload(epoch, selection.id, controller.signal)) return
+        if (page.summary.id !== selection.id || !Number.isSafeInteger(page.summary.group_count) || page.summary.group_count < 0
+          || page.items.length > PRELOAD_PAGE_SIZE || page.items.some(job => job.parameters.experiment?.id !== selection.id)) {
+          throw new ApiFailure(0, 'invalid_response', '实验记录不匹配，请重新加载全部图片。')
+        }
+        if (groupLimit === null) {
+          groupLimit = page.summary.group_count
+          runInAction(() => { this.preloadGroupLimit = groupLimit })
+        }
+        const expectedGroups = Math.min(PRELOAD_PAGE_SIZE, groupLimit - offset)
+        for (const job of page.items.slice(0, expectedGroups)) {
+          if (!this.isCurrentPreload(epoch, selection.id, controller.signal)) return
+          const expiresAt = job.result_expires_at
+          if (job.status !== 'succeeded' || job.image_urls.length === 0 || expiresAt === null
+            || !Number.isFinite(expiresAt) || expiresAt <= Date.now() / 1000) {
+            runInAction(() => {
+              this.preloadSkippedGroups += 1
+              this.preloadProcessedGroups += 1
+            })
+            continue
+          }
+          for (const path of job.image_urls) {
+            if (!this.isCurrentPreload(epoch, selection.id, controller.signal)) return
+            runInAction(() => { this.preloadStatus = 'loading' })
+            try {
+              if (!this.cachedImage(path, expiresAt)) {
+                // Do not evict earlier preloads just to make this pass continue.
+                if (this.imageCache.size >= this.cacheLimit) {
+                  runInAction(() => { this.preloadStatus = 'capacity' })
+                  return
+                }
+                const blob = await this.api.image(path, controller.signal)
+                if (!this.isCurrentPreload(epoch, selection.id, controller.signal)) return
+                // Foreground navigation may have cached this same path during the read.
+                if (!this.cachedImage(path, expiresAt) && !this.retainPreloadedImage(path, blob, expiresAt)) {
+                  runInAction(() => { this.preloadStatus = 'capacity' })
+                  return
+                }
+              }
+            } catch (error) {
+              if (!this.isCurrentPreload(epoch, selection.id, controller.signal)) return
+              runInAction(() => {
+                this.preloadFailedImages += 1
+                this.preloadImageError = errorText(error)
+              })
+            }
+            runInAction(() => { this.preloadProcessedImages += 1 })
+          }
+          runInAction(() => { this.preloadProcessedGroups += 1 })
+        }
+        if (page.items.length < expectedGroups) {
+          throw new ApiFailure(0, 'invalid_response', '实验记录已变化，部分记录尚未检查，请重新加载全部图片。')
+        }
+      }
+      runInAction(() => { this.preloadStatus = 'completed' })
+    } catch (error) {
+      if (this.isCurrentPreload(epoch, selection.id, controller.signal)) runInAction(() => {
+        this.preloadStatus = 'error'
+        this.preloadError = errorText(error)
+      })
+    } finally {
+      if (this.isCurrentPreload(epoch, selection.id, controller.signal)) runInAction(() => {
+        this.pruneExpiredImages()
+        this.preloadController = null
+      })
+    }
+  }
+
+  cancelPreload(): void {
+    if (!this.preloading) return
+    this.preloadEpoch += 1
+    this.preloadController?.abort()
+    this.preloadController = null
+    this.pruneExpiredImages()
+    this.preloadStatus = 'cancelled'
+  }
+
+  private isCurrentPreload(epoch: number, id: string, signal: AbortSignal): boolean {
+    return epoch === this.preloadEpoch && !signal.aborted && this.selection?.kind === 'experiment' && this.selection.id === id
   }
 
   async move(direction: -1 | 1): Promise<void> {
@@ -199,7 +344,19 @@ export class SavedResultsStore {
 
   private cachedImage(path: string, expiresAt: number | null): string | null {
     this.pruneExpiredImages()
-    const cached = this.imageCache.get(path)
+    let cached = this.imageCache.get(path)
+    const transient = this.transientImage
+    // Explicit preload may make an already displayed oversized PNG cacheable.
+    // Transfer its existing URL rather than downloading/owning it a second time.
+    if (!cached && transient?.path === path && expiresAt !== null && Number.isFinite(expiresAt)
+      && transient.expiresAt !== null && Number.isFinite(transient.expiresAt)
+      && Math.min(expiresAt, transient.expiresAt) > Date.now() / 1000
+      && this.imageCache.size < this.cacheLimit && this.imageCacheBytes + transient.size <= this.cacheByteLimit) {
+      cached = { url: transient.url, size: transient.size, expiresAt: Math.min(expiresAt, transient.expiresAt) }
+      this.imageCache.set(path, cached)
+      this.imageCacheBytes += transient.size
+      this.transientImage = null
+    }
     if (!cached) return null
     if (expiresAt === null || !Number.isFinite(expiresAt)) {
       this.removeCachedImage(path)
@@ -222,9 +379,9 @@ export class SavedResultsStore {
       throw new ApiFailure(404, 'image_unavailable', 'This result image has expired.')
     }
     let cacheable = expiresAt !== null && Number.isFinite(expiresAt) && expiresAt > Date.now() / 1000
-      && blob.size <= IMAGE_CACHE_BYTES
+      && blob.size <= this.cacheByteLimit
     if (cacheable) {
-      while (this.imageCache.size >= IMAGE_CACHE_LIMIT || this.imageCacheBytes + blob.size > IMAGE_CACHE_BYTES) {
+      while (this.imageCache.size >= this.cacheLimit || this.imageCacheBytes + blob.size > this.cacheByteLimit) {
         // The visible cached URL remains valid until navigation releases its reference.
         const oldest = [...this.imageCache].find(([, entry]) => entry.url !== this.image?.url)
         if (!oldest) { cacheable = false; break }
@@ -237,9 +394,22 @@ export class SavedResultsStore {
       this.imageCacheBytes += blob.size
     } else {
       // Uncacheable images belong only to the current display.
-      this.transientImageUrl = url
+      this.transientImage = { path, url, size: blob.size, expiresAt }
     }
     return url
+  }
+
+  private retainPreloadedImage(path: string, blob: Blob, expiresAt: number): boolean {
+    this.pruneExpiredImages()
+    if (expiresAt <= Date.now() / 1000) {
+      throw new ApiFailure(404, 'image_unavailable', 'This result image has expired.')
+    }
+    if (this.imageCache.size >= this.cacheLimit || this.imageCacheBytes + blob.size > this.cacheByteLimit) return false
+    // Background reads never create display-owned/transient URLs or evict entries.
+    const url = URL.createObjectURL(blob)
+    this.imageCache.set(path, { url, size: blob.size, expiresAt })
+    this.imageCacheBytes += blob.size
+    return true
   }
 
   private removeCachedImage(path: string): void {
@@ -259,15 +429,19 @@ export class SavedResultsStore {
   }
 
   private releaseImage(): void {
-    if (this.transientImageUrl) URL.revokeObjectURL(this.transientImageUrl)
-    this.transientImageUrl = null
+    if (this.transientImage) URL.revokeObjectURL(this.transientImage.url)
+    this.transientImage = null
     this.image = null
   }
 
   close(): void {
     this.viewerEpoch += 1
+    this.preloadEpoch += 1
     this.viewerController?.abort()
+    this.preloadController?.abort()
     this.viewerController = null
+    this.preloadController = null
+    this.preloadCacheEnabled = false
     this.releaseImage()
     for (const path of this.imageCache.keys()) this.removeCachedImage(path)
     this.selection = null
@@ -281,6 +455,14 @@ export class SavedResultsStore {
     this.imageLoading = false
     this.error = ''
     this.imageError = ''
+    this.preloadStatus = 'idle'
+    this.preloadGroupLimit = null
+    this.preloadProcessedGroups = 0
+    this.preloadProcessedImages = 0
+    this.preloadSkippedGroups = 0
+    this.preloadFailedImages = 0
+    this.preloadError = ''
+    this.preloadImageError = ''
   }
 
   reset(): void {

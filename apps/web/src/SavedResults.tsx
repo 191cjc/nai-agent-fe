@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { observer } from 'mobx-react-lite'
-import { ArrowDownToLine, ArrowLeft, ArrowRight, FlaskConical, RefreshCw, X } from 'lucide-react'
+import { ArrowDownToLine, ArrowLeft, ArrowRight, FlaskConical, Images, RefreshCw, X } from 'lucide-react'
 import { ApiFailure, errorText } from './api'
 import { PromptSummary } from './PromptSummary'
 import type { SavedResultsStore } from './saved-results'
@@ -49,6 +49,10 @@ export const SavedResultViewer = observer(({ saved, onClose }: { saved: SavedRes
   const image = saved.image
   const context = job?.parameters.experiment
   const isExperiment = selection.kind === 'experiment'
+  const preloadLabel = {
+    idle: '', reading: '正在读取实验记录', loading: '正在加载图片', completed: '本次加载检查已结束',
+    cancelled: '已取消加载，已缓存图片仍可使用', capacity: '已达到缓存容量限制，后续图片尚未加载', error: '加载检查中断，可重新开始',
+  }[saved.preloadStatus]
   const groupLabel = isExperiment ? context ? `第 ${context.ordinal} / ${context.total} 组` : '实验记录' : '历史图片'
   const placeholder = saved.loading ? '正在加载保存记录...'
     : saved.imageLoading ? '正在加载图片...'
@@ -68,7 +72,14 @@ export const SavedResultViewer = observer(({ saved, onClose }: { saved: SavedRes
       <div className="canvas-title"><FlaskConical size={16} aria-hidden="true" /><h2 id="saved-result-title">{isExperiment ? '已保存的画风对比' : '已保存的图片'}</h2>
         {job && <span className={`status status-${job.status}`}>{jobStatus(job.status)}</span>}
       </div>
-      <button className="icon-button" type="button" title="关闭历史图片" aria-label="关闭历史图片" onClick={onClose}><X size={18} /></button>
+      <div className="saved-viewer-toolbar-actions">
+        {isExperiment && <button className="text-action saved-preload-button" type="button" aria-describedby="saved-preload-help"
+          onClick={() => { if (saved.preloading) saved.cancelPreload(); else void saved.preloadImages() }}>
+          {saved.preloading ? <X size={15} aria-hidden="true" /> : <Images size={15} aria-hidden="true" />}
+          {saved.preloading ? '取消加载' : '加载全部图片'}
+        </button>}
+        <button className="icon-button" type="button" title="关闭历史图片" aria-label="关闭历史图片" onClick={onClose}><X size={18} /></button>
+      </div>
     </div>
       <figure className="canvas-figure">
         <div className="experiment-image-viewer" role="group" aria-label="已保存图片切换" aria-describedby="saved-navigation-help"
@@ -95,6 +106,16 @@ export const SavedResultViewer = observer(({ saved, onClose }: { saved: SavedRes
         </figcaption>
       </figure>
     <div className="canvas-metadata">
+      {isExperiment && <div className="saved-preload-info">
+        {saved.preloadStatus !== 'idle' && <div className="saved-preload-status" role="status" aria-live="polite" aria-atomic="true">
+          <strong>{preloadLabel}</strong>
+          <span>已检查 {saved.preloadProcessedGroups} / {saved.preloadGroupLimit ?? '…'} 组 · 已处理 {saved.preloadProcessedImages} 张图片</span>
+          <span>当前缓存 {saved.cachedImageCount} 张 / {(saved.cachedImageBytes / (1024 * 1024)).toFixed(1)} MiB · 跳过 {saved.preloadSkippedGroups} 组（无可用图片） · 图片失败 {saved.preloadFailedImages} 张</span>
+        </div>}
+        <p className="prompt-hint" id="saved-preload-help">加载全部图片会检查开始时已有的实验组，新增或未完成的结果可稍后再次加载。缓存最多 256 张 / 256 MiB，刷新页面或关闭对比后清空。</p>
+        {saved.preloadError && <p className="alert" role="alert">{saved.preloadError}</p>}
+        {saved.preloadImageError && <p className="saved-preload-image-error">最近一次图片加载失败：{saved.preloadImageError}（单张失败不会中断其余图片的加载）</p>}
+      </div>}
       <p className="prompt-hint" id="saved-navigation-help">左右箭头依次切换本组图片和下一个已保存组，聚焦图像区域后可按 ← / →。这里只查看保存结果，不改变草稿或服务器实验。</p>
       {(saved.error || saved.imageError) && <p className="alert" role="alert">{saved.error || saved.imageError}</p>}
       <div className="saved-result-actions"><span className="prompt-hint">私有保存 7 天</span><button type="button" className="text-action" disabled={saved.loading || saved.imageLoading} onClick={() => void saved.retry()}>

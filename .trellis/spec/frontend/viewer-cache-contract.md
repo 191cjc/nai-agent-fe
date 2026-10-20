@@ -16,7 +16,7 @@ ownership and server retention/scheduling are separate.
 
 ## Contracts
 
-- Cache successful PNG Blob URLs only: at most 32 entries AND 64 MiB summed
+- Default browsing caches successful PNG Blob URLs: at most32 entries AND64MiB summed
   Blob.size. A hit refreshes LRU recency and avoids another image-byte request.
   These are compressed image bytes, not a bound on browser decoded memory.
 - Continue normal group/generation metadata reads on navigation. A cache hit
@@ -29,12 +29,98 @@ ownership and server retention/scheduling are separate.
 - The cache owns its URLs. Navigation releases the display reference; eviction,
   expiry or clearing revokes the cached URL. An uncached oversized image is
   display-owned and revoked when released. Failed loads/placeholders never
-  enter the cache. Never prefetch neighbors or accumulate whole experiment runs.
+  enter the cache. Default browsing never prefetches neighbors or accumulates
+  whole experiments; explicit bulk loading follows the exception below.
 - Close, opening another selection, reset, logout start, 401 and dispose clear
   the cache and revoke its URLs. A refresh has no persistent cache to restore.
   Epoch/abort/session guards reject late reads before URL creation/cache fill.
 - Keep image, index, metadata, filename and current download aligned. Viewing
   and cache cleanup never mutate the draft or stop/resubmit paid server work.
+
+## Explicit Experiment Preload
+
+### Scope / Signatures
+
+The operator explicitly requested one button to begin loading all currently
+saved experiment images. This is an exception to lazy-only viewing, triggered
+only by an explicit experiment-viewer action; ordinary generations stay lazy.
+SavedResultsStore owns preload state/epochs/controllers and all PNG URLs.
+Its preloadImages(): Promise<void> and cancelPreload(): void actions expose
+preloadStatus plus checked-group, processed-image, skipped-group and failed-image
+counts; cachedImageCount/cachedImageBytes report current cache ownership.
+Use existing WorkspaceApi.experiment(id,offset,limit,signal) and image(path,signal);
+no API, server scheduler or provider changes.
+
+### Contracts
+
+- Read metadata in bounded20-group pages; freeze initial group_count as the
+  pass boundary, so a growing server run cannot keep the pass alive indefinitely.
+  Do not materialize total-sized lists. A later click observes later results.
+- Preload successful/unexpired paths sequentially. Reuse current cache hits,
+  skip failed/unfinished/expired/empty groups and continue after individual
+  image errors. Page failures stop with partial-progress error; no automatic
+  retry. Follow existing401/session cleanup.
+- Explicit start expands this selection's cache to256 entries AND256MiB PNG
+  Blob bytes until close. No new persistence/HTTP cache or server TTL extension.
+  Background reads cannot evict earlier entries just to continue; stop with a
+  capacity status. Foreground navigation may retain its normal bounded LRU/
+  transient behavior under the expanded budget; pin the displayed URL.
+- Count real currently retained URLs/bytes, checked groups/processed images,
+  skipped groups and failed images separately. Historical image_count includes
+  expired results and is not an available-image total. Capacity/error/cancel
+  and per-image failures cannot be labelled as full successful completion.
+- Preload has a selection/session epoch independent of per-navigation epochs.
+  Arrows/refresh/current downloads remain usable without cancelling bulk work.
+  Preloading never changes current job/image/index/filename/selection or draft,
+  never stops/restarts/resubmits a server run. Foreground/background duplicate
+  byte reads may overlap; recheck cache before URL creation and retain one URL.
+  If expansion makes a displayed transient PNG cacheable, transfer that same
+  URL into the cache using accepted metadata and the earlier original expiry.
+- Cancel aborts background reads/scheduling and retains completed cache entries.
+  Close/replacement/reset/logout-start/401/dispose invalidate late handlers,
+  abort work, reset progress/default budgets and revoke all owned URLs. Late
+  blobs cannot refill a closed/different selection. Background rejection on
+  capacity must never allocate a transient display-owned URL.
+
+### Validation & Error Matrix
+
+| Condition | Behavior |
+| --- | --- |
+| Explicit preload / repeated start | One pass; concurrent starts suppressed |
+| Active experiment grows during pass | Finite initial bound; later click finds additions |
+| Previously cached path | Reuse without another background PNG read |
+| Failed/unfinished/expired/empty group | Skip with truthful group count |
+| Individual image fails | Count failure and continue later images/groups |
+| Metadata page fails | Partial error; explicit retry available |
+| Count/byte budget exhausted | Capacity status; no preload eviction or false all-loaded claim |
+| Navigate during bulk work | Independent current view and preload lifecycle |
+| Cancel then restart | Retain cache; re-read metadata and reuse valid PNGs |
+| Close/logout/401/different selection during read | Abort/invalidate; no stale URL/cache fill |
+
+### Good / Base / Bad Cases
+
+- Good: explicitly load a72-image experiment and compare its cached PNGs with
+  arrows while preserving fresh metadata and original seven-day expiry.
+- Base: ordinary opening still loads one selected PNG under32/64MiB budgets.
+- Bad: download1000 images into32-entry LRU while claiming all are cached, or
+  mark expired historical images as successfully available.
+
+### Verification Required
+
+Use ESLint/TypeScript, independent full affected-source review and fresh
+explicit env-free build. No frontend/helper/browser automated tests or paid/
+live/private-image probes. Review multipage/multi-image/growing runs, valid hits,
+count+byte exhaustion, pinned/oversized URLs, image/page failures, cancel/restart,
+navigation races and all protected session cleanup paths. Publish static web
+only with unchanged API release/PID and retained old assets. Runtime interaction
+remains operator acceptance.
+
+### Wrong vs Correct
+
+- Wrong: tie bulk cancellation to viewerEpoch, or call the foreground transient
+  URL allocator after background cache admission fails.
+- Correct: selection-owned epoch/controller, non-evicting background admission
+  and a truthful capacity result while keeping ordinary navigation usable.
 
 ## Validation & Error Matrix
 

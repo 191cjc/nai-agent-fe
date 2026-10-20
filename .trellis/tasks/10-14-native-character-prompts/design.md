@@ -214,3 +214,10 @@ hidden-tags-design.md defines whole-line comments, conservative formatting,
 strict opt-in syntax, raw persistence/effective compilation and unchanged
 frozen experiment semantics. This supersedes the earlier no-rewrite-on-blur
 rule only for explicit textarea blur; view/history restoration stays verbatim.
+
+## Follow-up: Explicit Image Preload (2026-10-20)
+
+preload-images-design.md owns the explicit bulk-read exception, selection-owned
+preload lifecycle, enlarged bounded cache and truthful progress/cancel semantics.
+This is frontend-only; default browsing remains lazy and publication preserves
+the existing API process and private data.
