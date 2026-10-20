@@ -515,3 +515,9 @@ drawer; prompt content scrolls within the overlay. Keep the toggle, Generate,
 operation recovery/progress/Stop and left tools reachable, with unchanged
 editor/form/focus behavior. See overlay-prompt-drawer-design.md. Publish only
 the frontend and retain the running API.
+
+Full-height clarification: the operator requires the expanded drawer to cover
+the entire image and use the whole available main viewport, not the former
+28dvh/300px bottom sheet. Fill the canvas stage from its top to the persistent
+bottom controls, with an internally scrolling editor and unchanged underlying
+canvas sizing. This supersedes the first overlay release's small body height.

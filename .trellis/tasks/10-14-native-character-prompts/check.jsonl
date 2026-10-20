@@ -5,4 +5,4 @@
 {"file": ".trellis/spec/frontend/style-experiment-contract.md", "reason": "Keep progress/reconnect/Stop independent of prompt disclosure"}
 {"file": ".trellis/spec/frontend/section-assistant-contract.md", "reason": "Preserve section helper lifecycle and overlay stacking"}
 {"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Fix existing layout owner without parallel abstractions"}
-{"file": ".trellis/tasks/10-14-native-character-prompts/overlay-prompt-drawer-design.md", "reason": "Latest confirmed overlay requirement supersedes old canvas shrink/grow behavior"}
+{"file": ".trellis/tasks/10-14-native-character-prompts/overlay-prompt-drawer-design.md", "reason": "Latest full-height clarification: expanded drawer covers the whole canvas, superseding the small bottom sheet"}

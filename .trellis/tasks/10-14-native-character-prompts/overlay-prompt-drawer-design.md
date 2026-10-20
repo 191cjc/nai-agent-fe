@@ -28,10 +28,15 @@ animations, backdrop/modal behavior or pointer/focus interception are needed.
   reconnect/view/Stop outside the overlay, reachable and locally scrollable.
   Left tool overlays/backdrop/rail and app header remain above/outside this
   main-content drawer. Preserve section-helper/snapshot overlay ownership.
-- Preserve the existing bounded prompt-body height where practical, capped
-  to the stage on small/short screens, with an always-reachable named toggle
-  and independently scrolling editor. Expanded drawer may cover canvas
-  content; covered content is intentionally occluded, not resized to fit.
+- The operator clarified after the first overlay release that expansion must
+  fill the whole main viewport, covering the entire image. Set the expanded
+  dock to100% of the canvas stage (from main-content top to the fixed bottom
+  controls), with the prompt body flexing into all remaining height below
+  its toggle. Remove the old28dvh/300px and short-screen23dvh body heights.
+  No small-sheet/content-sized expanded height remains at any breakpoint.
+  Keep header, left tools and persistent operation/Generate controls reachable.
+  The expanded editor scrolls internally, including on short/narrow screens.
+  Collapse reveals the unchanged canvas; it does not recompute its dimensions.
 - Keep disclosure state/default-expanded, aria-expanded/aria-controls,
   mounted-hidden editors, focus handoff, blur-to-tags, helper cleanup,
   history reuse/open, resume and single external form submission unchanged.
@@ -39,7 +44,10 @@ animations, backdrop/modal behavior or pointer/focus interception are needed.
   drafts, cache ownership or server operations.
 
 This supersedes earlier canvas-layout language claiming the canvas grows on
-prompt collapse or giving an expanded dock a normal-flow minimum height.
+prompt collapse or giving an expanded dock a normal-flow minimum height. The
+full-height clarification supersedes the first overlay's preserved small
+prompt-body height. Expected additional product scope: styles.css only; reuse
+the mounted body hidden attribute to select expanded state without new JS.
 
 ## Validation / Release
 

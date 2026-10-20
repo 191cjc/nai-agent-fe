@@ -30,8 +30,12 @@ saved image ownership; layout must preserve those contracts.
 
 - Use the remaining viewport height for the canvas stage. Reserve only a
   constant collapsed-toggle strip in both disclosure states. Anchor the dock
-  absolutely to the stage bottom, with max-height:100% and local scrolling;
-  its expanded body occludes the lower canvas without resizing/recentering
+  absolutely to the stage bottom, with max-height:100% and local scrolling.
+  When its mounted body is not hidden, the expanded dock fills100% of the
+  stage and its body flexes into all remaining height below the toggle; no
+  28dvh/300px or short-screen23dvh small-sheet height remains. It covers the
+  entire image/main canvas from main-content top to persistent bottom controls,
+  without resizing/recentering
   the canvas or image. Never allocate the expanded body in normal flow.
   Generate, operation progress/Stop and recovery/errors stay outside the
   overlay. Main canvas, tool panel and prompt content own local scrolling.
@@ -99,11 +103,12 @@ saved image ownership; layout must preserve those contracts.
 ## Good / Base / Bad Cases
 
 - Good: expand prompts while comparing saved experiment images; prompts cover
-  the lower unchanged canvas and arrows reuse retained cached PNGs. Stop remains
+  the entire unchanged canvas and arrows reuse retained cached PNGs. Stop remains
   available separately. Collapse reveals the same canvas at the same size.
 - Base: empty workspace shows a canvas placeholder and the open prompt dock.
 - Bad: unmounting prompt fields on collapse, placing Stop inside hidden content,
-  or shrinking the canvas to allocate the expanded editor in normal flow.
+  shrinking the canvas in normal flow, or keeping a28dvh bottom sheet when the
+  expanded drawer must cover the whole canvas.
 
 ## Verification Required
 

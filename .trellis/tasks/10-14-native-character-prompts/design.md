@@ -228,3 +228,8 @@ overlay-prompt-drawer-design.md replaces the in-flow expanded prompt dock with
 a bounded overlay anchored to the main canvas stage. Disclosure must preserve
 canvas dimensions and existing prompt/form/focus/operation ownership. This
 supersedes earlier canvas-growth-on-collapse layout choices.
+
+The subsequent operator clarification requires full-stage expanded height,
+covering the entire canvas with a flex-filling scroll body. Remove preserved
+28dvh/300px and23dvh body heights. Reuse mounted-body disclosure state in CSS;
+the containing stage, editor, controls and request ownership remain unchanged.

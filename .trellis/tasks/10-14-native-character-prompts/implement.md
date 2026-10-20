@@ -602,3 +602,22 @@ owns the frozen shared API and supersedes earlier browser scheduling limits.
   old assets pass. API release/PID603374 remain unchanged; no API restart or
   private-state mutation. See deployment-overlay-prompt-drawer-2026-10-20.md.
 - [ ] Operator visual interaction acceptance; broader task stays in_progress.
+
+### Full-height Clarification (2026-10-20)
+
+1. Native implementer owns styles.css only: expanded dock fills100% of the
+   stage; body fills remaining height and scrolls, removing all small-sheet
+   height limits. Preserve collapsed strip and canvas allocation.
+2. Independent full affected-frontend check, ESLint/TypeScript and fresh
+   env-free locked build; no frontend/helper/browser tests.
+3. Scoped commit and web-only publication with exact source/asset hashes,
+   retained old assets and unchanged API release/PID. Record/journal; broader
+   task stays in_progress for operator acceptance.
+
+- [x] CSS-only full-height implementation and independent full affected-frontend
+  check GREEN: ESLint/TypeScript/diff --check and fresh25-input isolated locked
+  env-free build. No source corrections; full canvas occlusion, flex body,
+  collapsed invariance, controls/layers/form/focus/cache reviewed. See
+  check-full-height-prompt-drawer.md and
+  full-height-prompt-drawer-build-verification.md. No frontend/helper/browser
+  tests or private/paid/provider requests; backend unchanged.
