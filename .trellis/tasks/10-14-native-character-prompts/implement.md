@@ -669,6 +669,9 @@ owns the frozen shared API and supersedes earlier browser scheduling limits.
   backend gate: 748 fake tests, frozen sync/offline lock, Ruff src/tests and
   exact unchanged OpenAPI passed. No product corrections. Frontend unchanged;
   no frontend/helper/browser tests or actual provider/model calls.
-- [ ] Private one-time configuration copy and API-only publication after
-  verified backup/idle/configuration/schema/record/image-preservation gates.
+- [x] Source commit d55b939 published as API-only release20261020T095317
+  on2026-10-20 at17:54 China time. Private one-time AiQQ key/base/model copy,
+  config/online SQLite backup, idle/schema4/record/image/public checks passed.
+  New PID669990; all74 result/PNG bytes and expiry, web and AiQQ preserved.
+  Runner wiring verified without a model turn. See deployment-advice-config-2026-10-20.md.
 - [ ] Operator actual advice/translation acceptance; task remains in_progress.
