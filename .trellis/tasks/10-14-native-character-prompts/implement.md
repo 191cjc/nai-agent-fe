@@ -621,3 +621,8 @@ owns the frozen shared API and supersedes earlier browser scheduling limits.
   check-full-height-prompt-drawer.md and
   full-height-prompt-drawer-build-verification.md. No frontend/helper/browser
   tests or private/paid/provider requests; backend unchanged.
+- [x] Source commit38c443b published as web-only release20261020T082808 on
+  2026-10-20 at16:28 China time. Exact source/assets/public health and retained
+  old assets pass. API release/PID603374 remain unchanged; no restart or
+  private-state mutation. See deployment-full-height-prompt-drawer-2026-10-20.md.
+- [ ] Operator full-height visual acceptance; broader task stays in_progress.
