@@ -778,3 +778,26 @@ Changed the bottom prompt drawer to a bounded absolute overlay within a local ca
 ### Status
 
 [OK] **Completed**
+
+
+## Session 25: Full-height prompt drawer
+<!-- trellis-session: v=2 fp=4751b0dccaf657c1 -->
+
+**Date**: 2026-10-20
+**Task**: Full-height prompt drawer
+**Branch**: `feat/native-character-prompts`
+
+### Summary
+
+Applied operator clarification: expanded prompt drawer fills the entire canvas stage and occludes the full image. Removed former 28dvh/300px and short-screen23dvh heights; flex body scrolls internally. Collapsed strip, canvas allocation and persistent controls unchanged. Independent affected-frontend review, ESLint/TypeScript and fresh25-input env-free locked build passed. Published web-only release20261020T082808; exact public assets/health and retained previous assets verified, API release/PID603374 unchanged. No API restart, private-state mutation, frontend/helper/browser tests or provider calls. Broader task remains in_progress for visual acceptance.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `38c443b` | fix: expand prompt drawer over the entire canvas |
+| `926f6f6` | docs: record full-height prompt drawer deployment |
+
+### Status
+
+[OK] **Completed**

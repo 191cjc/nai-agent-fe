@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 24
+- **Total Sessions**: 25
 - **Last Active**: 2026-10-20
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~780 | Active |
+| `journal-1.md` | ~803 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 25 | 2026-10-20 | Full-height prompt drawer | `38c443b`, `926f6f6` | `feat/native-character-prompts` |
 | 24 | 2026-10-20 | Overlay prompt drawer | `8217b40`, `dd282e7` | `feat/native-character-prompts` |
 | 23 | 2026-10-20 | Experiment image preload | `c61e96c`, `79528ff` | `feat/native-character-prompts` |
 | 22 | 2026-10-19 | Individual hidden prompt tags and API-first release | `b643e47`, `737811e` | `feat/native-character-prompts` |
