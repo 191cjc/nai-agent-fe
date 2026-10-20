@@ -840,3 +840,40 @@ Added read-only current-section Chinese AI explanations and explicit questions; 
 ### Next Steps
 
 - Operator acceptance of translation quality and desktop/mobile interaction; keep current and other tasks in_progress, without archiving.
+
+
+## Session 27: Restore advice configuration from AiQQ
+<!-- trellis-session: v=2 fp=203243810a961f93 -->
+
+**Date**: 2026-10-20
+**Task**: Restore advice configuration from AiQQ
+**Branch**: `feat/native-character-prompts`
+
+### Summary
+
+Diagnosed missing advice key503, added optional HTTPS endpoint/model wiring, and privately copied user-authorized AiQQ text-AI configuration into independent NovelAI config; API-only release20261020T095317.
+
+### Main Changes
+
+- Optional validated NAI_CODEX_BASE_URL and NAI_CODEX_MODEL reach pinned SDK/thread while preserving stdin authentication, isolated environment and default behavior.
+- Private one-time key/base/model copy to root0600 /etc/novelai/api.env; documented sudoedit and idle restart for future key rotation.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d55b939` | fix: configure advice endpoint and model |
+| `a9696ba` | docs: record advice configuration enablement |
+
+### Testing
+
+- [OK] Independent full backend gate:748 fake tests, frozen sync/offline lock, Ruff src/tests and exact unchanged OpenAPI passed; backend type checker not configured.
+- [OK] Exact immutable API staging, CLI0.152.1, no-turn configured runner probes, private config/online DB backup, idle/schema4/rows/config/images/expiry preservation, unchanged web/AiQQ and public readiness passed; no real model/provider/paid calls.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Operator retry of advice/translation and actual model compatibility/quality acceptance; keep broader task in_progress without archiving.

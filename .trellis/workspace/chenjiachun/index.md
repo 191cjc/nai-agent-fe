@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 26
+- **Total Sessions**: 27
 - **Last Active**: 2026-10-20
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~842 | Active |
+| `journal-1.md` | ~879 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 27 | 2026-10-20 | Restore advice configuration from AiQQ | `d55b939`, `a9696ba` | `feat/native-character-prompts` |
 | 26 | 2026-10-20 | Per-section AI translation released | `0b5c002`, `4637ab6` | `feat/native-character-prompts` |
 | 25 | 2026-10-20 | Full-height prompt drawer | `38c443b`, `926f6f6` | `feat/native-character-prompts` |
 | 24 | 2026-10-20 | Overlay prompt drawer | `8217b40`, `dd282e7` | `feat/native-character-prompts` |
