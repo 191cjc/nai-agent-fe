@@ -15,6 +15,14 @@ proof that every tool is unavailable before execution.
   to `AdviceService.advise(text: str) -> AdviceResult`.
 - `NAI_CODEX_API_KEY` is optional. When absent, no runner is wired and advice
   returns `503 advice_unavailable`. No custom Codex URL is required.
+- Optional `NAI_CODEX_BASE_URL` and `NAI_CODEX_MODEL` configure the selected
+  advice endpoint/model. Unset or empty env values retain SDK/CLI defaults.
+  A configured base is an absolute HTTPS URL<=2048, with a hostname and valid
+  port, no userinfo/query/fragment delimiters, backslash, whitespace or control
+  characters. A configured model is nonblank<=200 without whitespace/control
+  characters. Reject invalid settings without including their value in errors.
+- `CodexAdviceRunner(api_key, *, base_url=None, model=None, ...)` receives the
+  validated settings from `create_app`; direct construction validates them too.
 
 ## Contracts
 
@@ -26,6 +34,12 @@ proof that every tool is unavailable before execution.
   stdin. Do not inherit a host CLI login, project files or broad process
   environment. Alongside fixed NovelAI-oriented instructions, only submitted
   advice text becomes dynamic model input; no chat thread is reused or persisted.
+- Pass an explicit base through pinned SDK `options.base_url` (which adds only
+  `OPENAI_BASE_URL` to its isolated child environment), and an explicit model
+  through `thread.model`. Omit these options when absent. Keep API-key login
+  on stdin; never pass SDK `api_key`, which would inject `CODEX_API_KEY`, or
+  inherit a host endpoint/model/credential. Endpoint/model are backend config,
+  never browser fields, prompt context or a model catalog migration.
 - Fixed INSTRUCTIONS explicitly targets NovelAI image prompts and relevant
   settings. Prefer established English NovelAI/Danbooru-compatible tags,
   translating Chinese intent as needed; concise English descriptors can fill
@@ -87,6 +101,9 @@ proof that every tool is unavailable before execution.
   shutdown stop the child before temporary-directory cleanup.
 - Verify `apps/api/contracts/openapi.json` contains no key, CLI path or
   private runtime directory, and check the package locks offline.
+- Fake tests cover optional/default settings, invalid endpoint/model rejection,
+  app-to-runner wiring and exact SDK/thread propagation. Preserve default and
+  configured isolation/no-key-env assertions; no real model request is needed.
 - Prompt/copy-only changes use the existing runtime suite and source review;
   do not add tests that merely match new literal instruction strings. No paid
   model query is required to verify prompt construction; actual suggestion

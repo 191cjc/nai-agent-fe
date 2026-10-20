@@ -1,9 +1,63 @@
 """Backend-only configuration."""
 
 import os
+import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
+
+
+def _has_whitespace_or_control(value: str) -> bool:
+    return any(
+        character.isspace() or unicodedata.category(character) in {"Cc", "Cf"}
+        for character in value
+    )
+
+
+def validate_codex_base_url(value: str | None) -> str | None:
+    if value is None:
+        return None
+    message = "NAI_CODEX_BASE_URL must be an HTTPS API base URL of at most 2048 characters"
+    if (
+        not isinstance(value, str)
+        or not value
+        or len(value) > 2048
+        or _has_whitespace_or_control(value)
+        or any(character in value for character in "\\?#")
+    ):
+        raise ValueError(message)
+    try:
+        parsed = urlsplit(value)
+        valid = (
+            parsed.scheme == "https"
+            and bool(parsed.hostname)
+            and parsed.username is None
+            and parsed.password is None
+            and not parsed.query
+            and not parsed.fragment
+        )
+        _ = parsed.port  # Validate malformed and out-of-range explicit ports.
+    except ValueError:
+        raise ValueError(message) from None
+    if not valid:
+        raise ValueError(message)
+    return value
+
+
+def validate_codex_model(value: str | None) -> str | None:
+    if value is None:
+        return None
+    if (
+        not isinstance(value, str)
+        or not value
+        or len(value) > 200
+        or _has_whitespace_or_control(value)
+    ):
+        raise ValueError(
+            "NAI_CODEX_MODEL must be a nonblank identifier of at most 200 characters "
+            "without whitespace or control characters"
+        )
+    return value
 
 
 @dataclass(frozen=True)
@@ -15,6 +69,12 @@ class Settings:
     novelai_mcp_url: str = "https://www.fsstudy.com.cn/novel-ai-v5"
     novelai_mcp_token: str | None = None
     codex_api_key: str | None = field(default=None, repr=False)
+    codex_base_url: str | None = field(default=None, repr=False)
+    codex_model: str | None = field(default=None, repr=False)
+
+    def __post_init__(self) -> None:
+        validate_codex_base_url(self.codex_base_url)
+        validate_codex_model(self.codex_model)
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -70,4 +130,6 @@ class Settings:
             novelai_mcp_url=novelai_mcp_url,
             novelai_mcp_token=os.environ.get("NAI_NOVELAI_MCP_TOKEN") or None,
             codex_api_key=os.environ.get("NAI_CODEX_API_KEY") or None,
+            codex_base_url=os.environ.get("NAI_CODEX_BASE_URL") or None,
+            codex_model=os.environ.get("NAI_CODEX_MODEL") or None,
         )

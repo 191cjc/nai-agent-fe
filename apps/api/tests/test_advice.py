@@ -10,6 +10,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 from openai_codex_sdk.abort import AbortError
+from openai_codex_sdk.exec import CodexExec, CodexExecArgs
 
 from novelai_api.advice import AdviceFailure, AdviceService, ToolUseAttempt
 from novelai_api.app import create_app
@@ -95,14 +96,32 @@ def test_no_runtime_is_explicitly_unavailable(database: Database) -> None:
         assert response.json()["code"] == "advice_unavailable"
 
 
+def test_endpoint_and_model_without_key_do_not_enable_advice(database: Database) -> None:
+    settings = Settings(
+        database.path,
+        "https://testserver",
+        codex_base_url="https://advice.example.test/v1",
+        codex_model="provider/example-model",
+    )
+    with TestClient(create_app(settings, database), base_url=settings.public_origin) as client:
+        login(client, database)
+        response = advice(client, {"input": "unseen"})
+        assert response.status_code == 503
+        assert response.json()["code"] == "advice_unavailable"
+
+
+@pytest.mark.parametrize(
+    ("base_url", "model"),
+    [(None, None), ("https://advice.example.test/v1", "provider/example-model")],
+)
 def test_configured_runner_is_wired_by_default(
-    database: Database, monkeypatch: pytest.MonkeyPatch
+    database: Database, monkeypatch: pytest.MonkeyPatch, base_url: str | None, model: str | None
 ) -> None:
     created = []
 
     class ConfiguredRunner:
-        def __init__(self, api_key: str):
-            created.append((self, api_key))
+        def __init__(self, api_key: str, *, base_url: str | None, model: str | None):
+            created.append((self, api_key, base_url, model))
             self.closed = False
 
         async def run(self, text: str) -> dict:
@@ -112,14 +131,20 @@ def test_configured_runner_is_wired_by_default(
             self.closed = True
 
     monkeypatch.setattr("novelai_api.app.CodexAdviceRunner", ConfiguredRunner)
-    settings = Settings(database.path, "https://testserver", codex_api_key="configured-test-key")
+    settings = Settings(
+        database.path,
+        "https://testserver",
+        codex_api_key="configured-test-key",
+        codex_base_url=base_url,
+        codex_model=model,
+    )
     assert "configured-test-key" not in repr(settings)
     with TestClient(create_app(settings, database), base_url=settings.public_origin) as client:
         login(client, database)
         response = advice(client, {"input": "lighting"})
         assert response.status_code == 200
         assert response.json() == {"suggestion": "Advice for lighting"}
-    assert created[0][1] == "configured-test-key"
+    assert created[0][1:] == ("configured-test-key", base_url, model)
     assert created[0][0].closed
 
 
@@ -220,7 +245,9 @@ class FakeCodex:
         return SimpleNamespace(events=self.events())
 
 
-def isolated_runner(tmp_path: Path, sdk: FakeCodex) -> CodexAdviceRunner:
+def isolated_runner(
+    tmp_path: Path, sdk: FakeCodex, *, base_url: str | None = None, model: str | None = None
+) -> CodexAdviceRunner:
     async def fake_login(_cli_path, environment, api_key):
         assert api_key == "test-only-key"
         assert all("KEY" not in name for name in environment)
@@ -229,6 +256,8 @@ def isolated_runner(tmp_path: Path, sdk: FakeCodex) -> CodexAdviceRunner:
 
     return CodexAdviceRunner(
         "test-only-key",
+        base_url=base_url,
+        model=model,
         codex_factory=sdk.create,
         cli_path="/fake/pinned/codex",
         workspace_parent=tmp_path,
@@ -263,6 +292,7 @@ def test_sdk_runner_uses_one_isolated_structured_turn(
         assert sdk.thread_options["web_search_enabled"] is False
         assert sdk.thread_options["approval_policy"] == "never"
         assert sdk.thread_options["skip_git_repo_check"] is True
+        assert "model" not in sdk.thread_options
         assert sdk.options["codex_path_override"] == "/fake/pinned/codex"
         assert "base_url" not in sdk.options
         assert "api_key" not in sdk.options
@@ -271,6 +301,105 @@ def test_sdk_runner_uses_one_isolated_structured_turn(
         assert not list(tmp_path.iterdir())
 
     asyncio.run(exercise())
+
+
+@pytest.mark.parametrize(
+    ("base_url", "model"),
+    [
+        ("https://advice.example.test:8443/v1/", None),
+        (None, "provider/example-model:2026.10"),
+        ("https://advice.example.test/v1", "provider/example-model"),
+    ],
+)
+def test_sdk_configured_endpoint_and_model_preserve_isolation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    base_url: str | None,
+    model: str | None,
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "inherited-test-secret")
+    monkeypatch.setenv("CODEX_API_KEY", "another-inherited-test-secret")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://inherited.example.test/v1")
+    monkeypatch.setenv("HTTPS_PROXY", "https://inherited-proxy.example.test")
+    observed = {}
+
+    async def events():
+        runtime = Path(sdk.options["env"]["CODEX_HOME"])
+        work = Path(sdk.thread_options["working_directory"])
+        observed["config"] = (runtime / "config.toml").read_text()
+        observed["instructions"] = (work / "AGENTS.md").read_text()
+        yield sdk_event("item.completed", "agent_message", '{"suggestion":"中文解释"}')
+        yield sdk_event("turn.completed")
+
+    sdk = FakeCodex(events)
+    runner = isolated_runner(tmp_path, sdk, base_url=base_url, model=model)
+    assert asyncio.run(runner.run("only this section text")) == {"suggestion": "中文解释"}
+    assert sdk.options.get("base_url") == base_url
+    assert sdk.thread_options.get("model") == model
+    assert ("base_url" in sdk.options) is (base_url is not None)
+    assert ("model" in sdk.thread_options) is (model is not None)
+    assert "api_key" not in sdk.options
+    assert set(sdk.options["env"]) == {"CODEX_HOME", "HOME", "TMPDIR", "PATH", "LANG"}
+    assert sdk.prompt == "only this section text"
+    assert "only this section text" not in observed["config"] + observed["instructions"]
+    assert "test-only-key" not in str(sdk.options) + str(sdk.thread_options)
+    assert "test-only-key" not in observed["config"] + observed["instructions"]
+    assert sdk.thread_options["sandbox_mode"] == "read-only"
+    assert sdk.thread_options["network_access_enabled"] is False
+    assert sdk.thread_options["web_search_enabled"] is False
+    assert sdk.thread_options["approval_policy"] == "never"
+    assert not list(tmp_path.iterdir())
+
+
+def test_pinned_sdk_builds_configured_execution_without_inheriting_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "inherited-test-secret")
+    monkeypatch.setenv("CODEX_API_KEY", "inherited-test-secret")
+    monkeypatch.setenv("HTTPS_PROXY", "https://inherited-proxy.example.test")
+    environment = {
+        "CODEX_HOME": "/fake/private/runtime",
+        "HOME": "/fake/private/runtime",
+        "TMPDIR": "/fake/private/tmp",
+        "PATH": os.defpath,
+        "LANG": "C.UTF-8",
+    }
+    execution = CodexExec("/fake/pinned/codex", environment)
+    args = CodexExecArgs(
+        input="only submitted text",
+        base_url="https://advice.example.test/v1",
+        model="provider/example-model:2026.10",
+        sandbox_mode="read-only",
+        network_access_enabled=False,
+        web_search_enabled=False,
+        approval_policy="never",
+    )
+    child_environment = execution._build_env(args)
+    assert child_environment == {
+        **environment,
+        "OPENAI_BASE_URL": "https://advice.example.test/v1",
+        "CODEX_INTERNAL_ORIGINATOR_OVERRIDE": "codex_sdk_py",
+    }
+    command = execution._build_command_args(args)
+    assert command[:2] == ["exec", "--experimental-json"]
+    assert command[command.index("--model") + 1] == "provider/example-model:2026.10"
+    assert command[command.index("--sandbox") + 1] == "read-only"
+    assert 'approval_policy="never"' in command
+    assert "sandbox_workspace_write.network_access=false" in command
+    assert "features.web_search_request=false" in command
+    assert "inherited-test-secret" not in str(command) + str(child_environment)
+
+
+@pytest.mark.parametrize(
+    ("options", "setting"),
+    [
+        ({"base_url": "https://advice.example.test:invalid/v1"}, "NAI_CODEX_BASE_URL"),
+        ({"model": "model\nunsafe"}, "NAI_CODEX_MODEL"),
+    ],
+)
+def test_direct_runner_rejects_invalid_provider_options(options: dict, setting: str) -> None:
+    with pytest.raises(ValueError, match=setting):
+        CodexAdviceRunner("test-only-key", **options)
 
 
 def test_sdk_config_disables_named_capabilities_and_hides_prompt(tmp_path: Path) -> None:

@@ -653,3 +653,22 @@ owns the frozen shared API and supersedes earlier browser scheduling limits.
   API restarted as PID657285. See deployment-section-translation-2026-10-20.md.
   No real AI/provider/paid calls or token issuance.
 - [ ] Operator translation/interaction acceptance; broader task in_progress.
+
+## Follow-up Execution: AI Configuration Reuse (2026-10-20)
+
+1. Native implementation of optional base/model settings, bounded validation,
+   configured runner wiring, fake regressions and private rotation docs.
+2. Independent full backend gate, exact unchanged OpenAPI and source review
+   of API-only staging/configuration activation helpers; no paid calls.
+3. Scoped commit and idle/private-backup/configuration/image-preserving API
+   publication. Document actual enablement and key path; record journal.
+4. Keep broader task in_progress for actual advice/translation acceptance.
+
+- [x] Optional validated base/model settings, SDK/thread wiring, meaningful
+  fake regressions and private rotation docs implemented. Independent full
+  backend gate: 748 fake tests, frozen sync/offline lock, Ruff src/tests and
+  exact unchanged OpenAPI passed. No product corrections. Frontend unchanged;
+  no frontend/helper/browser tests or actual provider/model calls.
+- [ ] Private one-time configuration copy and API-only publication after
+  verified backup/idle/configuration/schema/record/image-preservation gates.
+- [ ] Operator actual advice/translation acceptance; task remains in_progress.

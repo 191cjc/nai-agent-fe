@@ -45,6 +45,32 @@ arguments or the static root. Treat environment and diagnostics as sensitive.
 The unit creates `/var/lib/novelai` with `StateDirectory=novelai` and mode
 `0700`; only `novelai` writes there. Keep backups and SQLite outside `/srv/www`.
 
+## AI advice and translation configuration
+
+Edit the NovelAI AI key privately with `sudoedit /etc/novelai/api.env`:
+
+- `NAI_CODEX_API_KEY` enables advice and per-section translation. An absent key
+  leaves these features unavailable; endpoint/model settings alone do not enable them.
+- `NAI_CODEX_BASE_URL` optionally selects the HTTPS API base, including its API
+  path such as `/v1` when required. It must be at most 2048 characters and contain
+  a hostname, with no user information, query, fragment, backslash, whitespace
+  or control characters. Explicit ports must be valid.
+- `NAI_CODEX_MODEL` optionally selects a model identifier, at most 200 characters
+  with no whitespace or control characters. Model availability depends on the
+  selected provider; configuring a name does not verify it.
+
+Leave the optional endpoint/model variables absent or empty for SDK defaults.
+After editing, restart only when no generation jobs or style experiments are
+active: `sudo systemctl restart novelai-api.service`. Readiness can be checked
+with `curl --fail http://127.0.0.1:18080/api/health/ready`; this does not call an
+AI provider or prove that credentials are valid. No frontend rebuild is needed.
+
+An authorized reuse of AiQQ AI configuration is a one-time copy of its text-AI
+key, API base and model into these three NovelAI settings. The files remain
+independent: later edits to `/etc/novelai/api.env` do not update AiQQ, and AiQQ
+edits do not update NovelAI. Keep the original private file and any backup
+root-owned, mode `0600`; never print, paste or pass keys as command arguments.
+
 ## Stage a release
 
 Use a fresh, immutable release ID and a trusted, clean source checkout. Stage

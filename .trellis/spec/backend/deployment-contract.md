@@ -118,6 +118,17 @@ and [Prompt Sections](./prompt-sections-contract.md) (current schema4).
   for diagnosis and a forward fix. It may already have accepted new work;
   a recovery branch must not stop/restart it merely to retain the same code.
   Baseline API recovery is limited to failures before modern startup.
+- API/database readiness does not prove AI advice is configured. Before
+  reporting advice/translation enabled, verify the running API has its selected
+  `NAI_CODEX_API_KEY` and optional endpoint/model, and validate runner wiring
+  without starting a turn. Treat real upstream success as separate acceptance.
+  With explicit authorization, copy only the selected key/base/model from an
+  existing service into root0600 `/etc/novelai/api.env`; back up the original
+  config privately, preserve unrelated settings, and leave the source service
+  untouched. This is a one-time copy, not automatic cross-service syncing.
+  Never print secrets or pass them in command arguments. Future rotations use
+  `sudoedit /etc/novelai/api.env` and an idle API restart. Recover original
+  configuration automatically only before modern startup is attempted.
 
 - Retained images live under /var/lib/novelai/generation-images/, service-owned
   with 0700 directories/0600 files, outside the immutable release/web trees.

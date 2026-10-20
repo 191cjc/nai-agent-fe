@@ -133,7 +133,11 @@ def create_app(
         settings.tag_search_url, settings.public_origin, settings.tag_search_key
     )
     if advice_runner is None and settings.codex_api_key:
-        advice_runner = CodexAdviceRunner(settings.codex_api_key)
+        advice_runner = CodexAdviceRunner(
+            settings.codex_api_key,
+            base_url=settings.codex_base_url,
+            model=settings.codex_model,
+        )
     advice_service = AdviceService(advice_runner)
     if balance_provider is None and settings.novelai_mcp_token:
         balance_provider = NovelAiMcpBalanceProvider(

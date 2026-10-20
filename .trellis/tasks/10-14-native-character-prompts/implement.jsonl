@@ -1,11 +1,9 @@
-{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend quality routing"}
-{"file": ".trellis/spec/frontend/section-assistant-contract.md", "reason": "Popover identity, tab state, request guards and validated plain output"}
-{"file": ".trellis/spec/frontend/workspace-contract.md", "reason": "Protected lifecycle, explicit current input and no frontend/browser tests"}
-{"file": ".trellis/spec/backend/codex-advice-contract.md", "reason": "Current restricted runner and explicit explanation exception in new design"}
-{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Frozen fake-only full backend checks; no copy-literal tests"}
-{"file": ".trellis/spec/backend/api-contract.md", "reason": "Unchanged strict input/suggestion envelope and reviewed OpenAPI"}
-{"file": ".trellis/spec/backend/prompt-comments-contract.md", "reason": "Meaning of source weights/comments without effective prompt mutation"}
-{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Reuse local request helper and scoped purpose mappings"}
-{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Trace explicit source/question into AI explanation and plain read-only result"}
-{"file": ".trellis/tasks/10-14-native-character-prompts/section-translation-design.md", "reason": "Latest section translation follow-up requirements and publication gates"}
-{"file": ".trellis/spec/backend/deployment-contract.md", "reason": "API-first instruction rollout and preservation after attempted modern startup"}
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend quality routing"}
+{"file": ".trellis/spec/backend/codex-advice-contract.md", "reason": "Stdin authentication and isolated pinned SDK runtime"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Full fake-only backend gate and meaningful behavior tests"}
+{"file": ".trellis/spec/backend/api-contract.md", "reason": "Unchanged strict public input/suggestion envelope"}
+{"file": ".trellis/spec/backend/deployment-contract.md", "reason": "Idle/config backup/API-only publication and startup recovery"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Existing endpoint validation and native SDK options"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Settings through runner to SDK with secret-safe config copy"}
+{"file": ".trellis/tasks/10-14-native-character-prompts/advice-config-design.md", "reason": "Latest user-authorized configuration scope and publication gates"}
+{"file": ".trellis/tasks/10-14-native-character-prompts/research/advice-config-reuse.md", "reason": "Pinned SDK base/model mapping and no-key environment evidence"}

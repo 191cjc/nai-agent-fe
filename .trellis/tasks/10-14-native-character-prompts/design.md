@@ -240,3 +240,9 @@ section-translation-design.md owns the new middle helper tab, current-source
 explanation consultation and read-only Chinese result. Existing advice JSON
 transport/runtime remains intact; fixed instructions gain an explicit exception
 for explanations, while composition suggestions keep their English-tag format.
+
+## Follow-up: AI Configuration Reuse (2026-10-20)
+
+advice-config-design.md owns optional backend base/model wiring and the
+user-authorized private one-time AiQQ configuration copy. Preserve existing
+stdin authentication/isolation and all API/schema/generation contracts.

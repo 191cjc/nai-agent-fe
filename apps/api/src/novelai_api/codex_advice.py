@@ -17,6 +17,7 @@ from openai_codex_sdk import AbortController, Codex
 from openai_codex_sdk.exec import CodexExec, CodexExecArgs
 
 from .advice import AdviceResult, ToolUseAttempt
+from .config import validate_codex_base_url, validate_codex_model
 
 CLI_VERSION = "0.152.1"
 OUTPUT_SCHEMA = {
@@ -200,6 +201,8 @@ class CodexAdviceRunner:
         self,
         api_key: str,
         *,
+        base_url: str | None = None,
+        model: str | None = None,
         codex_factory: Callable[[dict[str, Any]], Any] = _ManagedCodex,
         cli_path: str | None = None,
         workspace_parent: Path | None = None,
@@ -208,6 +211,8 @@ class CodexAdviceRunner:
         if not api_key.strip():
             raise ValueError("Codex API key is required")
         self._api_key = api_key
+        self._base_url = validate_codex_base_url(base_url)
+        self._model = validate_codex_model(model)
         self._codex_factory = codex_factory
         self._cli_path = cli_path
         self._workspace_parent = workspace_parent
@@ -245,22 +250,24 @@ class CodexAdviceRunner:
                 }
                 cli_path = self._cli_path or _cli_path()
                 await self._authenticator(cli_path, environment, self._api_key)
-                codex = self._codex_factory(
-                    {
-                        "codex_path_override": cli_path,
-                        "env": environment,
-                    }
-                )
-                thread = codex.start_thread(
-                    {
-                        "sandbox_mode": "read-only",
-                        "working_directory": str(work),
-                        "skip_git_repo_check": True,
-                        "network_access_enabled": False,
-                        "web_search_enabled": False,
-                        "approval_policy": "never",
-                    }
-                )
+                options: dict[str, Any] = {
+                    "codex_path_override": cli_path,
+                    "env": environment,
+                }
+                if self._base_url is not None:
+                    options["base_url"] = self._base_url
+                codex = self._codex_factory(options)
+                thread_options: dict[str, Any] = {
+                    "sandbox_mode": "read-only",
+                    "working_directory": str(work),
+                    "skip_git_repo_check": True,
+                    "network_access_enabled": False,
+                    "web_search_enabled": False,
+                    "approval_policy": "never",
+                }
+                if self._model is not None:
+                    thread_options["model"] = self._model
+                thread = codex.start_thread(thread_options)
                 streamed = await thread.run_streamed(
                     text, {"output_schema": OUTPUT_SCHEMA, "signal": controller.signal}
                 )

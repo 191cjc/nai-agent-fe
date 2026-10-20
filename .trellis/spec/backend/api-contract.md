@@ -17,7 +17,7 @@ and review how the web app consumes the change.
   `GenerationNotConfigured` only at the initial missing-executor guard;
   the route catches this type, not its general RuntimeError base class.
 - `GET /api/health/ready` checks database readiness; it does not assert image
-  provider configuration, upstream credentials or successful paid output.
+  or advice provider configuration, upstream credentials or successful paid output.
 - GET `/api/account/balance` exposes only authenticated normalized image-service
   Anlas and actual successful-fetch time; see [Balance](./account-balance-contract.md).
   It is independent of generation acceptance and cannot classify request cost.
@@ -35,7 +35,8 @@ and review how the web app consumes the change.
   See [Durable Experiments](./durable-experiment-contract.md) for exact shapes,
   idempotency, failure continuation and migration3.
 - `POST /api/advice` has a typed suggestion response. A default runner is
-  wired only when `NAI_CODEX_API_KEY` is configured; see
+  wired only when `NAI_CODEX_API_KEY` is configured. Optional endpoint/model
+  settings remain backend-only and do not change the browser schema; see
   [Codex Advice Runtime Contract](./codex-advice-contract.md).
 - `/api/prompt-snapshots` lists/creates durable private named section bundles;
   `/{id}` reads/deletes only the owner's object. GenerationRequest adds optional

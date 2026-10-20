@@ -341,3 +341,126 @@ def test_config_rejects_urls_and_origins_with_paths(
     monkeypatch.setenv("NAI_NOVELAI_MCP_URL", "http://mcp.example/mcp")
     with pytest.raises(ValueError, match="HTTPS MCP endpoint"):
         Settings.from_env()
+
+
+@pytest.mark.parametrize("empty", [None, ""])
+def test_codex_optional_configuration_keeps_defaults(
+    monkeypatch: pytest.MonkeyPatch, empty: str | None
+) -> None:
+    for name in ("NAI_CODEX_BASE_URL", "NAI_CODEX_MODEL"):
+        if empty is None:
+            monkeypatch.delenv(name, raising=False)
+        else:
+            monkeypatch.setenv(name, empty)
+    settings = Settings.from_env()
+    assert settings.codex_base_url is None
+    assert settings.codex_model is None
+
+
+def test_codex_configuration_preserves_valid_endpoint_and_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    endpoint = "https://advice.example.test:8443/v1/"
+    model = "provider/example-model:2026.10"
+    monkeypatch.setenv("NAI_CODEX_API_KEY", "configured-test-secret")
+    monkeypatch.setenv("NAI_CODEX_BASE_URL", endpoint)
+    monkeypatch.setenv("NAI_CODEX_MODEL", model)
+    settings = Settings.from_env()
+    assert settings.codex_base_url == endpoint
+    assert settings.codex_model == model
+    assert "configured-test-secret" not in repr(settings)
+
+
+def test_codex_configuration_accepts_exact_length_limits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    base = "https://advice.example.test/"
+    endpoint = base + "a" * (2048 - len(base))
+    model = "m" * 200
+    monkeypatch.setenv("NAI_CODEX_BASE_URL", endpoint)
+    monkeypatch.setenv("NAI_CODEX_MODEL", model)
+    settings = Settings.from_env()
+    assert settings.codex_base_url == endpoint
+    assert settings.codex_model == model
+
+
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        "http://advice.example.test/v1",
+        "//advice.example.test/v1",
+        "https:///v1",
+        "https://user@advice.example.test/v1",
+        "https://:password@advice.example.test/v1",
+        "https://@advice.example.test/v1",
+        "https://advice.example.test/v1?key=sentinel",
+        "https://advice.example.test/v1?",
+        "https://advice.example.test/v1#fragment",
+        "https://advice.example.test/v1#",
+        "https://advice.example.test/v1\\path",
+        " https://advice.example.test/v1",
+        "https://advice.example.test/v1 ",
+        "https://advice.example.test/\tv1",
+        "https://advice.example.test/\nv1",
+        "https://advice.example.test/v1\x7f",
+        "https://advice.example.test/v1\u200b",
+        "https://advice.example.test/v1\u00a0",
+        "https://advice.example.test:invalid/v1",
+        "https://advice.example.test:65536/v1",
+        "https://[invalid/v1",
+        "https://advice.example.test/" + "a" * 2048,
+    ],
+)
+def test_codex_configuration_rejects_unsafe_endpoint_without_echo(
+    monkeypatch: pytest.MonkeyPatch, endpoint: str
+) -> None:
+    monkeypatch.setenv("NAI_CODEX_BASE_URL", endpoint)
+    with pytest.raises(ValueError) as failure:
+        Settings.from_env()
+    assert str(failure.value) == (
+        "NAI_CODEX_BASE_URL must be an HTTPS API base URL of at most 2048 characters"
+    )
+
+
+@pytest.mark.parametrize(
+    "model",
+    [
+        " ",
+        " model",
+        "model ",
+        "two models",
+        "model\n",
+        "model\t",
+        "m\x7f",
+        "m\x85",
+        "m\u200b",
+        "m\u00a0",
+        "m" * 201,
+    ],
+)
+def test_codex_configuration_rejects_invalid_model_without_echo(
+    monkeypatch: pytest.MonkeyPatch, model: str
+) -> None:
+    monkeypatch.setenv("NAI_CODEX_MODEL", model)
+    with pytest.raises(ValueError) as failure:
+        Settings.from_env()
+    assert str(failure.value) == (
+        "NAI_CODEX_MODEL must be a nonblank identifier of at most 200 characters "
+        "without whitespace or control characters"
+    )
+
+
+@pytest.mark.parametrize(
+    ("options", "setting"),
+    [
+        ({"codex_base_url": " "}, "NAI_CODEX_BASE_URL"),
+        ({"codex_base_url": "https://advice.example.test/v1\x00"}, "NAI_CODEX_BASE_URL"),
+        ({"codex_model": " "}, "NAI_CODEX_MODEL"),
+        ({"codex_model": "model\x00"}, "NAI_CODEX_MODEL"),
+    ],
+)
+def test_codex_direct_settings_validate_optional_provider_configuration(
+    tmp_path: Path, options: dict, setting: str
+) -> None:
+    with pytest.raises(ValueError, match=setting):
+        Settings(tmp_path / "not-created.sqlite3", "https://testserver", **options)

@@ -529,3 +529,11 @@ meanings of that section's existing prompts. Show current tags, allow a short
 question and present read-only explanations without editing the draft. Keep
 section/session ownership and explicit requests; distinguish old-source results
 after edits. See section-translation-design.md for frontend and runtime guidance.
+
+## Follow-up: Restore AI Service Configuration (2026-10-20)
+
+Advice/translation503 was traced to a missing production AI key. The user
+authorized reusing AiQQ AI configuration and requests the later key-edit
+location. Support its custom HTTPS endpoint and selected model with optional
+backend settings, privately copy the three fields once, and release the API
+without changing AiQQ or making a real model call. See advice-config-design.md.
