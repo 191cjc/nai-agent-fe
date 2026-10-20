@@ -801,3 +801,42 @@ Applied operator clarification: expanded prompt drawer fills the entire canvas s
 ### Status
 
 [OK] **Completed**
+
+
+## Session 26: Per-section AI translation released
+<!-- trellis-session: v=2 fp=e0664ef1829b3638 -->
+
+**Date**: 2026-10-20
+**Task**: Per-section AI translation released
+**Branch**: `feat/native-character-prompts`
+
+### Summary
+
+Added read-only current-section Chinese AI explanations and explicit questions; independently verified and deployed matched API/web release 20261020T091846 with private backup and all 74 retained images preserved.
+
+### Main Changes
+
+- Section helper now provides advice, translation and tag search with independent request state, bounded current-source input, stale explanation guards and no draft application.
+- Backend INSTRUCTIONS distinguish Chinese explanations from English composition tags; API/runtime/schema/dependencies remain unchanged.
+- Corrected activation recovery to preserve the modern API process after startup attempt and captured the contract; API-first publication completed with PID657285.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0b5c002` | feat: explain section prompts with AI translation |
+| `4637ab6` | docs: record section translation deployment |
+
+### Testing
+
+- [OK] 699 existing fake-only backend tests, frozen sync, offline lock, Ruff src/tests and unchanged exact OpenAPI passed; backend has no configured type checker.
+- [OK] Web ESLint/TypeScript, independent full affected-layer source review and fresh 25-input env-free locked production build passed; no frontend/helper/browser automated tests or real AI/provider/paid calls.
+- [OK] Private verified online backup, zero-active-work restart gates, preserved rows/config/schema4 and all 74 retained result/PNG bytes and original expiry; exact public assets/readiness, retained old assets and unauthenticated401/no-store passed.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Operator acceptance of translation quality and desktop/mobile interaction; keep current and other tasks in_progress, without archiving.
