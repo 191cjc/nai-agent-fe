@@ -34,6 +34,12 @@ proof that every tool is unavailable before execution.
   relevant comma-separated tags inside the suggestion value, without headings,
   Markdown or explanations. Keep the strict outer JSON envelope. Relevant
   generation-setting questions may still receive concise explanations.
+- Explicit requests to translate/explain existing prompt meanings are an
+  exception to composition's English-tag-only rule. Return concise Chinese
+  meanings identifying original tags, relevant visual effects and requested
+  weight/comment syntax; mark ambiguity rather than inventing canonical tags
+  or claiming live verification. Do not add unrequested prompt tags. Use the
+  same suggestion JSON field and keep all runtime/tool restrictions unchanged.
 - Match AiQQ's read-only sandbox, network/search disabled, approvals `never`,
   named capability switches off, and immediate rejection of observed tool
   events. The pinned CLI still reports `unified_exec=true` despite a `false`

@@ -110,6 +110,14 @@ and [Prompt Sections](./prompt-sections-contract.md) (current schema4).
   browser-route success. Keep real-route401/no-store checks separate from
   fake authenticated-route tests; never create a token or paid probe just to
   verify a header balance. Cached fetched_at remains the original fetch time.
+- Advice-instruction updates can require API-first publication despite an
+  unchanged OpenAPI/schema: publish explanation-aware instructions before the
+  section translation UI. Preserve idle/backup/configuration/image gates.
+  Once modern API startup has been attempted, a failed readiness/schema/config
+  or image verification must leave that process and release pointer intact
+  for diagnosis and a forward fix. It may already have accepted new work;
+  a recovery branch must not stop/restart it merely to retain the same code.
+  Baseline API recovery is limited to failures before modern startup.
 
 - Retained images live under /var/lib/novelai/generation-images/, service-owned
   with 0700 directories/0600 files, outside the immutable release/web trees.

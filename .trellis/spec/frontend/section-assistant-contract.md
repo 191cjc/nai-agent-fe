@@ -1,4 +1,4 @@
-# Per-section AI and Tag Search Assistant
+# Per-section AI Suggestions, Translation and Tag Search
 
 ## Scope / Trigger
 
@@ -40,8 +40,9 @@ backend [Codex Advice Contract](../backend/codex-advice-contract.md).
 
 Add the same compact helper to shared/person sections and style/negative
 headings. One active compact popover escapes clipped prompt-drawer overflow,
-anchors to its trigger and stays within the visual viewport. AI 建议 and
-提示词搜索 tabs preserve inputs/results while switching within one opening.
+anchors to its trigger and stays within the visual viewport. AI 建议, AI 翻译
+and 提示词搜索 appear in that order and preserve their separate inputs/results
+while switching within one opening.
 Opening/switching has no network or generation side effect; close discards
 local state. Existing section actions and style-experiment controls stay usable.
 
@@ -61,6 +62,23 @@ settings, images or advice history become implicit input. Only explicit
 editable text for user review, never markup/code, and apply only upon explicit
 追加 or 覆盖. No automatic paid request, retry, tool operation or draft write.
 Left unified advice continues using only its own consultation and display.
+
+AI 翻译 explains the current exact section source in Chinese. Show the stable
+target's latest promptTextAt value read-only, including weights/comment lines,
+and an editable short question (up to500 characters). On explicit request,
+freeze that source and build an input<=4000 from source/question/section label
+and typed purpose, without silently truncating tags or reading other sections.
+Empty source/question cannot submit. Translate original tags/visual effects,
+explain relevant syntax, and acknowledge unknown terms without lookup claims.
+The existing advice JSON envelope returns plain nonblank text<=3000; display
+it with preserved line breaks and wrapping. Explanations have no append/replace
+actions and never call applyPromptText or change the draft. If current source
+changes during/after a request, mark/hide the older result and require an
+explicit new request for current text. Translation owns independent local
+request/error/loading/cooldown state via useLocalRequest, with all existing
+opening/target/revision/session/visibility cleanup. Tab activation alone sends
+nothing; Ctrl/Cmd+Enter is local and cannot submit generation. No chat history
+or browser/server persistence is added.
 
 Search has local query/results/errors/loading and Retry-After cooldown. Show
 canonical tags, translations/NSFW/source and optional available metadata;
@@ -103,6 +121,8 @@ reposition on viewport/scroll/mobile-keyboard changes without a hot loop.
 | --- | --- |
 | Open/helper tab switch | Zero network calls and draft edits |
 | Explicit AI submit | Only visible current-section consultation sent |
+| Explicit translation | Current visible source/question only; read-only Chinese explanation |
+| Source changes before/after translation response | Identify/hide old-source result; next request reads latest source |
 | Search/AI candidate apply | Exact captured target, preserved hidden state |
 | Missing/removed/reused/reset target | Close or reject; no fallback assignment |
 | Oversized destination/relevant composition | Visible error; no partial edit |

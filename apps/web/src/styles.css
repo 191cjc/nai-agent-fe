@@ -265,6 +265,9 @@ h1, h2, h3 { letter-spacing: 0; }
 .section-assistant-submit, .section-assistant-apply { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .section-assistant-submit .primary, .section-assistant-apply .secondary { min-height: 32px; padding: 5px 12px; font-size: 12px; }
 .section-assistant-suggestion { display: grid; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.section-assistant-scroll .section-translation-question { margin-top: 12px; }
+.section-translation-result h3 { margin: 0; color: #d9d3c7; font-size: 12px; }
+.section-translation-explanation { margin: 0; font-size: 12px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
 .section-assistant-feedback { flex: 0 1 auto; min-height: 0; max-height: 30%; overflow: auto; padding: 0 12px; border-top: 1px solid var(--line); }
 .section-assistant-feedback .alert, .section-assistant-feedback .prompt-hint { margin: 8px 0; }
 .snapshot-entry-preview { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; min-width: 0; }

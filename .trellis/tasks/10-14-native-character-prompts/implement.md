@@ -626,3 +626,26 @@ owns the frozen shared API and supersedes earlier browser scheduling limits.
   old assets pass. API release/PID603374 remain unchanged; no restart or
   private-state mutation. See deployment-full-height-prompt-drawer-2026-10-20.md.
 - [ ] Operator full-height visual acceptance; broader task stays in_progress.
+
+## Follow-up Execution: Per-section AI Translation (2026-10-20)
+
+1. Native frontend implementer owns SectionAssistant.tsx/styles.css; backend
+   implementer owns codex_advice.py INSTRUCTIONS only. Follow
+   section-translation-design.md, no nested delegation or live/paid probes.
+2. Independent full affected-layer review; fake backend suite/frozen/lock/Ruff/
+   unchanged OpenAPI and frontend ESLint/TypeScript/source gate. Sync specs.
+3. Fresh env-free locked build and scoped commit; matched API-first schema4
+   publication after private backup/idle/config/row/image-preservation gates.
+4. Record release/journal; broader task stays in_progress for operator acceptance.
+
+- [x] Frontend and INSTRUCTIONS-only backend implementation passed independent
+  full affected-layer review: 699 existing offline fake backend tests, frozen
+  sync/lock, Ruff src/tests, unchanged exact OpenAPI and web ESLint/TypeScript.
+  No product fixes. Publication helper recovery was corrected to preserve the
+  API process after startup attempt; deployment spec synchronized. Fresh
+  25-input env-free locked build passed. See check-section-translation.md and
+  section-translation-build-verification.md. No frontend/helper/browser tests
+  or real AI/provider/paid calls.
+- [ ] Matched API-first publication with private backup/idle/configuration/
+  record/image preservation gates and exact public release verification.
+- [ ] Operator translation/interaction acceptance; broader task in_progress.

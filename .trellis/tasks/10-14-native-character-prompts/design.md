@@ -233,3 +233,10 @@ The subsequent operator clarification requires full-stage expanded height,
 covering the entire canvas with a flex-filling scroll body. Remove preserved
 28dvh/300px and23dvh body heights. Reuse mounted-body disclosure state in CSS;
 the containing stage, editor, controls and request ownership remain unchanged.
+
+## Follow-up: Section Translation (2026-10-20)
+
+section-translation-design.md owns the new middle helper tab, current-source
+explanation consultation and read-only Chinese result. Existing advice JSON
+transport/runtime remains intact; fixed instructions gain an explicit exception
+for explanations, while composition suggestions keep their English-tag format.

@@ -521,3 +521,11 @@ the entire image and use the whole available main viewport, not the former
 28dvh/300px bottom sheet. Fill the canvas stage from its top to the persistent
 bottom controls, with an internally scrolling editor and unchanged underlying
 canvas sizing. This supersedes the first overlay release's small body height.
+
+## Follow-up: Per-section AI Translation (2026-10-20)
+
+Add AI 翻译 right of AI 建议 in every section helper. Users can ask for Chinese
+meanings of that section's existing prompts. Show current tags, allow a short
+question and present read-only explanations without editing the draft. Keep
+section/session ownership and explicit requests; distinguish old-source results
+after edits. See section-translation-design.md for frontend and runtime guidance.

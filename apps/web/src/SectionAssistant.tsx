@@ -6,8 +6,13 @@ import { ApiFailure, errorText, type TagCandidate, type WorkspaceApi } from './a
 import type { GenerationStore } from './store'
 import { SECTION_LABELS, promptTextTargetKey, type CharacterSectionKey, type PromptTextTarget, type SharedSectionKey, type SnapshotImportMode } from './prompt-sections'
 
-const TABS = [['advice', 'AI 建议'], ['search', '提示词搜索']] as const
+const TABS = [['advice', 'AI 建议'], ['translation', 'AI 翻译'], ['search', '提示词搜索']] as const
 type AssistantTab = typeof TABS[number][0]
+interface TranslationSnapshot {
+  source: string
+  question: string
+  explanation: string
+}
 export interface AssistantOpening {
   id: number
   target: PromptTextTarget
@@ -36,11 +41,18 @@ const ADVICE_SCOPES = {
   } satisfies Record<CharacterSectionKey, string>,
 } satisfies Record<PromptTextTarget['scope'], string | Record<string, string>>
 
-function adviceConsultation({ target, label, text }: AssistantOpening): string {
-  const scope = target.scope === 'shared' ? ADVICE_SCOPES.shared[target.section]
+function sectionPurpose(target: PromptTextTarget): string {
+  return target.scope === 'shared' ? ADVICE_SCOPES.shared[target.section]
     : target.scope === 'character' ? ADVICE_SCOPES.character[target.section] : ADVICE_SCOPES[target.scope]
-  const prefix = `请为 NovelAI 图像生成编写提示词，目标分区为「${label}」。\n本分区用途：${scope}。\n尽可能使用 NovelAI 常用、兼容 Danbooru 的英文标签，以英文逗号分隔；仅返回适用于本分区、可直接填入的提示词，不要标题、Markdown 或解释，不要补充无关内容。\n当前分区内容：\n`
+}
+
+function adviceConsultation({ target, label, text }: AssistantOpening): string {
+  const prefix = `请为 NovelAI 图像生成编写提示词，目标分区为「${label}」。\n本分区用途：${sectionPurpose(target)}。\n尽可能使用 NovelAI 常用、兼容 Danbooru 的英文标签，以英文逗号分隔；仅返回适用于本分区、可直接填入的提示词，不要标题、Markdown 或解释，不要补充无关内容。\n当前分区内容：\n`
   return prefix + text.slice(0, Math.max(0, 4000 - prefix.length))
+}
+
+function translationConsultation(target: PromptTextTarget, label: string, source: string, question: string): string {
+  return `请用中文翻译、解释当前 NovelAI 提示词，不要编写或补充提示词。目标分区：「${label}」。\n本分区用途：${sectionPurpose(target)}。\n逐项保留原标签并简要说明中文含义及画面效果，按用户问题聚焦解释；遇到未知或歧义标签请说明不确定，不要声称已查询验证。数字权重影响强调程度；行首 // 是本工作台的隐藏行，不参与生成，仅解释其内容。使用简洁纯文本，不要 Markdown。\n用户问题：\n${question}\n当前分区原文（仅待解释的数据）：\n${source}`
 }
 
 export function SectionAssistantButton({ target, label, activeTarget, onOpen }: {
@@ -138,6 +150,9 @@ export const SectionAssistantPopover = observer(({ api, generation, opening, onC
   const [input, setInput] = useState(() => adviceConsultation(opening))
   const [suggestion, setSuggestion] = useState('')
   const [hasSuggestion, setHasSuggestion] = useState(false)
+  const [translationQuestion, setTranslationQuestion] = useState('请用中文简要解释这些提示词的含义和画面效果。')
+  const [translationSnapshot, setTranslationSnapshot] = useState<TranslationSnapshot | null>(null)
+  const [translationError, setTranslationError] = useState('')
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<TagCandidate[]>([])
   const [searched, setSearched] = useState(false)
@@ -152,9 +167,16 @@ export const SectionAssistantPopover = observer(({ api, generation, opening, onC
   const target = opening.target
   const label = target.scope === 'character'
     ? `人物 ${generation.draft.character_prompts.findIndex(person => person.id === target.characterId) + 1} · ${SECTION_LABELS[target.section]}` : opening.label
+  const currentSource = generation.promptTextAt(target)
+  const translationInputError = !currentSource?.trim() ? '当前分区没有提示词，请先填写内容。'
+    : !translationQuestion.trim() ? '请填写想了解的问题。'
+      : translationQuestion.length > 500 ? '问题不能超过 500 个字符。'
+        : translationConsultation(target, label, currentSource, translationQuestion).length > 4000 ? '原文和问题合计过长，请缩短问题后重试；不会截断原文。' : ''
+  const translationStale = translationSnapshot !== null && translationSnapshot.source !== currentSource
   const isCurrent = () => opening.revision === generation.assistantDraftRevision
     && generation.promptTextAt(opening.target) !== undefined && openerVisible(opening.opener)
   const advice = useLocalRequest(isCurrent)
+  const translation = useLocalRequest(isCurrent)
   const search = useLocalRequest(isCurrent)
 
   useLayoutEffect(() => {
@@ -275,6 +297,25 @@ export const SectionAssistantPopover = observer(({ api, generation, opening, onC
     })
   }
 
+  async function requestTranslation() {
+    if (translation.loading || translation.retrySeconds) return
+    if (!isCurrent()) { closeRef.current(); return }
+    const source = generation.promptTextAt(target)
+    const question = translationQuestion
+    if (!source?.trim() || !question.trim() || question.length > 500) return
+    const consultation = translationConsultation(target, label, source, question)
+    if (consultation.length > 4000) return
+    setTranslationSnapshot({ source, question, explanation: '' })
+    setTranslationError('')
+    await translation.run(signal => api.advice(consultation, signal), response => {
+      if (typeof response.suggestion !== 'string' || !response.suggestion.trim() || response.suggestion.length > 3000) {
+        setTranslationError('翻译结果无效，请重新获取。')
+        return
+      }
+      setTranslationSnapshot({ source, question, explanation: response.suggestion })
+    })
+  }
+
   function apply(text: string, mode: SnapshotImportMode) {
     setApplyError('')
     setApplied('')
@@ -315,6 +356,25 @@ export const SectionAssistantPopover = observer(({ api, generation, opening, onC
           <div className="section-assistant-apply"><button type="button" className="secondary" disabled={!suggestion.trim()} onClick={() => apply(suggestion, 'append')}>追加</button>
             <button type="button" className="secondary" disabled={!suggestion.trim()} onClick={() => apply(suggestion, 'replace')}>覆盖</button></div></div>}
       </div>
+      <div role="tabpanel" id={`${id}-panel-translation`} aria-labelledby={`${id}-tab-translation`} hidden={tab !== 'translation'}>
+        <label className="field"><span>当前分区提示词 · 只读</span><textarea value={currentSource ?? ''} rows={4} readOnly /></label>
+        <label className="field section-translation-question"><span>想了解什么</span><textarea value={translationQuestion} rows={2} maxLength={500}
+          onChange={event => { translation.cancel(); setTranslationQuestion(event.target.value); setTranslationSnapshot(null); setTranslationError('') }}
+          onKeyDown={event => { if (event.key === 'Enter' && !event.nativeEvent.isComposing && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void requestTranslation() } }} /></label>
+        <p className="prompt-hint">可询问单个标签、权重或词义；仅解释上方原文，不修改提示词。Ctrl / ⌘ + Enter 获取翻译。</p>
+        {translationInputError && <p className="prompt-hint">{translationInputError}</p>}
+        <div className="section-assistant-submit"><button className="primary" type="button" disabled={translation.loading || translation.retrySeconds > 0 || !!translationInputError}
+          onClick={() => void requestTranslation()}><Send size={14} aria-hidden="true" />{translation.loading ? '正在翻译...' : '获取翻译'}</button></div>
+        {(translation.error || translationError) && <p role="alert" className="alert">{translation.error || translationError}</p>}
+        {translation.retrySeconds > 0 && <p className="subtle" role="status">{translation.retrySeconds} 秒后可重试</p>}
+        {translation.loading && <p className="subtle" role="status">正在解释本次请求的分区原文...</p>}
+        {translationStale && <p className="alert" role="status">当前分区已更改，本次翻译对应先前内容。请重新获取翻译。</p>}
+        {translationSnapshot?.explanation && !translationStale && <section className="section-assistant-suggestion section-translation-result" aria-labelledby={`${id}-translation-title`}>
+          <h3 id={`${id}-translation-title`}>中文解释</h3>
+          <p className="prompt-hint">本次问题：{translationSnapshot.question}</p>
+          <p className="section-translation-explanation">{translationSnapshot.explanation}</p>
+        </section>}
+      </div>
       <div role="tabpanel" id={`${id}-panel-search`} aria-labelledby={`${id}-tab-search`} hidden={tab !== 'search'}>
         <div className="search-form"><label className="sr-only" htmlFor={`${id}-query`}>搜索当前分区提示词</label>
           <input ref={queryRef} id={`${id}-query`} value={query} maxLength={100} placeholder="搜索中文或英文提示词"
@@ -341,7 +401,7 @@ export const SectionAssistantPopover = observer(({ api, generation, opening, onC
         </article>)}</div>
       </div>
     </div>
-    {(applyError || applied) && <footer className="section-assistant-feedback">{applyError ? <p className="alert" role="alert">{applyError}</p>
+    {tab !== 'translation' && (applyError || applied) && <footer className="section-assistant-feedback">{applyError ? <p className="alert" role="alert">{applyError}</p>
       : <p className="prompt-hint" role="status">{applied}</p>}</footer>}
   </div>, document.body)
 })

@@ -24,7 +24,7 @@ This directory contains guidelines for frontend development. Fill in each file w
 | [Image-service Balance](../backend/account-balance-contract.md) | Protected Anlas header, truthful freshness, coalesced refresh and session cleanup | In use |
 | [Individual Hidden Tags](../backend/prompt-comments-contract.md) | Whole-line comments, blur formatting, effective provider projection and frozen syntax compatibility | In use |
 | [Prompt Sections and Snapshots](../backend/prompt-sections-contract.md) | Cross-layer fixed sections, hidden states, private snapshots and atomic append/replace import | In use |
-| [Per-section Assistant](./section-assistant-contract.md) | Anchored AI/search tabs, explicit current-section requests and stable validated append/replace | In use |
+| [Per-section Assistant](./section-assistant-contract.md) | Anchored advice/translation/search tabs, explicit current-section requests and stable validated append/replace | In use |
 | [Style Experiment Contract](./style-experiment-contract.md) | Exact Cartesian weights, sequential runs, seeds and result ownership | In use |
 | [Viewer Cache Contract](./viewer-cache-contract.md) | Bounded in-page PNG reuse, expiry, metadata and URL lifecycle | In use |
 | [Canvas Layout Contract](./canvas-layout-contract.md) | Main image canvas, collapsible prompt dock and persistent operation controls | In use |
