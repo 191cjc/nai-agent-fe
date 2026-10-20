@@ -646,6 +646,10 @@ owns the frozen shared API and supersedes earlier browser scheduling limits.
   25-input env-free locked build passed. See check-section-translation.md and
   section-translation-build-verification.md. No frontend/helper/browser tests
   or real AI/provider/paid calls.
-- [ ] Matched API-first publication with private backup/idle/configuration/
-  record/image preservation gates and exact public release verification.
+- [x] Source commit 0b5c002 published as matched API-first release
+  20261020T091846 on 2026-10-20 at17:19 China time. Private backup, idle,
+  configuration/record/schema4/OpenAPI and public hash/health gates passed.
+  All74 retained results/PNGs preserve exact bytes and original expiry.
+  API restarted as PID657285. See deployment-section-translation-2026-10-20.md.
+  No real AI/provider/paid calls or token issuance.
 - [ ] Operator translation/interaction acceptance; broader task in_progress.
