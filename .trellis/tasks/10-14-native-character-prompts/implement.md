@@ -597,3 +597,8 @@ owns the frozen shared API and supersedes earlier browser scheduling limits.
   production build passes. See check-overlay-prompt-drawer.md and
   overlay-prompt-drawer-build-verification.md. No frontend/helper/browser tests
   or provider/private-image calls; backend unchanged.
+- [x] Source commit8217b40 published as web-only release20261020T073033 on
+  2026-10-20 at15:30 China time. Exact source/assets/public health and retained
+  old assets pass. API release/PID603374 remain unchanged; no API restart or
+  private-state mutation. See deployment-overlay-prompt-drawer-2026-10-20.md.
+- [ ] Operator visual interaction acceptance; broader task stays in_progress.
