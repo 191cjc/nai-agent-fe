@@ -34,8 +34,11 @@ ownership and server retention/scheduling are separate.
 - Close, opening another selection, reset, logout start, 401 and dispose clear
   the cache and revoke its URLs. A refresh has no persistent cache to restore.
   Epoch/abort/session guards reject late reads before URL creation/cache fill.
-- Keep image, index, metadata, filename and current download aligned. Viewing
+- Keep image, index, metadata, filename and current download aligned. Navigation
   and cache cleanup never mutate the draft or stop/resubmit paid server work.
+  Explicit result-seed clicks update only the draft seed under the workspace
+  contract; local sanitized Save owns separate temporary export resources and
+  never changes or revokes the cache's original URLs.
 
 ## Explicit Experiment Preload
 

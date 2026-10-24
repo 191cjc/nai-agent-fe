@@ -13,8 +13,8 @@ saved image ownership; layout must preserve those contracts.
 - Workspace owns local prompt disclosure state and explicit history navigation
   callbacks. GenerationStore remains the draft/operation/image owner.
 - Result({ store, hidden }) remains mounted while the saved canvas is active.
-- SavedResultViewer({ saved, onClose }) delegates returning to the current
-  canvas and safe focus to Workspace; the store still owns URL cleanup.
+- SavedResultViewer delegates returning to the current canvas, safe focus and
+  explicit seed-use actions to Workspace; the store still owns URL cleanup.
 - GenerateControls({ store, onOpenSettings }) renders a submit button with
   form="generation-form". That mounted form owns one generation.submit path
   even when its prompt inputs are inside the hidden drawer body.
@@ -52,6 +52,12 @@ saved image ownership; layout must preserve those contracts.
   loaded images. Guard new job identity, empty/partial/short lists and correct
   current seed/index/filename/download. Local selection never fetches images.
   Preserve current pending/error/retry/parameters and explicit result cleanup.
+- Both current and saved image frames expose the actual accepted job seed
+  at the lower right as an explicitly labelled button, with a visible Save
+  button in the caption. Clicking the seed fills only the generation seed
+  setting; an ordinary image/view change never pins a seed. Save exports a sanitized PNG under the
+  workspace contract and retains selection/filename alignment on async changes.
+  Keep the full seed and actions reachable at narrow widths and short heights.
 - Saved comparisons keep lazy arrows, current metadata/weights/expiry, retry,
   download, viewer-local keys and bounded PNG cache. Image sizing adapts to
   available canvas space without cropping or a fixed height pushing controls
@@ -79,8 +85,11 @@ saved image ownership; layout must preserve those contracts.
   mobile overlay; history resume reveals current status with safe focus.
 - Keep Generate's existing guards/labels/uncertainty and validation behavior,
   with one submit path and no nested forms. Explicit unlocked ordinary submit
-  returns canvas selection to current work. Settings summary, unknown-submission
-  actions and operation errors remain reachable while prompts are collapsed.
+  returns canvas selection to current work and immediately collapses the prompt
+  drawer. Move focus out of a hidden editor/assistant when necessary, without
+  unmounting prompt state. Guarded/disabled submissions do not change disclosure.
+  Settings summary, unknown-submission actions and operation errors remain
+  reachable while prompts are collapsed.
 - Server experiment progress/reconnect/view/Stop stay outside the prompt body;
   closing it cannot detach/stop/restart server work. Bound verbose progress/
   snapshots so canvas and bottom actions remain reachable on short screens.
@@ -93,8 +102,11 @@ saved image ownership; layout must preserve those contracts.
 | --- | --- |
 | Toggle prompt drawer | Same canvas/image size; overlay expands; preserve content/configuration; no requests |
 | Generate with drawer closed | Same guarded form submit, current canvas visible |
+| Generate with drawer open | Collapse immediately after guards; preserve editor state and safe focus |
 | Active/uncertain operation | Existing locks, recovery and Stop remain reachable |
 | Select another ordinary image | Reuse existing URL; index/download stay aligned |
+| Click result seed / clear setting | Explicit seed-only draft update / blank random seed |
+| Save / change image or session during export | Sanitized PNG only / suppress stale download |
 | New/partial/empty ordinary images | Valid current selection or status placeholder |
 | Open/close saved comparison | Swap canvas view; independent owners remain valid |
 | History reuse with collapsed prompts | Open prompts, dismiss overlay, safe focus |

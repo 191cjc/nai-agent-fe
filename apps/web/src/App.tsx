@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { observer } from 'mobx-react-lite'
 import {
-  ArrowDownToLine, ArrowLeft, ArrowRight, Check, ChevronDown, ChevronUp,
+  ArrowLeft, ArrowRight, Check, ChevronDown, ChevronUp,
   FlaskConical, History, Image as ImageIcon, LogOut, RefreshCw, Search, Send, Settings2,
   Sparkles, Tags, Trash2, WandSparkles, X,
 } from 'lucide-react'
@@ -16,6 +16,7 @@ import { StyleExperimentConfig, StyleExperimentProgress } from './StyleExperimen
 import { PromptSummary } from './PromptSummary'
 import { SavedExperimentList, SavedResultViewer } from './SavedResults'
 import { AccountBalance } from './AccountBalance'
+import { ImageSaveButton, ImageSeedButton } from './ImageActions'
 
 const SOURCE_URL = 'https://huggingface.co/spaces/SAkizuki/DanbooruSearch'
 const RESOLUTION_PRESETS = [
@@ -240,7 +241,13 @@ const SettingsPanel = observer(({ store, hidden, onClose }: { store: AppStore; h
         <div className="settings-grid">
           <NumericField label="步数" name="steps" value={draft.steps} min={1} max={50} onChange={setNumeric} />
           <NumericField label="CFG 系数" name="cfg_scale" value={draft.cfg_scale} min={0} max={20} step="any" onChange={setNumeric} />
-          <NumericField label="种子" name="seed" value={draft.seed} min={1} max={4294967295} placeholder="随机" onChange={setNumeric} />
+          <div className="field seed-field"><label htmlFor="generation-seed">种子</label>
+            <div className="seed-input-row"><input id="generation-seed" type="number" inputMode="decimal" value={draft.seed}
+              min={1} max={4294967295} step={1} placeholder="随机" onChange={event => generation.setField('seed', event.target.value)} />
+              <button className="icon-button" type="button" title="清空种子，使用随机种子" aria-label="清空种子，使用随机种子"
+                disabled={!draft.seed} onClick={() => generation.setField('seed', '')}><X size={16} aria-hidden="true" /></button>
+            </div>
+          </div>
           <NumericField label="张数" name="sample_count" value={draft.sample_count} min={1} max={8} onChange={setNumeric} />
         </div>
         <label className="quality-toggle"><input type="checkbox" checked={draft.quality}
@@ -304,7 +311,8 @@ const Result = observer(({ store, hidden }: { store: AppStore; hidden: boolean }
         <button className="icon-button experiment-image-arrow" type="button" title="上一张生成图片" aria-label="上一张生成图片"
           disabled={!image || position === 0} onClick={() => select(position - 1)}><ArrowLeft size={22} aria-hidden="true" /></button>
         <div className="experiment-image-frame" aria-busy={generation.busy || generation.checking || generation.activeId !== null}>
-          {image && job ? <img key={image.url} src={image.url} alt={`本次生成图像 ${image.index + 1}`} />
+          {image && job ? <><img key={image.url} src={image.url} alt={`本次生成图像 ${image.index + 1}`} />
+            <ImageSeedButton seed={job.effective_seed} onUseSeed={seed => generation.setField('seed', String(seed))} /></>
             : <div className="canvas-placeholder" role="status">
               {generation.experimentRunning ? <FlaskConical size={32} aria-hidden="true" /> : <ImageIcon size={32} aria-hidden="true" />}
               <p>{placeholder}</p>
@@ -315,9 +323,11 @@ const Result = observer(({ store, hidden }: { store: AppStore; hidden: boolean }
           disabled={!image || position + 1 >= images.length} onClick={() => select(position + 1)}><ArrowRight size={22} aria-hidden="true" /></button>
       </div>
       <figcaption className="canvas-caption">
-        <span aria-live="polite" aria-atomic="true">{image && job ? `图像 ${image.index + 1} / ${job.image_count} · 实际种子 ${job.effective_seed}`
+        <span aria-live="polite" aria-atomic="true">{image && job ? `图像 ${image.index + 1} / ${job.image_count}`
           : job ? `实际种子 ${job.effective_seed}` : '图像画布'}</span>
-        {image && <a href={image.url} download={image.filename} className="icon-button" title={`下载图像 ${image.index + 1}`} aria-label={`下载图像 ${image.index + 1}`}><ArrowDownToLine size={17} aria-hidden="true" /></a>}
+        {image && job && !hidden && <ImageSaveButton key={image.url} url={image.url} filename={image.filename}
+          isCurrent={() => store.auth.status === 'ready' && !store.auth.loggingOut && store.savedResults.selection === null
+            && generation.job?.id === job.id && generation.images.some(candidate => candidate.url === image.url)} />}
       </figcaption>
     </figure>
     {(job || generation.activeId) && <div className="canvas-metadata">
@@ -500,6 +510,13 @@ const Workspace = observer(({ store }: { store: AppStore }) => {
     setPromptsOpen(!promptsOpen)
   }
 
+  function closePrompts() {
+    if (promptBodyRef.current?.contains(document.activeElement)
+      || document.getElementById('section-assistant-popover')?.contains(document.activeElement)) promptToggleRef.current?.focus({ preventScroll: true })
+    setFocusTarget(null)
+    setPromptsOpen(false)
+  }
+
   function openPrompts() {
     setActivePanel(null)
     setPromptsOpen(true)
@@ -520,6 +537,7 @@ const Workspace = observer(({ store }: { store: AppStore }) => {
     event.preventDefault()
     const generation = store.generation
     if (generation.operationLocked || generation.experimentRunning || generation.busy || generation.activeId !== null || generation.submitUncertain) return
+    closePrompts()
     store.savedResults.close()
     void generation.submit()
   }
@@ -557,7 +575,9 @@ const Workspace = observer(({ store }: { store: AppStore }) => {
         <div className="canvas-stage">
           <div className="canvas-region" aria-label="图像画布">
             <Result store={store} hidden={store.savedResults.selection !== null} />
-            <SavedResultViewer saved={store.savedResults} onClose={closeSavedResult} />
+            <SavedResultViewer saved={store.savedResults} onClose={closeSavedResult}
+              onUseSeed={seed => store.generation.setField('seed', String(seed))}
+              canSave={() => store.auth.status === 'ready' && !store.auth.loggingOut} />
           </div>
           <section className="prompt-dock" aria-label="提示词抽屉">
             <button ref={promptToggleRef} className="prompt-drawer-toggle" id="prompt-drawer-toggle" type="button"

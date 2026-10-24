@@ -416,7 +416,7 @@ export class GenerationStore {
         ? metadata.characters.map(character => newCharacter(character.sections, character.x, character.y)) : [newCharacter()],
       width: String(item.parameters.width), height: String(item.parameters.height),
       steps: String(item.parameters.steps), cfg_scale: String(item.parameters.cfg_scale),
-      seed: String(item.effective_seed), sample_count: String(item.parameters.sample_count),
+      seed: '', sample_count: String(item.parameters.sample_count),
     }
     this.positiveTagTarget = this.fallbackTagTarget()
     this.error = ''

@@ -81,13 +81,34 @@ explicit atomic append/replace import with visible character target mapping.
   object URLs remain ephemeral and are never stored in Web Storage/IndexedDB.
   Ordinary successful history has an explicit viewing action; automatic latest
   entry restoration still restores parameters only.
+- Seed settings are opt-in. `GenerationStore.reuse()` restores historical
+  parameters with `seed: ''`, including automatic workspace-entry restoration.
+  Do not write `effective_seed` back during history reads, polling or generation
+  completion. A blank draft seed still projects to request `seed: null`.
+  Manual input or clicking the displayed result seed explicitly selects a fixed
+  seed; preserve that choice across submissions until cleared or history reuse.
+  The seed input has a separate right-side clear button that writes `''`.
+  Current and saved result seed buttons use the accepted job's `effective_seed`
+  and change only the draft seed, without submitting or restoring other fields.
+- Explicit image Save exports a local sanitized PNG through the shared
+  `ImageActions` / `png-export` path. Decode at original dimensions, clear the
+  lowest RGB bits and set alpha to 255, then encode a fresh PNG. This removes
+  original PNG metadata chunks and NovelAI alpha/RGB LSB stealth carriers;
+  Canvas re-encoding alone does not clear pixel steganography. RGB values may
+  change by one level. Never fall back to downloading the original on failure.
+  Show saving/error state, suppress duplicate work, and reject late downloads
+  after image/view/session changes. Release temporary decode/download resources.
+  Viewer/cache URLs and retained server originals keep their existing owners;
+  browser right-click saving still acts on the displayed original image.
 - Saved experiment browsing owns independent read-only state: paginated group
   metadata and lazy images with a viewer-local LRU cache bounded to 32 PNGs and
   64 MiB of Blob.size. Follow [Viewer Cache Contract](./viewer-cache-contract.md)
   for current metadata/expiry checks and URL ownership. Keep current image/
   metadata/download aligned, last selection/session wins, and clear owned URLs
-  on replacement/close/reset/logout/401/disposal. Saved viewing never changes the
-  draft or generation/experiment operation, and never resumes paid work.
+  on replacement/close/reset/logout/401/disposal. Saved navigation never changes
+  the draft or generation/experiment operation, and never resumes paid work.
+  Explicitly clicking the displayed seed is the sole viewer action that writes
+  the draft seed; Save remains a local export.
   Left/right and viewer-focused keys traverse images then saved groups; failed
   or expired rows have one metadata placeholder. Show original seven-day
   retention and unavailable images accurately. Explicit history archive/list
@@ -204,7 +225,7 @@ explicit atomic append/replace import with visible character target mapping.
   and generation settings once, through `GenerationStore.reuse`. Page zero is
   already owner-scoped and ordered by created_at DESC, id DESC; do not filter
   to successful jobs or substitute the last currently displayed page. Reuse
-  retains its effective-seed behavior, legacy defaults, native characters and
+  leaves the seed blank and retains legacy defaults, native characters and
   arbitrary historical sampler/resolution values. Empty history keeps defaults;
   history-load errors stay visible without disabling the draft.
 - Entry restoration must be separate from ordinary history refresh, deletion,
@@ -253,7 +274,9 @@ explicit atomic append/replace import with visible character target mapping.
 | Weight becomes exactly 1 (including decimal equivalents) | Remove only selected outer numeric wrapper; plain source unchanged |
 | Sampler preset selected | Write the exact selected ID to the existing draft |
 | Manual sampler / unknown reused sampler | Preserve current value in an editable field; do not coerce to a preset |
-| Authenticated entry with history | Reuse newest item once, including effective seed and all structured/settings fields |
+| Authenticated entry with history | Reuse newest item once, including structured/settings fields, with seed blank |
+| Empty seed / explicitly selected seed | Send null for random / preserve fixed seed until cleared or history reuse |
+| Save error / source or session changes during export | Show local failure without raw-image fallback / suppress late download |
 | Empty/failed entry history | Keep defaults; expose existing history error when applicable |
 | Edit/manual reuse/operation before initial history settles | Skip late automatic restore |
 | History refresh/page change/failed-logout remount | Never automatically overwrite the draft |
@@ -296,6 +319,9 @@ explicit atomic append/replace import with visible character target mapping.
   deduplication, resumed/expired-image results, pending pagination (success and
   failure), and logout invalidation through the owning source paths. Record
   that source review separately from interactive browser validation.
+- Source-review explicit seed use/clear versus automatic entry/history reuse,
+  source PNG metadata and alpha/RGB stealth removal, original export dimensions,
+  duplicate saves, decoding/encoding failures, source changes and session cleanup.
 - Source-review neutral adjustments from both directions and exact decimal
   equivalents, nested/escaped body preservation and plain-tag no-op behavior.
 - Source-review sampler names/IDs, blank/preset/manual transitions, history

@@ -1,9 +1,10 @@
 import { useEffect, useRef } from 'react'
 import { observer } from 'mobx-react-lite'
-import { ArrowDownToLine, ArrowLeft, ArrowRight, FlaskConical, Images, RefreshCw, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, FlaskConical, Images, RefreshCw, X } from 'lucide-react'
 import { ApiFailure, errorText } from './api'
 import { PromptSummary } from './PromptSummary'
 import type { SavedResultsStore } from './saved-results'
+import { ImageSaveButton, ImageSeedButton } from './ImageActions'
 
 export const SavedExperimentList = observer(({ saved, onView }: { saved: SavedResultsStore; onView: () => void }) => {
   return <div className="saved-experiment-list">
@@ -38,7 +39,12 @@ function jobStatus(status: string): string {
   return { queued: '排队中', running: '生成中', succeeded: '已完成', failed: '失败' }[status] ?? status
 }
 
-export const SavedResultViewer = observer(({ saved, onClose }: { saved: SavedResultsStore; onClose: () => void }) => {
+export const SavedResultViewer = observer(({ saved, onClose, onUseSeed, canSave }: {
+  saved: SavedResultsStore
+  onClose: () => void
+  onUseSeed: (seed: number) => void
+  canSave: () => boolean
+}) => {
   const viewerRef = useRef<HTMLDivElement>(null)
   const selection = saved.selection
   useEffect(() => {
@@ -93,7 +99,8 @@ export const SavedResultViewer = observer(({ saved, onClose }: { saved: SavedRes
           <button className="icon-button experiment-image-arrow" type="button" title="上一个保存结果" aria-label="上一个保存结果"
             disabled={!saved.canPrevious} onClick={() => move(-1)}><ArrowLeft size={22} aria-hidden="true" /></button>
           <div className="experiment-image-frame" aria-busy={saved.loading || saved.imageLoading}>
-            {image ? <img key={image.url} src={image.url} alt={`${groupLabel}，图像 ${image.index + 1}`} />
+            {image && job ? <><img key={image.url} src={image.url} alt={`${groupLabel}，图像 ${image.index + 1}`} />
+              <ImageSeedButton seed={job.effective_seed} onUseSeed={onUseSeed} /></>
               : <div className="canvas-placeholder" role="status"><FlaskConical size={32} aria-hidden="true" /><p>{placeholder}</p></div>}
           </div>
           <button className="icon-button experiment-image-arrow" type="button" title="下一个保存结果" aria-label="下一个保存结果"
@@ -101,8 +108,8 @@ export const SavedResultViewer = observer(({ saved, onClose }: { saved: SavedRes
         </div>
         <figcaption className="canvas-caption">
           <span aria-live="polite" aria-atomic="true">{groupLabel}{job && (job.image_urls.length ? ` · 图像 ${saved.imageIndex + 1} / ${saved.imageSlots}` : ' · 无可用图片')}</span>
-          {image && <a href={image.url} download={isExperiment ? `style-experiment-${image.filename}` : image.filename}
-            className="icon-button" title="下载当前图片" aria-label="下载当前图片"><ArrowDownToLine size={17} aria-hidden="true" /></a>}
+          {image && job && <ImageSaveButton key={image.url} url={image.url} filename={isExperiment ? `style-experiment-${image.filename}` : image.filename}
+            isCurrent={() => canSave() && saved.selection === selection && saved.job?.id === job.id && saved.image?.url === image.url} />}
         </figcaption>
       </figure>
     <div className="canvas-metadata">
@@ -116,7 +123,7 @@ export const SavedResultViewer = observer(({ saved, onClose }: { saved: SavedRes
         {saved.preloadError && <p className="alert" role="alert">{saved.preloadError}</p>}
         {saved.preloadImageError && <p className="saved-preload-image-error">最近一次图片加载失败：{saved.preloadImageError}（单张失败不会中断其余图片的加载）</p>}
       </div>}
-      <p className="prompt-hint" id="saved-navigation-help">左右箭头依次切换本组图片和下一个已保存组，聚焦图像区域后可按 ← / →。这里只查看保存结果，不改变草稿或服务器实验。</p>
+      <p className="prompt-hint" id="saved-navigation-help">左右箭头依次切换本组图片和下一个已保存组，聚焦图像区域后可按 ← / →。点击图片右下角种子可填入生成设置；浏览不会启动生成或改变服务器实验。</p>
       {(saved.error || saved.imageError) && <p className="alert" role="alert">{saved.error || saved.imageError}</p>}
       <div className="saved-result-actions"><span className="prompt-hint">私有保存 7 天</span><button type="button" className="text-action" disabled={saved.loading || saved.imageLoading} onClick={() => void saved.retry()}>
         <RefreshCw size={15} aria-hidden="true" /> 刷新保存记录
