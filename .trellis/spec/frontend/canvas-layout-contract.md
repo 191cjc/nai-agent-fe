@@ -83,6 +83,11 @@ saved image ownership; layout must preserve those contracts.
   weights and coordinate controls. Wide columns may stack on narrow screens.
   History reuse explicitly opens prompts and makes them reachable through the
   mobile overlay; history resume reveals current status with safe focus.
+- Hidden shared/character prompt sections have a visibly distinct tinted card
+  and editor background, a contrasting border/accent and a text/icon hidden
+  status. Keep the restore action prominent. Section text and all local editing
+  controls remain readable and usable; do not dim the whole card with opacity,
+  disable its controls or confuse section visibility with individual tag comments.
 - Keep Generate's existing guards/labels/uncertainty and validation behavior,
   with one submit path and no nested forms. Explicit unlocked ordinary submit
   returns canvas selection to current work and immediately collapses the prompt
@@ -110,6 +115,7 @@ saved image ownership; layout must preserve those contracts.
 | New/partial/empty ordinary images | Valid current selection or status placeholder |
 | Open/close saved comparison | Swap canvas view; independent owners remain valid |
 | History reuse with collapsed prompts | Open prompts, dismiss overlay, safe focus |
+| Hide/show a prompt section | Distinct hidden card/editor/status and visible restore action; preserve editable text |
 | 320px width / short viewport | Local scrolling; reachable toggle and bottom action |
 
 ## Good / Base / Bad Cases

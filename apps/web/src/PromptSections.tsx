@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { observer } from 'mobx-react-lite'
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Download, Plus, RefreshCw, Save, Trash2, X } from 'lucide-react'
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Download, EyeOff, Plus, RefreshCw, Save, Trash2, X } from 'lucide-react'
 import type { AppStore, GenerationStore } from './store'
 import { MAX_CHARACTERS } from './store'
 import { CharacterPositions } from './CharacterPositions'
@@ -232,11 +232,11 @@ const SectionEditor = observer(({ generation, reference, section, label, selecte
     <div className="prompt-section-heading"><label className="section-selection"><input type="checkbox" checked={selected}
       aria-label={`选择${label}用于保存快照`} onChange={event => onSelect(event.target.checked)} /><span>{SECTION_LABELS[reference.section]}</span></label>
       <div className="prompt-section-actions"><SectionAssistantButton target={reference} label={label} activeTarget={assistantTarget} onOpen={onAssistant} />
-        <button className="text-action" type="button" aria-pressed={!section.enabled}
+        <button className="text-action section-visibility-toggle" type="button" aria-pressed={!section.enabled}
         aria-label={`${section.enabled ? '隐藏' : '显示'}${label}`} onClick={() => generation.setSectionEnabled(reference, !section.enabled)}>{section.enabled ? '隐藏' : '显示'}</button>
         <button className="text-action" type="button" aria-label={`保存${label}快照`} onClick={onSave}>保存</button>
         <button className="text-action" type="button" aria-label={`导入快照到${label}`} onClick={onImport}>导入</button></div></div>
-    {!section.enabled && <p className="section-hidden-note">已隐藏 · 保留文字，不参与生成</p>}
+    {!section.enabled && <p className="section-hidden-note"><EyeOff size={14} aria-hidden="true" /><span>已隐藏 · 保留文字，不参与生成</span></p>}
     <div className="field"><PromptEditor id={id} label={label} value={section.text} placeholder={`填写${SECTION_LABELS[reference.section]}提示词`} rows={2}
       onFocus={() => { if (section.enabled) generation.setPositiveTagTarget(sectionReferenceKey(reference)) }}
       onChange={text => generation.setSectionText(reference, text)} /></div>

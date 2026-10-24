@@ -234,13 +234,19 @@ h1, h2, h3 { letter-spacing: 0; }
 .section-character-list { display: grid; gap: 12px; min-width: 0; }
 .character-card-heading h4 { margin: 0; color: #c6b5dc; font-size: 12px; }
 .prompt-section-card { min-width: 0; padding: 8px; border: 1px solid #454957; border-radius: 5px; background: #1d2029; }
-.prompt-section-card.section-disabled { border-style: dashed; background: #24242c; }
+.prompt-section-card.section-disabled { --field: #2b1f2a; border: 1px dashed #936577; background: #3b2938; box-shadow: inset 3px 0 #c18c9f; }
+.section-disabled .section-selection { color: #efd1dc; }
+.section-disabled .prompt-editor { border-color: #775062; }
+.section-disabled .prompt-editor-footer { border-color: #634052; }
 .prompt-section-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 9px; margin-bottom: 7px; }
 .section-selection { display: flex; align-items: center; gap: 6px; min-height: 26px; color: #d8c8e6; font-size: 12px; font-weight: 600; }
 .section-selection input, .snapshot-library-row input { width: 15px; height: 15px; margin: 0; accent-color: var(--gold); flex-shrink: 0; }
-.prompt-section-actions { display: flex; flex-shrink: 0; align-items: center; margin-left: auto; gap: 9px; }
+.prompt-section-actions { display: flex; flex-shrink: 0; flex-wrap: wrap; align-items: center; max-width: 100%; margin-left: auto; gap: 9px; }
 .prompt-section-actions .text-action { min-height: 28px; padding: 3px 0; font-size: 11px; }
-.section-hidden-note { margin: 0 0 7px; font-size: 11px; color: #bea5ac; }
+.section-disabled .section-visibility-toggle { padding: 3px 9px; border: 1px solid #c18c9f; border-radius: 4px; background: #583b4c; color: #ffe2ed; }
+.section-disabled .section-visibility-toggle:hover { background: #704c60; }
+.section-hidden-note { display: flex; align-items: center; gap: 7px; margin: 0 0 7px; padding: 6px 8px; border: 1px solid #7b5364; border-radius: 4px; background: #513443; color: #f2cfde; font-size: 11px; line-height: 1.5; }
+.section-hidden-note svg { flex-shrink: 0; }
 .section-summary-state { display: block; color: #a8a0ad; font-size: 10px; }
 .section-summary-line { display: block; margin-top: 6px; }
 .section-summary-line > strong { font-size: 11px; color: #b6a5cc; }
