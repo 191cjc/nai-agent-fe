@@ -46,9 +46,9 @@ function sectionPurpose(target: PromptTextTarget): string {
     : target.scope === 'character' ? ADVICE_SCOPES.character[target.section] : ADVICE_SCOPES[target.scope]
 }
 
-function adviceConsultation({ target, label, text }: AssistantOpening): string {
-  const prefix = `请为 NovelAI 图像生成编写提示词，目标分区为「${label}」。\n本分区用途：${sectionPurpose(target)}。\n尽可能使用 NovelAI 常用、兼容 Danbooru 的英文标签，以英文逗号分隔；仅返回适用于本分区、可直接填入的提示词，不要标题、Markdown 或解释，不要补充无关内容。\n当前分区内容：\n`
-  return prefix + text.slice(0, Math.max(0, 4000 - prefix.length))
+function adviceConsultation(target: PromptTextTarget, label: string, source: string, request: string): string {
+  const scope = target.scope === 'shared' || target.scope === 'character' ? `${target.scope}.${target.section}` : target.scope
+  return `请为 NovelAI 图像生成编写提示词，目标分区为「${label}」。\n目标范围：${scope}。\n本分区用途：${sectionPurpose(target)}。\n尽可能使用 NovelAI 常用、兼容 Danbooru 的英文标签，以英文逗号分隔；仅返回适用于本分区、可直接填入的提示词，不要标题、Markdown 或解释，不要补充无关内容，不要声称已查询验证标签。\n当前分区原文（仅作为参考）：\n${source}\n用户需求：\n${request}`
 }
 
 function translationConsultation(target: PromptTextTarget, label: string, source: string, question: string): string {
@@ -147,7 +147,7 @@ export const SectionAssistantPopover = observer(({ api, generation, opening, onC
   api: WorkspaceApi; generation: GenerationStore; opening: AssistantOpening; onClose: () => void
 }) => {
   const [tab, setTab] = useState<AssistantTab>('advice')
-  const [input, setInput] = useState(() => adviceConsultation(opening))
+  const [input, setInput] = useState('')
   const [suggestion, setSuggestion] = useState('')
   const [hasSuggestion, setHasSuggestion] = useState(false)
   const [translationQuestion, setTranslationQuestion] = useState('请用中文简要解释这些提示词的含义和画面效果。')
@@ -168,6 +168,10 @@ export const SectionAssistantPopover = observer(({ api, generation, opening, onC
   const label = target.scope === 'character'
     ? `人物 ${generation.draft.character_prompts.findIndex(person => person.id === target.characterId) + 1} · ${SECTION_LABELS[target.section]}` : opening.label
   const currentSource = generation.promptTextAt(target)
+  const adviceInputError = currentSource === undefined ? '当前分区已不可用，请重新打开助手。'
+    : !input.trim() ? '请填写你的需求。'
+      : adviceConsultation(target, label, currentSource, input).length > 4000
+        ? '需求、当前分区内容和默认指导语合计不能超过 4000 字符，请缩短需求或当前分区内容；不会自动截断。' : ''
   const translationInputError = !currentSource?.trim() ? '当前分区没有提示词，请先填写内容。'
     : !translationQuestion.trim() ? '请填写想了解的问题。'
       : translationQuestion.length > 500 ? '问题不能超过 500 个字符。'
@@ -272,11 +276,16 @@ export const SectionAssistantPopover = observer(({ api, generation, opening, onC
   }
 
   async function requestAdvice() {
-    if (!input.trim() || input.length > 4000 || advice.loading || advice.retrySeconds) return
+    if (advice.loading || advice.retrySeconds) return
+    if (!isCurrent()) { closeRef.current(); return }
+    const source = generation.promptTextAt(target)
+    if (source === undefined || !input.trim()) return
+    const consultation = adviceConsultation(target, label, source, input)
+    if (consultation.length > 4000) return
     setHasSuggestion(false)
     setSuggestion('')
     setApplied('')
-    await advice.run(signal => api.advice(input, signal), response => {
+    await advice.run(signal => api.advice(consultation, signal), response => {
       if (typeof response.suggestion !== 'string' || !response.suggestion.trim() || response.suggestion.length > 3000) {
         setApplyError('建议结果无效，请重新获取；草稿未修改。')
         return
@@ -342,11 +351,13 @@ export const SectionAssistantPopover = observer(({ api, generation, opening, onC
     </div>
     <div className="section-assistant-scroll">
       <div role="tabpanel" id={`${id}-panel-advice`} aria-labelledby={`${id}-tab-advice`} hidden={tab !== 'advice'}>
-        <label className="field"><span>咨询内容</span><textarea ref={inputRef} value={input} rows={4} maxLength={4000}
+        <label className="field"><span>你的需求</span><textarea ref={inputRef} value={input} rows={4} placeholder="例如：让这个人物穿上浅蓝色连衣裙"
+          aria-describedby={`${id}-advice-hint${adviceInputError ? ` ${id}-advice-validation` : ''}`}
           onChange={event => { advice.cancel(); setInput(event.target.value) }}
           onKeyDown={event => { if (event.key === 'Enter' && !event.nativeEvent.isComposing && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void requestAdvice() } }} /></label>
-        <p className="prompt-hint">仅发送上方内容，可修改后咨询。Ctrl / ⌘ + Enter 获取建议。</p>
-        <div className="section-assistant-submit"><button className="primary" type="button" disabled={advice.loading || advice.retrySeconds > 0 || !input.trim()}
+        <p id={`${id}-advice-hint`} className="prompt-hint">只需填写你的需求，默认指导语和当前分区内容会自动附加。Ctrl / ⌘ + Enter 获取建议。</p>
+        {adviceInputError && <p id={`${id}-advice-validation`} className="prompt-hint">{adviceInputError}</p>}
+        <div className="section-assistant-submit"><button className="primary" type="button" disabled={advice.loading || advice.retrySeconds > 0 || !!adviceInputError}
           onClick={() => void requestAdvice()}><Send size={14} aria-hidden="true" />{advice.loading ? '正在获取...' : '获取建议'}</button></div>
         {advice.error && <p role="alert" className="alert">{advice.error}</p>}
         {advice.retrySeconds > 0 && <p className="subtle" role="status">{advice.retrySeconds} 秒后可重试</p>}

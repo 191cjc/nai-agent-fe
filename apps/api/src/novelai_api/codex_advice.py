@@ -310,8 +310,8 @@ class CodexAdviceRunner:
                 if item is None:
                     raise RuntimeError("Invalid Codex item event")
                 if event_type == "item.completed" and item_type == "agent_message":
-                    if message is not None:
-                        raise RuntimeError("Codex returned multiple messages")
+                    # Match the pinned SDK: commentary may precede the final agent message.
+                    # Validate its JSON only after the entire turn completes safely.
                     message = getattr(item, "text", None)
                     if not isinstance(message, str) or len(message) > 4096:
                         raise RuntimeError("Invalid Codex message")

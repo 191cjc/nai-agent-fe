@@ -46,8 +46,9 @@ while switching within one opening.
 Opening/switching has no network or generation side effect; close discards
 local state. Existing section actions and style-experiment controls stay usable.
 
-Opening AI seeds an editable consultation from fixed NovelAI/tag guidance,
-the exact opening label, a typed destination scope and current section text.
+Opening AI leaves the requirement input empty. The operator types only their
+own requirement; fixed NovelAI/tag guidance is added when explicitly submitting,
+alongside the current label, typed destination scope and current section text.
 Prefer established English NovelAI/Danbooru-compatible tags, comma-separated
 and directly usable in that destination with no headings/Markdown/explanations.
 Do not imply live tag lookup/verification. Resolve scopes from target.scope
@@ -56,9 +57,15 @@ negative, shared scene/other and all7 character sections; distinguish shared
 global other from character-local other. For example upper_clothing requests
 upper garments/sleeves/material/color, while action requests pose/expression/
 gaze/interactions. Broad tags/special/other follow current text and intent.
-No other sections,
-settings, images or advice history become implicit input. Only explicit
-获取建议 sends that visible consultation. Render returned suggestion as plain
+Read the latest exact text from `generation.promptTextAt(target)` at submission,
+including weights and comments; do not freeze context from the opening. Empty
+section text is valid with a nonblank requirement. No other sections,
+settings, images or advice history become implicit input. Show a short hint
+that guidance/current section are automatically included. Only explicit
+获取建议 assembles and sends the consultation. Validate the whole assembled
+input against 4000 characters and show a local error without truncating context
+or the requirement; click and Ctrl/Cmd+Enter share that guard. Default guidance
+never becomes editable requirement text. Render returned suggestion as plain
 editable text for user review, never markup/code, and apply only upon explicit
 追加 or 覆盖. No automatic paid request, retry, tool operation or draft write.
 Left unified advice continues using only its own consultation and display.
@@ -120,7 +127,8 @@ reposition on viewport/scroll/mobile-keyboard changes without a hot loop.
 | Condition | Required behavior |
 | --- | --- |
 | Open/helper tab switch | Zero network calls and draft edits |
-| Explicit AI submit | Only visible current-section consultation sent |
+| Explicit AI submit | User requirement plus fixed guidance and latest selected-section source only |
+| Empty requirement / assembled input over 4000 | Local explanation and disabled submission; no truncation or request |
 | Explicit translation | Current visible source/question only; read-only Chinese explanation |
 | Source changes before/after translation response | Identify/hide old-source result; next request reads latest source |
 | Search/AI candidate apply | Exact captured target, preserved hidden state |

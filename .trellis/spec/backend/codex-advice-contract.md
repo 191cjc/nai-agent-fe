@@ -67,6 +67,16 @@ proof that every tool is unavailable before execution.
   two concurrent turns and sets a 45-second deadline. Abort and close the
   SDK execution before removing the temporary workspace on failure, timeout,
   cancellation and shutdown. Never write advice text or output to SQLite.
+- A completed tool-free turn can contain intermediate `agent_message` items
+  before its final answer. Match the pinned SDK's last-completed-message rule:
+  validate the final message after the successful turn/stream has completed,
+  without concatenating intermediate commentary or requiring a single message.
+  An earlier valid JSON message cannot rescue an invalid final response.
+  Keep message/event bounds and reject tool items anywhere, including after
+  turn completion; intermediate messages never bypass tool/stream validation.
+- Failure logs contain only a fixed timeout/tool category or the exception's
+  class name. Never log exception contents, tracebacks, submitted text, model
+  output, credentials or raw upstream responses; public errors stay generic.
 
 ## Validation & Error Matrix
 
@@ -79,6 +89,7 @@ proof that every tool is unavailable before execution.
 | Concurrent advice capacity exhausted | `429 advice_busy` |
 | Observed tool item, even after a completed turn | `502 advice_tool_attempt`; no suggestion released |
 | Malformed JSON, invalid schema, SDK/CLI failure | `502 advice_failed`; no upstream details |
+| Intermediate commentary followed by valid final JSON and completed turn | Return the final suggestion only |
 | Deadline exceeded | `504 advice_timeout`; abort and cleanup |
 
 ## Good / Base / Bad Cases
@@ -104,6 +115,11 @@ proof that every tool is unavailable before execution.
 - Fake tests cover optional/default settings, invalid endpoint/model rejection,
   app-to-runner wiring and exact SDK/thread propagation. Preserve default and
   configured isolation/no-key-env assertions; no real model request is needed.
+- Parser-backed fake streams cover commentary then final output, multiple final
+  candidates using only the last, an invalid final after earlier valid JSON,
+  and tool events after messages/completion. No real turn is needed.
+- Sentinel failures assert diagnostic categories/class names are observable
+  while exception contents, input and credentials stay out of logs/responses.
 - Prompt/copy-only changes use the existing runtime suite and source review;
   do not add tests that merely match new literal instruction strings. No paid
   model query is required to verify prompt construction; actual suggestion

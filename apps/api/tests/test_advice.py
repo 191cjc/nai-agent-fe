@@ -1,6 +1,7 @@
 """Stateless advice tests use in-process fake runners, never paid Codex."""
 
 import asyncio
+import logging
 import os
 import signal
 import tomllib
@@ -11,6 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 from openai_codex_sdk.abort import AbortError
 from openai_codex_sdk.exec import CodexExec, CodexExecArgs
+from openai_codex_sdk.parsing import parse_thread_event
 
 from novelai_api.advice import AdviceFailure, AdviceService, ToolUseAttempt
 from novelai_api.app import create_app
@@ -170,6 +172,35 @@ def test_unexpected_output_and_tool_attempt_fail_closed(
         assert "shell tool requested" not in response.text
 
 
+@pytest.mark.parametrize(
+    ("failure", "error_code", "diagnostic"),
+    [
+        (RuntimeError("private-upstream-sentinel"), "advice_failed", "RuntimeError"),
+        (ToolUseAttempt("private-upstream-sentinel"), "advice_tool_attempt", "tool use"),
+        (TimeoutError("private-upstream-sentinel"), "advice_timeout", "timed out"),
+    ],
+)
+def test_advice_failure_diagnostics_do_not_expose_private_text(
+    caplog: pytest.LogCaptureFixture, failure: Exception, error_code: str, diagnostic: str
+) -> None:
+    caplog.set_level(logging.WARNING, logger="novelai_api.advice")
+    runner = FakeRunner(payload={"suggestion": "private-output-sentinel"}, failure=failure)
+
+    async def exercise():
+        with pytest.raises(AdviceFailure) as caught:
+            await AdviceService(runner).advise("private-input-sentinel")
+        assert caught.value.code == error_code
+
+    asyncio.run(exercise())
+    assert diagnostic in caplog.text
+    for secret in (
+        "private-upstream-sentinel", "private-input-sentinel", "private-output-sentinel"
+    ):
+        assert secret not in caplog.text
+    assert caplog.records
+    assert all(record.exc_info is None and record.stack_info is None for record in caplog.records)
+
+
 def test_timeout_cancels_runner_and_runs_cleanup() -> None:
     cleaned = asyncio.Event()
 
@@ -301,6 +332,29 @@ def test_sdk_runner_uses_one_isolated_structured_turn(
         assert not list(tmp_path.iterdir())
 
     asyncio.run(exercise())
+
+
+@pytest.mark.parametrize(
+    "commentary", ["I will suggest lighting tags.", '{"suggestion":"intermediate advice"}']
+)
+def test_sdk_returns_final_message_after_commentary(tmp_path: Path, commentary: str) -> None:
+    async def events():
+        for index, (phase, text) in enumerate(
+            [("commentary", commentary), ("final_answer", '{"suggestion":"rim lighting"}')]
+        ):
+            yield parse_thread_event({
+                "type": "item.completed",
+                "item": {"id": str(index), "type": "agent_message", "phase": phase, "text": text},
+            })
+        yield parse_thread_event({
+            "type": "turn.completed",
+            "usage": {"input_tokens": 0, "cached_input_tokens": 0, "output_tokens": 0},
+        })
+
+    sdk = FakeCodex(events)
+    runner = isolated_runner(tmp_path, sdk)
+    assert asyncio.run(runner.run("lighting")) == {"suggestion": "rim lighting"}
+    assert not list(tmp_path.iterdir())
 
 
 @pytest.mark.parametrize(
@@ -490,6 +544,13 @@ def test_sdk_rejects_tool_events_at_any_stream_position(
     tmp_path: Path, event_type: str, after_completion: bool
 ) -> None:
     async def events():
+        yield parse_thread_event({
+            "type": "item.completed",
+            "item": {
+                "id": "commentary", "type": "agent_message", "phase": "commentary",
+                "text": '{"suggestion":"intermediate advice"}',
+            },
+        })
         yield sdk_event("item.completed", "agent_message", '{"suggestion":"ignore"}')
         if after_completion:
             yield sdk_event("turn.completed")
@@ -618,11 +679,22 @@ def test_sdk_interruption_stops_cli_before_workspace_cleanup(
 
 
 @pytest.mark.parametrize(
-    "output", ['not json', '{"suggestion":"ok","extra":1}', '{"suggestion":""}']
+    "output",
+    ['not json', '{"suggestion":"ok","extra":1}', '{"suggestion":""}', None, "x" * 4097],
 )
-def test_sdk_rejects_non_schema_output(tmp_path: Path, output: str) -> None:
+@pytest.mark.parametrize("commentary", [None, '{"suggestion":"valid intermediate advice"}'])
+def test_sdk_rejects_non_schema_final_output(
+    tmp_path: Path, output: str | None, commentary: str | None
+) -> None:
     async def events():
-        yield sdk_event("item.completed", "agent_message", output)
+        if commentary is not None:
+            yield sdk_event("item.completed", "agent_message", commentary)
+        yield parse_thread_event({
+            "type": "item.completed",
+            "item": {
+                "id": "final", "type": "agent_message", "phase": "final_answer", "text": output
+            },
+        })
         yield sdk_event("turn.completed")
 
     sdk = FakeCodex(events)
@@ -632,6 +704,40 @@ def test_sdk_rejects_non_schema_output(tmp_path: Path, output: str) -> None:
         with pytest.raises(AdviceFailure) as failure:
             await AdviceService(runner).advise("lighting")
         assert failure.value.code == "advice_failed"
+        assert not list(tmp_path.iterdir())
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("ending", ["missing", "failed", "unknown", "over_limit", "late_message"])
+def test_sdk_does_not_release_messages_without_a_valid_complete_turn(
+    tmp_path: Path, ending: str
+) -> None:
+    async def events():
+        yield sdk_event("item.completed", "agent_message", '{"suggestion":"intermediate"}')
+        yield sdk_event("item.completed", "agent_message", '{"suggestion":"final"}')
+        if ending == "missing":
+            return
+        if ending == "failed":
+            yield sdk_event("turn.failed")
+        elif ending == "unknown":
+            yield sdk_event("unknown.event")
+        else:
+            if ending == "over_limit":
+                for _ in range(254):
+                    yield sdk_event("item.updated", "reasoning")
+            yield sdk_event("turn.completed")
+            if ending == "late_message":
+                yield sdk_event("item.completed", "agent_message", '{"suggestion":"late"}')
+
+    sdk = FakeCodex(events)
+    runner = isolated_runner(tmp_path, sdk)
+
+    async def exercise():
+        with pytest.raises(AdviceFailure) as failure:
+            await AdviceService(runner).advise("lighting")
+        assert failure.value.code == "advice_failed"
+        assert sdk.turn_options["signal"].aborted
         assert not list(tmp_path.iterdir())
 
     asyncio.run(exercise())

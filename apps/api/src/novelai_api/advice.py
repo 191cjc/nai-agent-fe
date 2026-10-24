@@ -1,9 +1,12 @@
 """Stateless advice request and response boundary."""
 
 import asyncio
+import logging
 from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+logger = logging.getLogger(__name__)
 
 
 class AdviceRequest(BaseModel):
@@ -65,12 +68,15 @@ class AdviceService:
                 payload = await asyncio.wait_for(self.runner.run(text), timeout=self.timeout)
                 return AdviceResult.model_validate(payload)
             except TimeoutError as exception:
+                logger.warning("AI advice timed out")
                 raise AdviceFailure(504, "advice_timeout", "AI advice timed out") from exception
             except ToolUseAttempt as exception:
+                logger.warning("AI advice rejected observed tool use")
                 raise AdviceFailure(
                     502, "advice_tool_attempt", "AI advice unavailable"
                 ) from exception
             except asyncio.CancelledError:
                 raise
             except Exception as exception:
+                logger.warning("AI advice failed (%s)", type(exception).__name__)
                 raise AdviceFailure(502, "advice_failed", "AI advice unavailable") from exception
