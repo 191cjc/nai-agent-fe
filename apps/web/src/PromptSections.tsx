@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { observer } from 'mobx-react-lite'
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Download, EyeOff, Plus, RefreshCw, Save, Trash2, X } from 'lucide-react'
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ChevronRight, Download, EyeOff, Plus, RefreshCw, Save, Trash2, X } from 'lucide-react'
 import type { AppStore, GenerationStore } from './store'
 import { MAX_CHARACTERS } from './store'
 import { CharacterPositions } from './CharacterPositions'
@@ -243,6 +243,24 @@ const SectionEditor = observer(({ generation, reference, section, label, selecte
   </section>
 })
 
+function CharacterCard({ label, onRemove, children }: { label: string; onRemove: () => void; children: ReactNode }) {
+  const [collapsed, setCollapsed] = useState(false)
+  const bodyId = useId()
+  return <section className={`character-card${collapsed ? ' character-card-collapsed' : ''}`} aria-label={label}>
+    <div className="character-card-heading"><h4><button className="character-disclosure" type="button"
+      aria-expanded={!collapsed} aria-controls={bodyId} onClick={event => {
+        // Keep focus outside the hidden editors and their portaled assistant.
+        event.currentTarget.focus({ preventScroll: true })
+        setCollapsed(current => !current)
+      }}>
+      {collapsed ? <ChevronRight size={15} aria-hidden="true" /> : <ChevronDown size={15} aria-hidden="true" />}
+      {label}<span>{collapsed ? '展开' : '收起'}</span>
+    </button></h4><button className="icon-button danger" type="button" aria-label={`移除${label}`} onClick={onRemove}>
+      <X size={15} aria-hidden="true" /></button></div>
+    <div className="section-grid character-card-body" id={bodyId} hidden={collapsed}>{children}</div>
+  </section>
+}
+
 export const PromptSectionsEditor = observer(({ store, assistantTarget, onAssistant }: {
   store: AppStore; assistantTarget: PromptTextTarget | null; onAssistant: OpenSectionAssistant
 }) => {
@@ -304,11 +322,10 @@ export const PromptSectionsEditor = observer(({ store, assistantTarget, onAssist
       </div>
       <p className="prompt-hint">每个人物独立填写分区，可自动安排或手动定位。没有启用文字的人物保留在草稿中，不参与生成。</p>
       <CharacterPositions generation={generation} />
-      <div className="section-character-list">{draft.character_prompts.map((person, index) => <section className="character-card" key={person.id} aria-label={`人物 ${index + 1}`}>
-        <div className="character-card-heading"><h4>人物 {index + 1}</h4><button className="icon-button danger" type="button" aria-label={`移除人物 ${index + 1}`}
-          onClick={() => { generation.removeCharacter(person.id); requestAnimationFrame(() => document.getElementById('add-character')?.focus()) }}><X size={15} aria-hidden="true" /></button></div>
-        <div className="section-grid">{CHARACTER_SECTION_KEYS.map(key => section({ scope: 'character', characterId: person.id, section: key }, `人物 ${index + 1} · ${SECTION_LABELS[key]}`))}</div>
-      </section>)}</div>
+      <div className="section-character-list">{draft.character_prompts.map((person, index) => <CharacterCard key={person.id} label={`人物 ${index + 1}`}
+        onRemove={() => { generation.removeCharacter(person.id); requestAnimationFrame(() => document.getElementById('add-character')?.focus()) }}>
+        {CHARACTER_SECTION_KEYS.map(key => section({ scope: 'character', characterId: person.id, section: key }, `人物 ${index + 1} · ${SECTION_LABELS[key]}`))}
+      </CharacterCard>)}</div>
     </section>
     {dialog?.mode === 'save' && <SaveSnapshot store={store} entries={dialog.entries} onClose={() => setDialog(null)} />}
     {dialog?.mode === 'import' && <ImportSnapshots store={store} destination={dialog.destination} onClose={() => setDialog(null)} />}

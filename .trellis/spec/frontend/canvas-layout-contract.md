@@ -83,6 +83,16 @@ saved image ownership; layout must preserve those contracts.
   weights and coordinate controls. Wide columns may stack on narrow screens.
   History reuse explicitly opens prompts and makes them reachable through the
   mobile overlay; history resume reveals current status with safe focus.
+- Each character card has an independent native disclosure button with
+  `aria-expanded` and `aria-controls`. Existing/new cards begin expanded; local
+  disclosure state follows the stable character identity across sibling edits
+  and removal. Keep its heading and delete action reachable while collapsed,
+  and keep its section editors mounted under a hidden body that cannot receive
+  focus (`display: grid` must not override `[hidden]`). Restore focus to the
+  toggle on collapse; the section assistant must close/invalidate a hidden
+  opener and reject late replies. Expanding restores the same editors, text,
+  enabled flags, snapshot selections and local state. Disclosure changes only
+  local UI state, never generation participation, draft revisions or requests.
 - Hidden shared/character prompt sections have a visibly distinct tinted card
   and editor background, a contrasting border/accent and a text/icon hidden
   status. Keep the restore action prominent. Section text and all local editing
@@ -116,6 +126,7 @@ saved image ownership; layout must preserve those contracts.
 | Open/close saved comparison | Swap canvas view; independent owners remain valid |
 | History reuse with collapsed prompts | Open prompts, dismiss overlay, safe focus |
 | Hide/show a prompt section | Distinct hidden card/editor/status and visible restore action; preserve editable text |
+| Collapse/expand a character | Compact heading/delete; stable independent disclosure and mounted editors; no draft/request changes |
 | 320px width / short viewport | Local scrolling; reachable toggle and bottom action |
 
 ## Good / Base / Bad Cases
@@ -134,6 +145,7 @@ Run ESLint/TypeScript, source review of all affected frontend interfaces and a
 fresh env-free locked build. Review new/partial/multiple results, download/index,
 drawer overlay/unchanged canvas bounds, disclosure/focus/form semantics,
 history reuse/resume, saved cache races,
+character disclosure/add/delete, preserved selections and hidden assistant cleanup,
 all active/uncertain/failed/logout states and narrow/short scrolling. Respect
 the operator restriction against frontend/helper/browser automated tests or
 paid probes. Visual/desktop/mobile interaction remains operator acceptance.
