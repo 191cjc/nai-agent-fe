@@ -194,19 +194,51 @@ def test_actual_mcp_arguments_exclude_hidden_source_flag_and_metadata(
     arguments = paid[0]["params"]["arguments"]
     expected = {
         "prompt": "artist:a, garden, sky" if metadata else "artist:a, garden",
-        "negative_prompt": "blurry\r\n", "model": "nai-diffusion-5-full",
+        "negative_prompt": "blurry ", "model": "nai-diffusion-5-full",
         "width": 512, "height": 512, "steps": 28, "scale": 5.0, "sampler": "fixture-sampler",
         "seed": 77, "n_samples": 2, "quality": True,
     }
     if not all_hidden_people:
         expected.update(auto_character_position=automatic, character_prompts=[{
-            "prompt": "blue hair, standing" if metadata else "blue hair\n",
+            "prompt": "blue hair, standing" if metadata else "blue hair ",
             "negative_prompt": "", "enabled": True,
             **({} if automatic else {"x": 0.7, "y": 0.3}),
         }])
     assert arguments == expected
     assert "PRIVATE" not in json.dumps(arguments)
     assert "prompt_comments" not in arguments and "prompt_sections" not in arguments
+
+
+@pytest.mark.parametrize("comments", [None, False])
+@pytest.mark.parametrize("automatic", [False, True])
+def test_legacy_submission_preserves_physical_newlines_and_literal_escapes(comments, automatic):
+    payload = {
+        **INPUT, "seed": 77, "model": "nai-diffusion-5-full",
+        "positive_prompt": "garden,\r\n// literal\nhttps://example.test/a\\n",
+        "negative_prompt": "bad\rworse,\nworst\\n",
+        "character_prompts": [{"prompt": "blue\r\neyes,\n// literal\rsmile\\n"}],
+        "auto_character_position": automatic,
+    }
+    if comments is not None:
+        payload["prompt_comments"] = comments
+    parameters = GenerationRequest.model_validate(payload)
+    before = parameters.model_dump(mode="json")
+    transport, calls = mock_mcp(schema={
+        **SCHEMA, "properties": {
+            **SCHEMA["properties"], "character_prompts": CHARACTER_SCHEMA,
+            "auto_character_position": POSITION_SCHEMA,
+        },
+    })
+    captured = []
+    provider_for(transport).generate_with_request(parameters, captured.append)
+    submitted = [call for call in calls if call["method"] == "tools/call"]
+    assert len(submitted) == 1
+    arguments = submitted[0]["params"]["arguments"]
+    assert captured == [arguments]
+    assert arguments["prompt"] == payload["positive_prompt"]
+    assert arguments["negative_prompt"] == payload["negative_prompt"]
+    assert arguments["character_prompts"][0]["prompt"] == payload["character_prompts"][0]["prompt"]
+    assert parameters.model_dump(mode="json") == before
 
 
 def test_comment_source_round_trips_history_snapshots_restart_and_backup(database):
@@ -231,7 +263,7 @@ def test_comment_source_round_trips_history_snapshots_restart_and_backup(databas
         assert JobStore(source).get(user, job_id).parameters.model_dump(mode="json") == expected
         assert PromptSnapshotStore(source).get(user, str(saved.id)) == saved
         with source.connect() as connection:
-            assert connection.execute("PRAGMA user_version").fetchone()[0] == 4
+            assert connection.execute("PRAGMA user_version").fetchone()[0] == 5
 
 
 @pytest.mark.parametrize(("source", "expected"), [

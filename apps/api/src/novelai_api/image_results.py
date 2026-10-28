@@ -279,30 +279,30 @@ class DiskResultStore:
             finally:
                 os.close(directory)
 
+    # Reads take no lock: results appear by atomic rename and are never modified in place,
+    # so a concurrent sweep/discard can only make a read fail closed (None).
     def describe(self, job_id: str, user_id: str) -> ResultInfo | None:
-        with self._lock:
-            try:
-                with self._result(job_id, user_id) as (_directory, manifest):
-                    return ResultInfo(len(manifest["images"]), manifest["expires_at"])
-            except (OSError, ValueError, TypeError):
-                return None
+        try:
+            with self._result(job_id, user_id) as (_directory, manifest):
+                return ResultInfo(len(manifest["images"]), manifest["expires_at"])
+        except (OSError, ValueError, TypeError):
+            return None
 
     def image(self, job_id: str, user_id: str, index: int) -> GeneratedImage | None:
-        with self._lock:
-            try:
-                with self._result(job_id, user_id) as (directory, manifest):
-                    if not 0 <= index < len(manifest["images"]):
-                        return None
-                    data = self._read(directory, f"{index}.png", MAX_IMAGE_BYTES)
-                    image = GeneratedImage(data, "image/png")
-                    if (
-                        hashlib.sha256(data).hexdigest() != manifest["images"][index]["sha256"]
-                        or not valid_images([image])
-                    ):
-                        return None
-                    return image
-            except (OSError, ValueError, TypeError):
-                return None
+        try:
+            with self._result(job_id, user_id) as (directory, manifest):
+                if not 0 <= index < len(manifest["images"]):
+                    return None
+                data = self._read(directory, f"{index}.png", MAX_IMAGE_BYTES)
+                image = GeneratedImage(data, "image/png")
+                if (
+                    hashlib.sha256(data).hexdigest() != manifest["images"][index]["sha256"]
+                    or not valid_images([image])
+                ):
+                    return None
+                return image
+        except (OSError, ValueError, TypeError):
+            return None
 
     def get(self, job_id: str, user_id: str) -> CachedResult | None:
         """Compatibility helper; routes use metadata and one selected image instead."""

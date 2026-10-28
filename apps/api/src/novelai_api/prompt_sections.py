@@ -77,6 +77,8 @@ class SectionCharacter(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     sections: CharacterSections
+    # Omit the enabled default so legacy frozen run definitions remain byte-compatible.
+    enabled: bool = Field(default=True, strict=True, exclude_if=lambda value: value)
     x: float = Field(default=0.5, ge=0.1, le=0.9, allow_inf_nan=False, strict=True)
     y: float = Field(default=0.5, ge=0.1, le=0.9, allow_inf_nan=False, strict=True)
 
@@ -101,5 +103,6 @@ class PromptSections(BaseModel):
         return [
             {"prompt": prompt, "x": character.x, "y": character.y}
             for character in self.characters
+            if character.enabled
             if (prompt := character.sections.compose(prompt_comments=prompt_comments)).strip()
         ]

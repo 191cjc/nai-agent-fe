@@ -30,6 +30,9 @@ explicit atomic append/replace import with visible character target mapping.
   existing history callbacks when composing balance activity notifications.
 - `GenerationStore(api, onSubmitted, onTerminal)` reports accepted submissions
   separately from the first terminal observation of the tracked job.
+- `GenerationParameters({job: GenerationView})` shares current and saved result
+  details. It displays `parameters` and nullable `provider_request` from the
+  API as separately labelled, focusable, bounded scrolling JSON disclosures.
 - `setPromptTagWeight(source, tag, weight)` updates one validated source span;
   an exact neutral weight removes only its outer numeric wrapper, while
   assigning 1 to a plain tag preserves its source. Unsafe/stale tags return null.
@@ -81,6 +84,13 @@ explicit atomic append/replace import with visible character target mapping.
   object URLs remain ephemeral and are never stored in Web Storage/IndexedDB.
   Ordinary successful history has an explicit viewing action; automatic latest
   entry restoration still restores parameters only.
+- Parameter details retain raw comments/sections/hidden source metadata in the
+  workspace disclosure and show the exact backend-captured NovelAI service
+  arguments separately. Null or absent capture shows an unavailable message;
+  never derive actual submitted arguments from browser state/history. Keep
+  this data in existing protected in-memory job state, without extra requests
+  or Web Storage. The backend [API contract](../backend/api-contract.md) owns
+  capture semantics and schema5/API-first release requirements.
 - Seed settings are opt-in. `GenerationStore.reuse()` restores historical
   parameters with `seed: ''`, including automatic workspace-entry restoration.
   Do not write `effective_seed` back during history reads, polling or generation

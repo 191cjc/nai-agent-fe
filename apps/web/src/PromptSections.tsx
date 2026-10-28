@@ -243,10 +243,12 @@ const SectionEditor = observer(({ generation, reference, section, label, selecte
   </section>
 })
 
-function CharacterCard({ label, onRemove, children }: { label: string; onRemove: () => void; children: ReactNode }) {
+function CharacterCard({ label, enabled, onToggle, onRemove, children }: {
+  label: string; enabled: boolean; onToggle: () => void; onRemove: () => void; children: ReactNode
+}) {
   const [collapsed, setCollapsed] = useState(false)
   const bodyId = useId()
-  return <section className={`character-card${collapsed ? ' character-card-collapsed' : ''}`} aria-label={label}>
+  return <section className={`character-card${collapsed ? ' character-card-collapsed' : ''}${enabled ? '' : ' character-card-disabled'}`} aria-label={label}>
     <div className="character-card-heading"><h4><button className="character-disclosure" type="button"
       aria-expanded={!collapsed} aria-controls={bodyId} onClick={event => {
         // Keep focus outside the hidden editors and their portaled assistant.
@@ -255,8 +257,12 @@ function CharacterCard({ label, onRemove, children }: { label: string; onRemove:
       }}>
       {collapsed ? <ChevronRight size={15} aria-hidden="true" /> : <ChevronDown size={15} aria-hidden="true" />}
       {label}<span>{collapsed ? '展开' : '收起'}</span>
-    </button></h4><button className="icon-button danger" type="button" aria-label={`移除${label}`} onClick={onRemove}>
-      <X size={15} aria-hidden="true" /></button></div>
+    </button></h4><div className="character-card-actions">
+      <button className="text-action character-visibility-toggle" type="button" aria-pressed={!enabled}
+        aria-label={`${enabled ? '隐藏' : '显示'}${label}`} onClick={onToggle}>{enabled ? '隐藏' : '显示'}</button>
+      <button className="icon-button danger" type="button" aria-label={`移除${label}`} onClick={onRemove}>
+        <X size={15} aria-hidden="true" /></button></div></div>
+    {!enabled && <p className="section-hidden-note"><EyeOff size={14} aria-hidden="true" /><span>已隐藏 · 保留内容和位置，不参与生成</span></p>}
     <div className="section-grid character-card-body" id={bodyId} hidden={collapsed}>{children}</div>
   </section>
 }
@@ -320,9 +326,10 @@ export const PromptSectionsEditor = observer(({ store, assistantTarget, onAssist
             if (id) requestAnimationFrame(() => document.getElementById(`prompt-section-character:${id}:character`)?.focus())
           }}><Plus size={15} aria-hidden="true" />添加人物</button>
       </div>
-      <p className="prompt-hint">每个人物独立填写分区，可自动安排或手动定位。没有启用文字的人物保留在草稿中，不参与生成。</p>
+      <p className="prompt-hint">每个人物独立填写分区，可自动安排或手动定位。隐藏或没有启用文字的人物保留在草稿中，不参与生成。</p>
       <CharacterPositions generation={generation} />
       <div className="section-character-list">{draft.character_prompts.map((person, index) => <CharacterCard key={person.id} label={`人物 ${index + 1}`}
+        enabled={person.enabled} onToggle={() => generation.setCharacterEnabled(person.id, !person.enabled)}
         onRemove={() => { generation.removeCharacter(person.id); requestAnimationFrame(() => document.getElementById('add-character')?.focus()) }}>
         {CHARACTER_SECTION_KEYS.map(key => section({ scope: 'character', characterId: person.id, section: key }, `人物 ${index + 1} · ${SECTION_LABELS[key]}`))}
       </CharacterCard>)}</div>

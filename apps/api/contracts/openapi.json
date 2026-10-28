@@ -619,6 +619,18 @@
           "parameters": {
             "$ref": "#/components/schemas/GenerationRequest"
           },
+          "provider_request": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Request"
+          },
           "result_expires_at": {
             "anyOf": [
               {
@@ -1156,6 +1168,11 @@
       "SectionCharacter": {
         "additionalProperties": false,
         "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
           "sections": {
             "$ref": "#/components/schemas/CharacterSections"
           },

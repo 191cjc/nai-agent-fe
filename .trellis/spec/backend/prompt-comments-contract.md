@@ -58,6 +58,18 @@ projections must exactly match effective fields. The MCP allowlist never gains
 raw metadata, comment flags or hidden source; negative/flat/manual/automatic
 paths all use effective text.
 
+At the final MCP boundary only, modern (`prompt_comments=true`) prompt and
+negative-prompt strings replace each contiguous CR/LF run with one ordinary
+space, including native character strings. For example, `cat,\nblue eyes`
+becomes `cat, blue eyes`, while `blue\neyes` becomes `blue eyes`. Perform this
+after per-source comment filtering and before capturing/submitting arguments.
+Preserve all other whitespace, punctuation, numeric weights, Unicode and
+literal backslash-plus-n sequences. Do not add commas or join words together.
+Raw editor fields, effective projections used for validation, snapshot library
+text and already captured historical requests are unchanged. Absent/false
+legacy mode remains verbatim. Unsubmitted groups of modern frozen runs use
+this outbound formatting rule without rewriting definitions or replaying work.
+
 Modern experiment indexes include hidden entries, but hidden/manual-only entries
 cannot be selected or varied. Hidden text cannot satisfy all-zero survivor or
 shared-base checks. Selected zero removes only that active occurrence, retaining
@@ -87,6 +99,8 @@ restore or unsafe API downgrade.
 | Reachable zero leaves only hidden style and no shared | Reject before create |
 | Same run ID changed comment mode/source | Conflict; no duplicate work |
 | Older frozen literal `//` | Preserve original literal interpretation and definition |
+| Modern MCP prompt contains CR/LF | Replace contiguous line-ending runs with one space after filtering; capture exact sent values |
+| Literal backslash-plus-n or legacy mode | Preserve it verbatim |
 
 ## Good / Base / Bad Cases
 
@@ -104,6 +118,9 @@ per-section projection/coordinate order, raw history/snapshot recovery and exact
 MCP argument exclusion for flat/manual/automatic paths. Assert modern hidden
 candidate rejection, active-zero source preservation, hidden-only empty bases,
 near-limit bounds and legacy frozen identity/restart without paid replay.
+Verify modern flat/manual/automatic and section calls have no physical CR/LF
+in positive/negative/native strings; preserve raw source and literal escapes,
+retain legacy payloads, and match captured arguments to the fake HTTP body.
 
 Follow full backend frozen sync/pytest/Ruff/lock and exact reviewed OpenAPI.
 Web/helper/browser automated tests remain prohibited by operator preference;

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { observer } from 'mobx-react-lite'
 import { RotateCcw } from 'lucide-react'
-import { characterPrompt } from './prompt-sections'
+import { effectiveCharacterPrompt } from './prompt-sections'
 import {
   CHARACTER_POSITION_CENTER, CHARACTER_POSITION_MAX, CHARACTER_POSITION_MIN,
   type GenerationStore,
@@ -113,10 +113,10 @@ export const CharacterPositions = observer(({ generation }: { generation: Genera
           style={{ aspectRatio, width: `min(100%, ${Math.min(300, 230 * aspectRatio)}px)` }}
           role="group" aria-label="画布人物位置预览" aria-describedby="character-position-help">
           {characters.map((character, index) => <button key={character.id} type="button"
-            className={`character-position-marker${selected.id === character.id ? ' selected' : ''}${characterPrompt(character.sections).trim() ? '' : ' empty'}`}
+            className={`character-position-marker${selected.id === character.id ? ' selected' : ''}${effectiveCharacterPrompt(character).trim() ? '' : ' empty'}`}
             style={{ left: `${character.x * 100}%`, top: `${character.y * 100}%` }}
             aria-pressed={selected.id === character.id} aria-describedby="character-position-help"
-            aria-label={`人物 ${index + 1}，X ${character.x.toFixed(2)}，Y ${character.y.toFixed(2)}${characterPrompt(character.sections).trim() ? '' : '，无启用文本，未参与生成'}`}
+            aria-label={`人物 ${index + 1}，X ${character.x.toFixed(2)}，Y ${character.y.toFixed(2)}${!character.enabled ? '，已隐藏，未参与生成' : effectiveCharacterPrompt(character).trim() ? '' : '，无启用文本，未参与生成'}`}
             onFocus={() => setSelectedId(character.id)} onClick={() => setSelectedId(character.id)} onKeyDown={event => adjustPosition(event, character.id)}
             onPointerDown={event => startDrag(event, character.id)} onPointerMove={moveDrag}
             onPointerUp={finishDrag} onPointerCancel={finishDrag} onLostPointerCapture={finishDrag}>
@@ -128,7 +128,7 @@ export const CharacterPositions = observer(({ generation }: { generation: Genera
         <div className="character-position-selection" role="group" aria-label="选择要定位的人物">
           {characters.map((character, index) => <button type="button" key={character.id}
             className={selected.id === character.id ? 'selected' : ''} aria-pressed={selected.id === character.id}
-            onClick={() => setSelectedId(character.id)}>人物 {index + 1}{!characterPrompt(character.sections).trim() && <span>未参与生成</span>}</button>)}
+            onClick={() => setSelectedId(character.id)}>人物 {index + 1}{!effectiveCharacterPrompt(character).trim() && <span>{character.enabled ? '未参与生成' : '已隐藏'}</span>}</button>)}
         </div>
         <p className="character-position-readout">人物 {selectedIndex + 1}<span>X {selected.x.toFixed(2)} · Y {selected.y.toFixed(2)}</span></p>
         <button className="text-action" type="button" onClick={() => generation.setCharacterPosition(selected.id, CHARACTER_POSITION_CENTER, CHARACTER_POSITION_CENTER)}>

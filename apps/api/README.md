@@ -171,6 +171,19 @@ on the selected `/novelai/` UI route. The proxy strips `/novelai` before
 forwarding to the unchanged backend `/api/*` routes, while the web client
 prefixes returned authenticated image paths for browser fetches.
 
+Generation and experiment-group details include `parameters` (complete workspace
+input, including private comments/sections) and nullable `provider_request`
+(the actual allowlisted arguments captured before the MCP `generate_image`
+call). History lists omit the latter. Old records have no capture; uncertain
+outcomes retain the attempted arguments without automatic retries. These are
+the configured MCP service's inputs, not its internal downstream HTTP body.
+Modern editor requests replace physical prompt line endings with spaces only
+at the provider boundary, after removing hidden comments. Raw workspace inputs
+and previously captured requests retain their original text.
+This requires schema5 (`0005_provider_requests.sql`): run the explicit
+`novelai-admin migrate` before API readiness and publish the API before the web.
+Preserve private backups and existing data; retain the compatible API on web fallback.
+
 The schema describes the advice response type; actual availability depends on
 the explicit Codex key and installed pinned CLI. Model and sampler identifiers
 remain provisional until the operator verifies accepted values;

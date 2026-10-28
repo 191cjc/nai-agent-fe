@@ -1,6 +1,6 @@
 import type { GenerationRequest } from './api'
 import { CHARACTER_POSITION_CENTER } from './store'
-import { CHARACTER_SECTION_KEYS, SHARED_SECTION_KEYS, SECTION_LABELS, characterPrompt } from './prompt-sections'
+import { CHARACTER_SECTION_KEYS, SHARED_SECTION_KEYS, SECTION_LABELS, effectiveCharacterPrompt } from './prompt-sections'
 
 export function PromptSummary({ parameters }: { parameters: Pick<GenerationRequest, 'style_prompt' | 'positive_prompt' | 'character_prompts' | 'auto_character_position' | 'prompt_sections' | 'prompt_comments'> }) {
   const metadata = parameters.prompt_sections
@@ -12,7 +12,8 @@ export function PromptSummary({ parameters }: { parameters: Pick<GenerationReque
       {metadata.shared[key].text || '（留空）'}
     </dd></div>)}
     {metadata.characters.map((person, index) => <div key={index}><dt>人物 {index + 1}</dt><dd>
-      <span className="character-saved-position">{characterPrompt(person.sections, parameters.prompt_comments === true).trim()
+      {person.enabled === false && <span className="section-summary-state">整个人物已隐藏 · 未参与生成</span>}
+      <span className="character-saved-position">{effectiveCharacterPrompt(person, parameters.prompt_comments === true).trim()
         ? parameters.auto_character_position ? '自动位置' : `手动位置 X ${person.x.toFixed(2)} · Y ${person.y.toFixed(2)}`
         : `未参与生成 · ${parameters.auto_character_position ? '自动模式 · ' : ''}保留手动位置 X ${person.x.toFixed(2)} · Y ${person.y.toFixed(2)}`}</span>
       {CHARACTER_SECTION_KEYS.map(key => <span className="section-summary-line" key={key}>

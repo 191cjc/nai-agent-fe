@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { observer } from 'mobx-react-lite'
 import { ArrowLeft, ArrowRight, FlaskConical, Images, RefreshCw, X } from 'lucide-react'
 import { ApiFailure, errorText } from './api'
-import { PromptSummary } from './PromptSummary'
+import { GenerationParameters } from './GenerationParameters'
 import type { SavedResultsStore } from './saved-results'
 import { ImageSaveButton, ImageSeedButton } from './ImageActions'
 
@@ -137,11 +137,7 @@ export const SavedResultViewer = observer(({ saved, onClose, onUseSeed, canSave 
         {job.result_expires_at !== null && <p className="subtle saved-expiry">私有图片保存至 {new Date(job.result_expires_at * 1000).toLocaleString()}，查看不会延长保存时间。</p>}
         <details className="result-parameters"><summary>保存的完整生成参数</summary>
           {saved.summary && <p>已提交 {saved.summary.group_count} / {saved.summary.total} 组 · 已结束 {saved.summary.completed_count} 组 · 曾生成 {saved.summary.image_count} 张</p>}
-          <PromptSummary parameters={job.parameters} />
-          {job.parameters.negative_prompt && <p>负向：{job.parameters.negative_prompt}</p>}
-          <p>{job.parameters.model} · {job.parameters.width}×{job.parameters.height} · {job.parameters.sampler}</p>
-          <p>{job.parameters.steps} 步 · CFG {job.parameters.cfg_scale} · 实际种子 {job.effective_seed} · {job.parameters.sample_count} 张 · {job.parameters.quality ? '高质量' : '标准质量'}</p>
-          <p>任务 ID：{job.id}</p>
+          <GenerationParameters job={job} />
         </details>
         {job.error_code && <p className="alert" role="alert">{errorText(new ApiFailure(0, job.error_code, '生成失败，请检查服务状态。'))}</p>}
       </>}

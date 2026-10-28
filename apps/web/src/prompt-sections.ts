@@ -7,14 +7,14 @@ export type SharedSectionKey = typeof SHARED_SECTION_KEYS[number]
 export type CharacterSectionKey = typeof CHARACTER_SECTION_KEYS[number]
 export const SECTION_LABELS = {
   scene: '场景', character: '角色', upper_clothing: '上半身服饰', lower_clothing: '下半身服饰',
-  action: '动作', tags: '标签', special: '特殊', other: '其他',
+  action: '动作', tags: '表情', special: '特殊', other: '其他',
 } as const
 export interface PromptSection { text: string; enabled: boolean }
 export type SharedSections = Record<SharedSectionKey, PromptSection>
 export type CharacterSections = Record<CharacterSectionKey, PromptSection>
-export interface SectionCharacter { sections: CharacterSections; x: number; y: number }
+export interface SectionCharacter { sections: CharacterSections; x: number; y: number; enabled?: boolean }
 export interface PromptSections { version: 1; shared: SharedSections; characters: SectionCharacter[] }
-export interface SectionCharacterDraft extends SectionCharacter { id: string }
+export interface SectionCharacterDraft extends SectionCharacter { id: string; enabled: boolean }
 export interface SectionDraft { shared_sections: SharedSections; character_prompts: SectionCharacterDraft[]; style_prompt: string }
 export type SectionReference = { scope: 'shared'; section: SharedSectionKey }
   | { scope: 'character'; characterId: string; section: CharacterSectionKey }
@@ -49,16 +49,17 @@ export function composeSections<Key extends string>(sections: Record<Key, Prompt
 }
 export const sharedPrompt = (sections: SharedSections, comments = true): string => composeSections(sections, SHARED_SECTION_KEYS, comments)
 export const characterPrompt = (sections: CharacterSections, comments = true): string => composeSections(sections, CHARACTER_SECTION_KEYS, comments)
+export const effectiveCharacterPrompt = (person: SectionCharacter, comments = true): string => person.enabled === false ? '' : characterPrompt(person.sections, comments)
 
 export function metadataFromDraft(draft: SectionDraft): PromptSections {
   return {
     version: 1, shared: copySharedSections(draft.shared_sections),
-    characters: draft.character_prompts.map(({ sections, x, y }) => ({ sections: copyCharacterSections(sections), x, y })),
+    characters: draft.character_prompts.map(({ sections, x, y, enabled }) => ({ sections: copyCharacterSections(sections), x, y, ...(enabled ? {} : { enabled: false }) })),
   }
 }
 export function copyPromptMetadata(metadata: PromptSections): PromptSections {
   return { version: 1, shared: copySharedSections(metadata.shared), characters: metadata.characters.map(person => ({
-    sections: copyCharacterSections(person.sections), x: person.x, y: person.y,
+    ...person, sections: copyCharacterSections(person.sections),
   })) }
 }
 
@@ -78,7 +79,7 @@ export function validateSectionBudgets(draft: SectionDraft, target?: PromptTextT
       throw new Error('画风和公共提示词合计不能超过 3000 字符（含分隔符），草稿未修改。')
     }
   }
-  if (characters.some(person => characterPrompt(person.sections).length > 3000)) {
+  if (characters.some(person => effectiveCharacterPrompt(person).length > 3000)) {
     throw new Error('每个人物启用的提示词合计不能超过 3000 字符（含分隔符），草稿未修改。')
   }
   if (draft.character_prompts.some(person => !validAxis(person.x) || !validAxis(person.y))) throw new Error('人物位置无效，草稿未修改。')
@@ -96,7 +97,8 @@ function validSections(value: unknown, keys: readonly string[]): boolean {
 export function isPromptSections(value: unknown): value is PromptSections {
   return object(value) && exactKeys(value, ['version', 'shared', 'characters']) && value.version === 1
     && validSections(value.shared, SHARED_SECTION_KEYS) && Array.isArray(value.characters) && value.characters.length <= 6
-    && value.characters.every(person => object(person) && exactKeys(person, ['sections', 'x', 'y'])
+    && value.characters.every(person => object(person) && (exactKeys(person, ['sections', 'x', 'y'])
+      || (exactKeys(person, ['sections', 'x', 'y', 'enabled']) && typeof person.enabled === 'boolean'))
       && validAxis(person.x) && validAxis(person.y) && validSections(person.sections, CHARACTER_SECTION_KEYS))
 }
 /** New metadata is a strict payload projection, never a best-effort fallback. */
@@ -110,7 +112,7 @@ export function validRequestSections(parameters: GenerationRequest): boolean {
   const style = comments ? compilePromptComments(parameters.style_prompt) : parameters.style_prompt
   const base = style.trim() ? [style.trim(), shared.trim()].filter(Boolean).join(', ') : shared
   if (parameters.positive_prompt !== shared || shared.length > 3000 || parameters.style_prompt.length > 3000 || base.length > 3000 || !base.trim()) return false
-  const characters = metadata.characters.map(person => ({ prompt: characterPrompt(person.sections, comments), x: person.x, y: person.y })).filter(person => person.prompt.trim())
+  const characters = metadata.characters.map(person => ({ prompt: effectiveCharacterPrompt(person, comments), x: person.x, y: person.y })).filter(person => person.prompt.trim())
   if (characters.some(person => person.prompt.length > 3000)) return false
   return Array.isArray(parameters.character_prompts) && characters.length === parameters.character_prompts.length
     && characters.every((person, index) => {

@@ -9,7 +9,8 @@ deployment without Docker: Vite/FastAPI locally, host Nginx and one systemd
 API process in production. Generated images use private seven-day disk retention;
 see [Image Retention](./image-retention-contract.md) and
 [Durable Experiments](./durable-experiment-contract.md) (introduced schema3)
-and [Prompt Sections](./prompt-sections-contract.md) (current schema4).
+and [Prompt Sections](./prompt-sections-contract.md) (introduced schema4).
+Captured provider requests use current schema5; see [Database](./database-guidelines.md).
 
 ## Signatures
 
@@ -96,6 +97,12 @@ and [Prompt Sections](./prompt-sections-contract.md) (current schema4).
   manifest/PNG SHA-256 inventory while the API is stopped, then verify exact
   bytes and original expiry for every still-unexpired result after startup.
   Root-directory existence/permissions alone do not verify retained images.
+- Captured provider-request rollout requires migration5 and API-first web
+  publication. Preserve the same private backup, idle/shutdown, configuration
+  and image checks. Verify old job/run/snapshot/session data and new-column
+  readiness. After migration5 commits, retain the schema5-compatible API during
+  web fallback; never start schema4-only code or restore the live database.
+  Existing jobs have no captured request and remain explicitly unavailable.
 - Individual tag comments require an API-first release at unchanged schema4.
   Old APIs ignore prompt_comments and may submit hidden style/negative source.
   Verify the strict optional boolean in exact running OpenAPI before web

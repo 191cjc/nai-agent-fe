@@ -5,7 +5,7 @@ import binascii
 import json
 import re
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Any
 
 import httpx
@@ -131,6 +131,11 @@ class NovelAiMcpProvider:
         self.timeout = timeout
 
     def generate(self, parameters: GenerationRequest) -> Sequence[GeneratedImage]:
+        return self.generate_with_request(parameters, lambda _arguments: None)
+
+    def generate_with_request(
+        self, parameters: GenerationRequest, record_request: Callable[[dict[str, Any]], None],
+    ) -> Sequence[GeneratedImage]:
         headers = {
             "Authorization": f"Bearer {self.token}",
             "Accept": "application/json, text/event-stream",
@@ -271,6 +276,12 @@ class NovelAiMcpProvider:
                     }
                     for character in characters
                 ]
+            if parameters.prompt_comments:
+                # Compile comments before removing physical line boundaries; editor
+                # source and literal backslash escapes remain unchanged.
+                for prompt_fields in (arguments, *arguments.get("character_prompts", [])):
+                    for field in ("prompt", "negative_prompt"):
+                        prompt_fields[field] = re.sub(r"[\r\n]+", " ", prompt_fields[field])
             for field in ("model", "sampler"):
                 field_schema = properties[field]
                 choices = field_schema.get("enum") if isinstance(field_schema, dict) else None
@@ -279,6 +290,9 @@ class NovelAiMcpProvider:
             required = schema.get("required", [])
             if not isinstance(required, list) or not set(required).issubset(arguments):
                 raise ProviderFailure("incompatible_mcp_server")
+            # Persist the exact allowlisted body before the sole paid call, including
+            # uncertain outcomes. Headers, credentials and editor metadata stay out.
+            record_request(arguments)
             result = send(
                 client,
                 "tools/call",

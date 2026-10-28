@@ -68,6 +68,7 @@ export interface HistoryItem {
 export interface GenerationView extends HistoryItem {
   image_urls: string[]
   result_expires_at: number | null
+  provider_request: Record<string, unknown> | null
 }
 
 export interface HistoryPage {

@@ -22,7 +22,7 @@ from novelai_api.style_experiments import (
 )
 
 
-def sections_request(*, all_hidden=False, automatic=False) -> dict:
+def sections_request(*, all_hidden=False, automatic=False, hide_whole_characters=False) -> dict:
     def character(text: str, *, hidden=False, x=0.5, y=0.5):
         sections = {key: {"text": "", "enabled": True} for key in CharacterSections.model_fields}
         sections["character"] = {"text": text, "enabled": not hidden}
@@ -41,6 +41,12 @@ def sections_request(*, all_hidden=False, automatic=False) -> dict:
             character("", x=0.4, y=0.6),
         ],
     }
+    if hide_whole_characters:
+        metadata["characters"][0]["enabled"] = False
+        metadata["characters"][0]["sections"]["character"]["enabled"] = True
+        if all_hidden:
+            metadata["characters"][1]["enabled"] = False
+            metadata["characters"][1]["sections"]["character"]["enabled"] = True
     return {
         **INPUT,
         "seed": 77,
@@ -105,6 +111,28 @@ def test_fixed_order_one_part_raw_and_hidden_character_positions_are_lossless():
     )
 
 
+def test_character_visibility_preserves_sections_coordinates_and_legacy_serialization():
+    payload = sections_request()
+    original = copy.deepcopy(payload)
+    payload["prompt_sections"]["characters"][1]["enabled"] = False
+    payload["character_prompts"] = []
+    hidden = GenerationRequest.model_validate(payload)
+    assert hidden.character_prompts == []
+    assert hidden.model_dump(mode="json")["prompt_sections"] == payload["prompt_sections"]
+    assert json.loads(hidden.model_dump_json())["prompt_sections"] == payload["prompt_sections"]
+    # Re-enable the person without changing the independent section switches or axes.
+    restored_payload = hidden.model_dump(mode="json")
+    restored_payload["prompt_sections"]["characters"][1]["enabled"] = True
+    restored_payload["character_prompts"] = original["character_prompts"]
+    restored = GenerationRequest.model_validate(restored_payload)
+    assert restored.prompt_sections.characters[1].enabled is True
+    original_request = GenerationRequest.model_validate(original)
+    assert restored.model_dump(mode="json") == original_request.model_dump(mode="json")
+    assert all(
+        "enabled" not in person for person in restored.prompt_sections.model_dump()["characters"]
+    )
+
+
 @pytest.mark.parametrize(
     "change",
     [
@@ -112,6 +140,7 @@ def test_fixed_order_one_part_raw_and_hidden_character_positions_are_lossless():
         lambda p: p.update(character_prompts=[]),
         lambda p: p["character_prompts"][0].update(prompt="blue hair"),
         lambda p: p["character_prompts"][0].update(x=0.5),
+        lambda p: p["prompt_sections"]["characters"][1].update(enabled=False),
         lambda p: p["prompt_sections"]["characters"][0]["sections"]["character"].update(
             enabled=True
         ),
@@ -130,9 +159,14 @@ def test_metadata_projection_mismatch_is_rejected(change):
 
 
 @pytest.mark.parametrize("bad", [None, 0, 1, "true", [], {}])
-def test_enabled_is_a_strict_boolean_even_when_hidden(bad):
+@pytest.mark.parametrize("scope", ["section", "character"])
+def test_enabled_is_a_strict_boolean_even_when_hidden(bad, scope):
     payload = sections_request()
-    payload["prompt_sections"]["shared"]["other"]["enabled"] = bad
+    target = (
+        payload["prompt_sections"]["shared"]["other"]
+        if scope == "section" else payload["prompt_sections"]["characters"][0]
+    )
+    target["enabled"] = bad
     with pytest.raises(ValidationError):
         GenerationRequest.model_validate(payload)
 
@@ -266,8 +300,13 @@ def test_hidden_shared_text_cannot_rescue_an_all_zero_style_plan(database, monke
 
 @pytest.mark.parametrize("all_hidden", [False, True])
 @pytest.mark.parametrize("automatic", [False, True])
-def test_full_metadata_history_restart_and_online_backup(database, all_hidden, automatic):
-    payload = sections_request(all_hidden=all_hidden, automatic=automatic)
+@pytest.mark.parametrize("hide_whole_characters", [False, True])
+def test_full_metadata_history_restart_and_online_backup(
+    database, all_hidden, automatic, hide_whole_characters,
+):
+    payload = sections_request(
+        all_hidden=all_hidden, automatic=automatic, hide_whole_characters=hide_whole_characters,
+    )
     expected = copy.deepcopy(payload["prompt_sections"])
     with client_for(database, FakeProvider()) as client:
         _, user, _ = login(client, database, "alice")
@@ -297,14 +336,20 @@ def test_full_metadata_history_restart_and_online_backup(database, all_hidden, a
 
 @pytest.mark.parametrize("automatic", [False, True])
 @pytest.mark.parametrize("seed", [None, 77])
+@pytest.mark.parametrize("hide_whole_characters", [False, True])
 def test_frozen_run_metadata_idempotency_group_history_restart_and_backup(
-    database, automatic, seed,
+    database, automatic, seed, hide_whole_characters,
 ):
     user = owner(database)
     definition = RunCreate.model_validate(
         {
             "id": str(uuid4()),
-            "parameters": {**sections_request(automatic=automatic), "seed": seed},
+            "parameters": {
+                **sections_request(
+                    automatic=automatic, hide_whole_characters=hide_whole_characters,
+                ),
+                "seed": seed,
+            },
             "ranges": [{"tag_index": 0, "min": "0.9", "max": "1.1", "step": "0.1"}],
         }
     )
@@ -321,6 +366,11 @@ def test_frozen_run_metadata_idempotency_group_history_restart_and_backup(
     assert store.create(user, retry).id == run.id
     with pytest.raises(RunConflict, match="experiment_run_conflict"):
         store.create(user, definition)
+    # The empty third card still changes frozen identity when hidden as a whole.
+    changed_visibility = retry.model_copy(deep=True)
+    changed_visibility.parameters.prompt_sections.characters[2].enabled = False
+    with pytest.raises(RunConflict, match="experiment_run_conflict"):
+        store.create(user, changed_visibility)
     for section, field, value in (
         ("tags", "enabled", False),
         ("special", "text", "private later text"),

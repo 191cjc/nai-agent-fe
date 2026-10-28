@@ -9,11 +9,12 @@ import { ApiFailure, errorText } from './api'
 import type { GenerationDraft } from './store'
 import { AppStore, NATIVE_CHARACTER_MODELS, supportsNativeCharacters } from './store'
 import { PromptSectionsEditor } from './PromptSections'
-import { characterPrompt, promptTextTargetKey, type PromptTextTarget } from './prompt-sections'
+import { effectiveCharacterPrompt, promptTextTargetKey, type PromptTextTarget } from './prompt-sections'
 import { SectionAssistantButton, SectionAssistantPopover, type AssistantOpening } from './SectionAssistant'
 import { PromptEditor } from './PromptEditor'
 import { StyleExperimentConfig, StyleExperimentProgress } from './StyleExperiment'
 import { PromptSummary } from './PromptSummary'
+import { GenerationParameters } from './GenerationParameters'
 import { SavedExperimentList, SavedResultViewer } from './SavedResults'
 import { AccountBalance } from './AccountBalance'
 import { ImageSaveButton, ImageSeedButton } from './ImageActions'
@@ -202,7 +203,7 @@ const SettingsPanel = observer(({ store, hidden, onClose }: { store: AppStore; h
             onChange={event => generation.setField('model', event.target.value)} /></label>
         <datalist id="native-character-models">{NATIVE_CHARACTER_MODELS.map(model => <option key={model} value={model} />)}</datalist>
         <p className="prompt-hint">独立人物支持列表中的 V4 / V4.5 / V5 模型。</p>
-        {draft.character_prompts.some(character => characterPrompt(character.sections).trim()) && draft.model.trim() && !supportsNativeCharacters(draft.model)
+        {draft.character_prompts.some(character => effectiveCharacterPrompt(character).trim()) && draft.model.trim() && !supportsNativeCharacters(draft.model)
           && <p className="model-hint" role="status">当前模型不支持独立人物，请选择列表中的模型。</p>}
         <label className="field"><span>采样器 <span className="required">*</span></span>
           <select value={showManualSampler ? 'manual' : draft.sampler} onChange={event => {
@@ -341,12 +342,8 @@ const Result = observer(({ store, hidden }: { store: AppStore; hidden: boolean }
       {(generation.error || generation.imageError) && <button className="text-action" type="button" disabled={generation.checking}
         onClick={() => void generation.refresh()}><RefreshCw size={14} aria-hidden="true" /> 检查状态</button>}
       {job && <details className="result-parameters"><summary>本次生成参数{job.status === 'succeeded' ? ` · ${job.image_count} 张` : ''}</summary>
-        <PromptSummary parameters={job.parameters} />
-        {job.parameters.negative_prompt && <p>负向：{job.parameters.negative_prompt}</p>}
-        <p>{job.parameters.model} · {job.parameters.width}×{job.parameters.height} · {job.parameters.sampler}</p>
-        <p>{job.parameters.steps} 步 · CFG {job.parameters.cfg_scale} · 实际种子 {job.effective_seed} · {job.parameters.sample_count} 张 · {job.parameters.quality ? '高质量' : '标准质量'}</p>
+        <GenerationParameters job={job} />
         {job.result_expires_at !== null && <p>图片私有保存至 {new Date(job.result_expires_at * 1000).toLocaleString()}；刷新后可从历史记录重新查看。</p>}
-        <p>任务 ID：{job.id}</p>
       </details>}
     </div>}
   </section>

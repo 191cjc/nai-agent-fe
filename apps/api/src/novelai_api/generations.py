@@ -10,10 +10,10 @@ import time
 from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Annotated, Literal, Protocol, Self
+from typing import Annotated, Any, Literal, Protocol, Self, runtime_checkable
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 
 from .db import Database
 from .prompt_comments import compile_prompt_comments
@@ -184,10 +184,20 @@ class ImageProvider(Protocol):
     def generate(self, parameters: GenerationRequest) -> Sequence[GeneratedImage]: ...
 
 
+@runtime_checkable
+class RequestRecordingImageProvider(ImageProvider, Protocol):
+    def generate_with_request(
+        self, parameters: GenerationRequest, record_request: Callable[[dict[str, Any]], None],
+    ) -> Sequence[GeneratedImage]: ...
+
+
 class ProviderFailure(Exception):
     def __init__(self, code: str):
         self.code = code
         super().__init__(code)
+
+
+_NOT_LOADED = object()
 
 
 class HistoryItem(BaseModel):
@@ -199,11 +209,14 @@ class HistoryItem(BaseModel):
     effective_seed: int
     error_code: str | None
     image_count: int
+    # Raw provider snapshot from the same row read; not part of the list contract.
+    _provider_request_json: str | None | object = PrivateAttr(default=_NOT_LOADED)
 
 
 class GenerationView(HistoryItem):
     image_urls: list[str]
     result_expires_at: int | None
+    provider_request: dict[str, Any] | None = None
 
 
 class HistoryPage(BaseModel):
@@ -244,7 +257,9 @@ WITH experiment_rows AS (
         json_extract(settings_json, '$.experiment.ordinal') AS ordinal,
         json_extract(settings_json, '$.experiment.total') AS total
     FROM generation_jobs
-    WHERE user_id = ? AND valid_experiment(settings_json) = 1
+    WHERE user_id = ? AND json_valid(settings_json)
+        AND json_type(settings_json, '$.experiment') = 'object'
+        AND valid_experiment(settings_json) = 1
 )
 """
 EXPERIMENT_SUMMARY = """
@@ -325,6 +340,28 @@ class JobStore:
                 (int(time.time()), job_id),
             )
         return bool(updated.rowcount)
+
+    def record_provider_request(
+        self, user_id: str, job_id: str, arguments: dict[str, Any],
+    ) -> bool:
+        with self.database.connect(write=True) as connection:
+            updated = connection.execute(
+                "UPDATE generation_jobs SET provider_request_json = ? "
+                "WHERE id = ? AND user_id = ? AND status = 'running' "
+                "AND provider_request_json IS NULL",
+                (json.dumps(arguments, ensure_ascii=False, allow_nan=False), job_id, user_id),
+            )
+        return bool(updated.rowcount)
+
+    def provider_request(self, user_id: str, job_id: str) -> dict[str, Any] | None:
+        with self.database.connect() as connection:
+            row = connection.execute(
+                "SELECT provider_request_json FROM generation_jobs WHERE id = ? AND user_id = ?",
+                (job_id, user_id),
+            ).fetchone()
+        if row is None or row["provider_request_json"] is None:
+            return None
+        return json.loads(row["provider_request_json"])
 
     def finish(self, job_id: str, *, image_count: int = 0, error_code: str | None = None) -> bool:
         status = "failed" if error_code is not None else "succeeded"
@@ -416,7 +453,7 @@ class JobStore:
 
     @staticmethod
     def _item(row: sqlite3.Row) -> HistoryItem:
-        return HistoryItem(
+        item = HistoryItem(
             id=row["id"],
             parameters=GenerationRequest.model_validate(json.loads(row["settings_json"])),
             status=row["status"],
@@ -426,6 +463,9 @@ class JobStore:
             error_code=row["error_code"],
             image_count=row["image_count"],
         )
+        if "provider_request_json" in row.keys():
+            item._provider_request_json = row["provider_request_json"]
+        return item
 
 
 @dataclass
@@ -610,11 +650,17 @@ class GenerationManager:
 
     def view(self, job: HistoryItem, user_id: str) -> GenerationView:
         result = self.cache.describe(job.id, user_id) if job.status == "succeeded" else None
+        raw_request = job._provider_request_json
+        if raw_request is _NOT_LOADED:
+            provider_request = self.store.provider_request(user_id, job.id)
+        else:
+            provider_request = json.loads(raw_request) if raw_request is not None else None
         return GenerationView(
             **job.model_dump(),
             image_urls=[f"/api/generation-results/{job.id}/images/{index}"
                         for index in range(result.image_count)] if result else [],
             result_expires_at=result.expires_at if result else None,
+            provider_request=provider_request,
         )
 
     def is_inflight(self, job_id: str) -> bool:
@@ -681,7 +727,14 @@ class GenerationManager:
             if not self.store.mark_running(job_id):
                 return
             try:
-                images = self.provider.generate(parameters) if self.provider else ()
+                def record_request(arguments: dict[str, Any]) -> None:
+                    if not self.store.record_provider_request(user_id, job_id, arguments):
+                        raise RuntimeError("Provider request could not be recorded")
+
+                if isinstance(self.provider, RequestRecordingImageProvider):
+                    images = self.provider.generate_with_request(parameters, record_request)
+                else:
+                    images = self.provider.generate(parameters) if self.provider else ()
                 if len(images) != parameters.sample_count:
                     self.store.finish(job_id, error_code="invalid_result")
                     return

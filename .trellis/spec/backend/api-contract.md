@@ -13,6 +13,12 @@ and review how the web app consumes the change.
   or create a SQLite database.
 - `GET /api/generations/{job_id}` returns saved parameters and seven-day
   owner-only image URLs. `POST /api/generations` returns `202` with a job ID.
+- `GenerationView.provider_request: dict[str, Any] | None = None` adds the
+  captured MCP `generate_image` arguments to generation and experiment-group
+  details. `HistoryItem` and paginated generation history omit this field.
+- `JobStore.record_provider_request(user_id, job_id, arguments) -> bool`
+  persists the snapshot once for an owned running job;
+  `provider_request(user_id, job_id) -> dict | None` reads it with owner scope.
 - `GenerationManager.submit(user_id, request) -> str | None` raises
   `GenerationNotConfigured` only at the initial missing-executor guard;
   the route catches this type, not its general RuntimeError base class.
@@ -51,6 +57,24 @@ and review how the web app consumes the change.
   `/novelai` before forwarding. `NAI_PUBLIC_ORIGIN` contains no route path.
 - Errors use `ApiError(code: str, message: str, retryable: bool)`; return
   generic user-visible messages, never upstream credentials or responses.
+- Keep the full workspace input in `parameters`, including comments, section
+  metadata and hidden source text. Capture `provider_request` at the adapter's
+  submission boundary after schema validation and before its sole paid call;
+  it contains exactly the allowlisted tool arguments, including the effective
+  seed and capability-dependent position fields. Never include authentication
+  headers, credentials, editor metadata or hidden text in this snapshot.
+  Recording failure aborts before the paid call. A stored snapshot describes
+  attempted submission, not proof of delivery, payment or successful output.
+  It is the configured MCP service's input, not that service's internal
+  downstream NovelAI HTTP body. Legacy/pre-submission records return null;
+  never reconstruct an allegedly actual request from historical parameters.
+  Snapshots survive restart, backup and image expiry until the job is deleted.
+- Modern comment-aware MCP prompt strings are formatted as one line after
+  filtering: physical CR/LF runs become a space in base/negative/character
+  prompts before capture. `parameters` still returns raw workspace input;
+  prior `provider_request` captures are immutable. Legacy absent/false comment
+  mode and literal backslash-plus-n text remain unchanged. See
+  [Individual Hidden Tags](./prompt-comments-contract.md) for exact rules.
 - `apps/api/contracts/openapi.json` is a deterministic, credential-free
   snapshot, not evidence that unconfigured providers work. Model and sampler
   are provisional strings, not an invented choice enum. Character-bearing
@@ -83,6 +107,9 @@ and review how the web app consumes the change.
 | Insufficient private image storage before paid admission | 503/result_storage_unavailable, no seed/history/provider work |
 | Duplicate experiment ordinal or inconsistent total | 409/experiment_conflict before paid work |
 | Missing Codex runner | `503 advice_unavailable` |
+| Legacy job, discovery rejection or recording failure | Detail `provider_request` is null; no fabricated snapshot |
+| Unknown paid outcome after capture | Retain exact attempted arguments; no automatic paid retry |
+| Duplicate or foreign snapshot write | Refuse without overwriting or leaking another owner's data |
 
 Where applicable, also document `429` rate/queue limits and `502`/`504`
 provider failures in route response metadata. A successful generation
@@ -97,6 +124,9 @@ does not. The JSON `ApiError` shape is unchanged.
   history, and accesses a private retained image during its seven-day lifetime.
 - Base: schema generation with fake settings produces no SQLite file and
   no network activity.
+- Good: current/saved image details show complete private workspace inputs
+  beside exact submitted MCP arguments; hidden comments appear only in the
+  workspace input. Base: old history explicitly reports no captured request.
 - Good: missing image executor causes generation POST to refuse with
   `503/provider_unavailable` before any seed, history or provider work. Base:
   database readiness may still return `200/status=ok` with no executor.
@@ -110,6 +140,11 @@ does not. The JSON `ApiError` shape is unchanged.
   credential URL/env value leaks.
 - Keep integration tests on disposable SQLite and fake providers; automatic
   tests must not call paid services.
+- `test_provider_requests.py` verifies committed snapshot equality at the fake
+  HTTP boundary for flat/manual/automatic/all-hidden/legacy-schema requests,
+  uncertain outcomes, pre-call refusal, experiment groups, owner isolation,
+  immutable writes, restart/backup and schema4-to5 preservation. Assert the
+  detail field is absent from `HistoryItem` in the exact OpenAPI snapshot.
 - Generation regressions must distinguish missing executor (503 with no
   seed/history/enqueue/provider work) from generic RuntimeError in history
   creation or executor submission (unknown server failure, never the explicit
@@ -125,3 +160,6 @@ does not. The JSON `ApiError` shape is unchanged.
   accepted job's terminal provider error with POST refusal.
 - Correct: check provider configuration separately; preserve the refusal's
   pre-acceptance boundary when changing submit or enqueue behavior.
+- Wrong: label a frontend projection or rebuilt historical payload as the
+  actual provider input. Correct: display only the adapter-captured snapshot
+  and explain null snapshots without inventing missing fields.

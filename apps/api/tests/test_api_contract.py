@@ -128,6 +128,17 @@ def test_openapi_contract_matches_snapshot_without_database_or_provider_calls(
     assert "prompt_comments" not in required
     character_schema = schema["components"]["schemas"]["CharacterPrompt"]
     assert character_schema["required"] == ["prompt"]
+    section_character_schema = schema["components"]["schemas"]["SectionCharacter"]
+    assert section_character_schema["properties"]["enabled"] == {
+        "default": True, "title": "Enabled", "type": "boolean",
+    }
+    assert "enabled" not in section_character_schema["required"]
+    view_fields = schema["components"]["schemas"]["GenerationView"]["properties"]
+    assert view_fields["provider_request"] == {
+        "anyOf": [{"additionalProperties": True, "type": "object"}, {"type": "null"}],
+        "title": "Provider Request",
+    }
+    assert "provider_request" not in schema["components"]["schemas"]["HistoryItem"]["properties"]
     for coordinate in ("x", "y"):
         assert character_schema["properties"][coordinate] == {
             "default": 0.5, "minimum": 0.1, "maximum": 0.9,

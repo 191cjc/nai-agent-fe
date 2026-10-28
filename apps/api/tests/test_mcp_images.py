@@ -703,8 +703,13 @@ def test_workspace_experiment_metadata_never_changes_provider_arguments(native: 
 
 @pytest.mark.parametrize("all_hidden", [False, True])
 @pytest.mark.parametrize("automatic", [False, True])
-def test_section_metadata_and_hidden_text_never_enter_exact_mcp_payload(all_hidden, automatic):
-    payload = sections_request(all_hidden=all_hidden, automatic=automatic)
+@pytest.mark.parametrize("hide_whole_characters", [False, True])
+def test_section_metadata_and_hidden_text_never_enter_exact_mcp_payload(
+    all_hidden, automatic, hide_whole_characters,
+):
+    payload = sections_request(
+        all_hidden=all_hidden, automatic=automatic, hide_whole_characters=hide_whole_characters,
+    )
     if all_hidden:
         payload["model"] = "fixture-model"
     parameters = GenerationRequest.model_validate(payload)

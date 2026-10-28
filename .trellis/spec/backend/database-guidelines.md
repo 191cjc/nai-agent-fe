@@ -28,7 +28,8 @@ generated image bytes to it.
   directories or change the process-wide umask.
 - Admin migrations run before API readiness. DB schema lives in
   `migrations/0001_auth.sql`, `0002_generations.sql` and
-  `0003_style_experiments.sql` and `0004_prompt_snapshots.sql` (schema4), with
+  `0003_style_experiments.sql`, `0004_prompt_snapshots.sql` and
+  `0005_provider_requests.sql` (current schema5), with
   `PRAGMA user_version` and transactional scripts. Store job parameters, effective
   seed, timestamps and outcome, including optional experiment metadata in
   settings_json. Durable compact run/cursor/seed/Stop state uses the schema3 run table; see
@@ -39,6 +40,11 @@ generated image bytes to it.
   entries stay in private SQLite and online backups, never image/public files;
   see [Prompt Sections](./prompt-sections-contract.md). Section history metadata
   alone uses existing settings_json and needs no additional generation columns.
+- Schema5 adds nullable `generation_jobs.provider_request_json TEXT` without
+  rewriting existing rows. Old jobs retain NULL. Readiness probes this column;
+  online backups preserve it. Owner-scoped write-once capture uses the existing
+  private job lifecycle, not a new public table or image expiry. See
+  [Browser API](./api-contract.md) for capture and null-snapshot semantics.
 - Deploy the API on a trusted, private data volume. Existing parent directory
   modes and Windows ACLs require operator review; these POSIX modes do not
   protect against an attacker who can replace paths inside the directory.
@@ -48,7 +54,8 @@ generated image bytes to it.
 | Input / condition | Expected behavior |
 | --- | --- |
 | New path under an absent directory | Create private parent/data and DB before migrations |
-| Existing v1 DB with permissive modes | Restrict DB/WAL/SHM, migrate through v4, preserve records |
+| Existing v1 DB with permissive modes | Restrict DB/WAL/SHM, migrate through v5, preserve records |
+| Existing schema4 job/run/snapshot/session data | Migration5 preserves all values; new request column is NULL |
 | Backup path exists or is a symlink | Reject exclusive creation without overwrite |
 | Backup fails after creating destination | Close connections and remove only that destination |
 | Missing/unsupported schema | Readiness false / reject future schema version |
@@ -58,7 +65,7 @@ generated image bytes to it.
 - Good: after migrating a v1 database, the same issued token and session
   continue working, and owner-only parameter history remains intact.
 - Base: running `migrate` twice changes neither version nor auth records;
-  a backup contains saved parameters but no PNG bytes.
+  a backup contains saved parameters and captured provider arguments but no PNG bytes.
 - Bad: relying on the host's default umask creates a world-readable new DB;
   blindly copying the main WAL database file can lose transactions.
 
@@ -68,6 +75,9 @@ generated image bytes to it.
   `apps/api/tests/test_auth.py` for POSIX-permission, upgrade, symlink and
   backup failure tests; see `apps/api/tests/test_generations.py` for online
   backup/restore without images.
+- `test_provider_requests.py` verifies schema4-to5 preservation of sessions,
+  jobs, runs and prompt snapshots; repeated migration/readiness; legacy NULL
+  values; and captured arguments surviving online backup and restart.
 - Verify a permissive umask in a subprocess rather than changing pytest's
   global process umask; check WAL/SHM, existing v1 data and mode `0600`
   backups. POSIX-specific assertions should skip on non-POSIX systems.

@@ -366,11 +366,12 @@ def test_schema3_upgrade_preserves_all_rows_raw_definitions_auth_and_private_bac
     assert database.check_ready()
     assert current_user(database, session) == user
     with database.connect() as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 4
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 5
         for table in tables:
-            assert [tuple(row) for row in connection.execute(f"SELECT * FROM {table}")] == before[
-                table
-            ]
+            assert [
+                tuple(value for key, value in dict(row).items() if key != "provider_request_json")
+                for row in connection.execute(f"SELECT * FROM {table}")
+            ] == before[table]
         assert connection.execute("SELECT COUNT(*) FROM prompt_snapshots").fetchone()[0] == 0
     assert JobStore(database).get(user["id"], job_id).parameters.prompt_sections is None
     assert RunStore(database).get(user["id"], run.id).parameters.prompt_sections is None
@@ -383,9 +384,10 @@ def test_schema3_upgrade_preserves_all_rows_raw_definitions_auth_and_private_bac
     assert PromptSnapshotStore(restored).get(user["id"], str(saved.id)) == saved
     with restored.connect() as connection:
         for table in tables:
-            assert [tuple(row) for row in connection.execute(f"SELECT * FROM {table}")] == before[
-                table
-            ]
+            assert [
+                tuple(value for key, value in dict(row).items() if key != "provider_request_json")
+                for row in connection.execute(f"SELECT * FROM {table}")
+            ] == before[table]
     if os.name == "posix":
         assert path.stat().st_mode & 0o777 == 0o600
         assert backup.stat().st_mode & 0o777 == 0o600

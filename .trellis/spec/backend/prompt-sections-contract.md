@@ -22,6 +22,13 @@ absent/false preserves the legacy contracts below.
   lower_clothing, action, tags, special, other. All fixed metadata objects reject
   unknown keys; each source character also stores independently validated x/y
   (finite strict floats, default.5, inclusive.1–.9). No draft-only IDs on wire.
+  The stable character key `tags` displays as 表情 in editors, summaries and
+  snapshot selectors. Its assistant scope is expression/emotion/gaze/eye/mouth
+  state. Preserve the wire key and existing saved text; do not rewrite history.
+- `SectionCharacter.enabled: strict bool=True` independently hides a whole
+  person. Omission means enabled; serialize only false, omitting true in both
+  dict/JSON dumps to preserve legacy frozen definitions. Browser drafts use
+  a required boolean and restore omitted historical values as true.
 - Snapshot create/detail: `{id: UUID, name: str[1,100], entries: list[Entry]}`
   with detail adding created_at. Summary: `{id,name,created_at,entry_count}`.
   Page: `{items: list[Summary], next_offset: int|null}`.
@@ -40,11 +47,21 @@ absent/false preserves the legacy contracts below.
 Composition selects enabled nonblank section texts in fixed order. No texts
 returns ''. One returns the exact original text; multiple return trimmed
 texts joined by ', '. The effective positive_prompt must equal composed shared
-text. Compose every complete metadata person in source order, filter blank
-projections, then require exact ordered character_prompts with matching x/y.
+text. Select enabled metadata people in source order, compose their enabled
+sections, filter blank projections, then require exact ordered character_prompts
+with matching x/y.
 Never zip the shorter effective list against unfiltered metadata. Keep legacy
 CharacterPrompt nonblank validation and all existing effective limits/model
 rules. Hidden/empty metadata cards remain available to history/reuse.
+
+Whole-person visibility is separate from card collapse and section switches.
+Hide/show changes only the person's enabled flag, retaining source text,
+independent section flags, stable draft identity and coordinates. Hidden people
+have no positive-tag insertion targets and show inactive position markers;
+history summaries label whole-person hiding independently of section states.
+`effectiveCharacterPrompt(person, comments)` owns this browser projection for
+submission, budgets, model hints, position status and request validation.
+Hidden raw sections and coordinates still obey their individual validation.
 
 MCP uses its existing explicit effective argument allowlist. Never serialize
 metadata, hidden text or snapshot contents downstream. No effective characters
@@ -80,6 +97,7 @@ wins. Preserve duplicate tags and destination enabled state. Validate the whole
 proposed draft and apply atomically, retaining original draft on any error.
 Per-section import filters exact compatible scope/key and fixes destination.
 Saving selected sections creates one named bundle, including hidden text.
+Import preserves whole-person visibility too; newly created people are enabled.
 Save/import works on incomplete drafts without requiring valid generation
 settings or a nonblank base; only relevant section/effective length, position,
 cardinality and target checks belong to this local atomic edit. Full request
@@ -92,6 +110,9 @@ frozen requests. Protected snapshot state uses session epochs/abort cleanup and
 is cleared on logout/401/disposal. No Web Storage or nested generation forms.
 History summaries distinguish source numbering and hidden content from actual
 generated prompts. No automatic advice input or paid generation on import.
+Release the API accepting optional person visibility before the matching web
+build; the preceding strict metadata API rejects the new false flag. No new
+SQLite migration or provider argument is needed.
 
 ## Validation & Error Matrix
 
@@ -101,6 +122,9 @@ generated prompts. No automatic advice input or paid generation on import.
 | Metadata/effective text, order or axes disagree | 422 before seed/history/provider |
 | Invalid enabled type, keys, section text or source axes | 422; hidden content remains bounded/validated |
 | All people hidden | Empty effective list, flat provider path; full private editor recovery |
+| Person enabled omitted/true | Enabled; omit the flag from serialized metadata for legacy compatibility |
+| Person enabled false | Preserve every section and axis privately; omit person from effective list |
+| Person enabled null/string/number | 422; strict bool, including on otherwise empty/hidden cards |
 | Only hidden base text survives | Existing nonblank base/preflight rejection |
 | Snapshot malformed/empty, duplicate key or bad list query | 422 safe ApiError |
 | Snapshot same-owner UUID identical payload | Idempotent original object, no duplicate row |
@@ -115,6 +139,9 @@ generated prompts. No automatic advice input or paid generation on import.
 - Good: hide lower clothing for a close-up; no hidden text reaches MCP, while
   history restores its exact weights and visibility. A hidden first person at
   (.2,.3) cannot lend coordinates to an enabled second person at (.8,.7).
+- Good: hide a whole person, then show it again; text, positions and separately
+  hidden clothing remain unchanged, including after history reuse. Collapsing
+  its card only changes disclosure and never changes generation participation.
 - Good: save a character's upper/lower sections together, then import that and
   an action snapshot into an explicitly selected person, default append.
 - Base: metadata-free native/flat requests and old v1/v2 experiment definitions
@@ -128,6 +155,10 @@ generated prompts. No automatic advice input or paid generation on import.
   strict metadata, mismatched projections, all-hidden/empty source cards, exact
   axes/order and legacy omission. Exact fake MCP assertions prove hidden text
   and metadata are absent in flat/manual/automatic payloads.
+- Whole-person visibility tests cover strict booleans, effective-list mismatch,
+  exact omission and source axes with visible siblings, all-hidden flat calls,
+  lossless re-enable/default omission, history/backup/restart and frozen run
+  identity. Legacy enabled source metadata retains its old serialization.
 - Frozen runs preserve metadata under caller changes/restart, style overrides
   still validate, same-ID changed hidden text/state conflicts and old absent
   metadata definitions remain byte-identical without ordinal replay.
@@ -142,6 +173,9 @@ generated prompts. No automatic advice input or paid generation on import.
 
 ## Wrong vs Correct
 
+- Wrong: implement whole-person hiding by clearing text or switching all
+  sections off, then switching all sections on when shown. Correct: store an
+  independent person enabled flag and preserve every section's original state.
 - Wrong: make empty disabled CharacterPrompt valid everywhere or forward a
   request model_dump directly to MCP. Correct: retain strict effective prompts
   and validate a separate optional private editor projection.

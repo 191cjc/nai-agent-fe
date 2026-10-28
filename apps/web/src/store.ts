@@ -20,7 +20,7 @@ import { PromptSnapshotStore } from './prompt-snapshots'
 import { BalanceStore } from './balance-store'
 import { appendPromptText, compilePromptComments } from './prompt-weights'
 import {
-  CHARACTER_SECTION_KEYS, SHARED_SECTION_KEYS, SECTION_LABELS, characterPrompt, sharedPrompt,
+  CHARACTER_SECTION_KEYS, SHARED_SECTION_KEYS, SECTION_LABELS, effectiveCharacterPrompt, sharedPrompt,
   emptyCharacterSections, emptySharedSections, metadataFromDraft, restoredSections, sectionAt,
   validateSectionBudgets, projectSnapshotImport, type SectionCharacterDraft, type SectionReference,
   copySharedSections, copyCharacterSections, type PromptTextTarget,
@@ -57,8 +57,8 @@ export type GenerationDraft = Omit<GenerationRequest, 'positive_prompt' | 'promp
 
 let characterSequence = 0
 
-function newCharacter(sections: CharacterSections = emptyCharacterSections(), x = CHARACTER_POSITION_CENTER, y = CHARACTER_POSITION_CENTER): CharacterDraft {
-  return { id: `character-${++characterSequence}`, sections, x, y }
+function newCharacter(sections: CharacterSections = emptyCharacterSections(), x = CHARACTER_POSITION_CENTER, y = CHARACTER_POSITION_CENTER, enabled = true): CharacterDraft {
+  return { id: `character-${++characterSequence}`, sections, x, y, enabled }
 }
 
 function validCharacterPosition(value: number): boolean {
@@ -94,7 +94,7 @@ export function requestFromDraft(draft: GenerationDraft): GenerationRequest {
     : positive
   if (!basePrompt.trim()) throw new Error('请填写画风或公共提示词。')
   if (draft.negative_prompt.length > 3000) throw new Error('负面提示词不能超过 3000 字符。')
-  const characters = draft.character_prompts.map(character => ({ prompt: characterPrompt(character.sections), x: character.x, y: character.y }))
+  const characters = draft.character_prompts.map(character => ({ prompt: effectiveCharacterPrompt(character), x: character.x, y: character.y }))
     .filter(character => character.prompt.trim())
   if (!draft.model.trim() || draft.model.length > 80) throw new Error('请输入模型 ID（最多 80 字符）。')
   if (characters.length && !supportsNativeCharacters(draft.model)) {
@@ -282,7 +282,7 @@ export class GenerationStore {
       ...SHARED_SECTION_KEYS.filter(key => this.draft.shared_sections[key].enabled).map(key => ({
         value: `shared:${key}` as const, label: `公共 · ${SECTION_LABELS[key]}`, reference: { scope: 'shared' as const, section: key },
       })),
-      ...this.draft.character_prompts.flatMap((character, index) => CHARACTER_SECTION_KEYS.filter(key => character.sections[key].enabled).map(key => ({
+      ...this.draft.character_prompts.flatMap((character, index) => CHARACTER_SECTION_KEYS.filter(key => character.enabled && character.sections[key].enabled).map(key => ({
         value: `character:${character.id}:${key}` as const, label: `人物 ${index + 1} · ${SECTION_LABELS[key]}`,
         reference: { scope: 'character' as const, characterId: character.id, section: key },
       }))),
@@ -343,6 +343,14 @@ export class GenerationStore {
     else if (target.scope === 'negative') this.draft.negative_prompt = value
     else sectionAt(this.draft, target)!.text = value
     this.draftVersion += 1
+  }
+
+  setCharacterEnabled(id: string, enabled: boolean): void {
+    const character = this.draft.character_prompts.find(person => person.id === id)
+    if (!character || character.enabled === enabled) return
+    this.draftVersion += 1
+    character.enabled = enabled
+    if (!this.positiveTagTargets.some(target => target.value === this.positiveTagTarget)) this.positiveTagTarget = this.fallbackTagTarget()
   }
 
   setSectionEnabled(reference: SectionReference, enabled: boolean): void {
@@ -413,7 +421,7 @@ export class GenerationStore {
       style_prompt: item.parameters.style_prompt ?? '',
       auto_character_position: item.parameters.auto_character_position ?? false,
       character_prompts: metadata.characters.length || item.parameters.prompt_sections
-        ? metadata.characters.map(character => newCharacter(character.sections, character.x, character.y)) : [newCharacter()],
+        ? metadata.characters.map(character => newCharacter(character.sections, character.x, character.y, character.enabled !== false)) : [newCharacter()],
       width: String(item.parameters.width), height: String(item.parameters.height),
       steps: String(item.parameters.steps), cfg_scale: String(item.parameters.cfg_scale),
       seed: '', sample_count: String(item.parameters.sample_count),
