@@ -72,6 +72,13 @@ proof that every tool is unavailable before execution.
   validate the final message after the successful turn/stream has completed,
   without concatenating intermediate commentary or requiring a single message.
   An earlier valid JSON message cannot rescue an invalid final response.
+- The pinned CLI emits non-fatal config/model warnings as `item.completed`
+  items of type `error` before every turn (deprecated config key,
+  under-development feature, unknown model metadata). Ignore only these
+  completed warning items; `error` items in started/updated events and every
+  other non-message item (command, file, MCP, web search, todo list, unknown)
+  remain tool attempts. Fatal failures arrive as `turn.failed`/`error` events.
+  Rejection logs record only a sanitized item type, never item text.
   Keep message/event bounds and reject tool items anywhere, including after
   turn completion; intermediate messages never bypass tool/stream validation.
 - Failure logs contain only a fixed timeout/tool category or the exception's
@@ -88,6 +95,7 @@ proof that every tool is unavailable before execution.
 | Missing `NAI_CODEX_API_KEY` | `503 advice_unavailable` |
 | Concurrent advice capacity exhausted | `429 advice_busy` |
 | Observed tool item, even after a completed turn | `502 advice_tool_attempt`; no suggestion released |
+| Completed `error` warning items before/within a successful turn | Ignored; final suggestion returned |
 | Malformed JSON, invalid schema, SDK/CLI failure | `502 advice_failed`; no upstream details |
 | Intermediate commentary followed by valid final JSON and completed turn | Return the final suggestion only |
 | Deadline exceeded | `504 advice_timeout`; abort and cleanup |

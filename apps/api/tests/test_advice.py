@@ -357,6 +357,66 @@ def test_sdk_returns_final_message_after_commentary(tmp_path: Path, commentary: 
     assert not list(tmp_path.iterdir())
 
 
+# Exact non-fatal warnings the pinned CLI 0.152.1 emits before every turn.
+CLI_WARNINGS = [
+    "`[features].web_search_request` is deprecated because web search is enabled by default.",
+    "Under-development features enabled: skip_host_skill_discovery.",
+    "Model metadata for `example-model` not found. Defaulting to fallback metadata.",
+]
+
+
+def test_sdk_ignores_cli_warning_items_and_returns_advice(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture,
+) -> None:
+    async def events():
+        yield parse_thread_event({"type": "thread.started", "thread_id": "thread"})
+        for index, message in enumerate(CLI_WARNINGS):
+            yield parse_thread_event({
+                "type": "item.completed",
+                "item": {"id": f"warning-{index}", "type": "error", "message": message},
+            })
+        yield parse_thread_event({"type": "turn.started"})
+        yield sdk_event("item.completed", "agent_message", '{"suggestion":"rim lighting"}')
+        yield sdk_event("turn.completed")
+
+    sdk = FakeCodex(events)
+    runner = isolated_runner(tmp_path, sdk)
+    caplog.set_level(logging.WARNING)
+    result = asyncio.run(AdviceService(runner).advise("lighting"))
+    assert result.suggestion == "rim lighting"
+    assert not sdk.turn_options["signal"].aborted
+    assert not caplog.records
+    assert not list(tmp_path.iterdir())
+
+
+def test_sdk_warnings_never_release_advice_without_a_completed_turn(tmp_path: Path) -> None:
+    async def events():
+        yield sdk_event("item.completed", "error", "")
+        yield sdk_event("item.completed", "agent_message", '{"suggestion":"partial"}')
+
+    runner = isolated_runner(tmp_path, FakeCodex(events))
+    with pytest.raises(AdviceFailure) as failure:
+        asyncio.run(AdviceService(runner).advise("lighting"))
+    assert failure.value.code == "advice_failed"
+
+
+@pytest.mark.parametrize("event_type", ["item.started", "item.updated"])
+def test_sdk_rejects_error_items_that_are_not_completed_warnings(
+    tmp_path: Path, event_type: str, caplog: pytest.LogCaptureFixture,
+) -> None:
+    async def events():
+        yield sdk_event(event_type, "error")
+        yield sdk_event("item.completed", "agent_message", '{"suggestion":"ignore"}')
+        yield sdk_event("turn.completed")
+
+    runner = isolated_runner(tmp_path, FakeCodex(events))
+    caplog.set_level(logging.WARNING)
+    with pytest.raises(AdviceFailure) as failure:
+        asyncio.run(AdviceService(runner).advise("lighting"))
+    assert failure.value.code == "advice_tool_attempt"
+    assert "rejected observed tool use (error)" in caplog.text
+
+
 @pytest.mark.parametrize(
     ("base_url", "model"),
     [

@@ -298,9 +298,12 @@ class CodexAdviceRunner:
                 "item.started", "item.updated", "item.completed"
             } else None
             item_type = getattr(item, "type", None)
-            if item is not None and item_type not in {"agent_message", "reasoning"}:
+            # The pinned CLI reports non-fatal config/model warnings as completed error
+            # items before the turn starts; fatal errors arrive as turn.failed/error events.
+            warning = event_type == "item.completed" and item_type == "error"
+            if item is not None and not warning and item_type not in {"agent_message", "reasoning"}:
                 controller.abort("Unexpected Codex item")
-                raise ToolUseAttempt("Unexpected Codex item")
+                raise ToolUseAttempt("Unexpected Codex item", item_type=item_type)
             if count > 256 or completed:
                 controller.abort("Unexpected Codex event stream")
                 raise RuntimeError("Unexpected Codex event stream")
@@ -309,6 +312,8 @@ class CodexAdviceRunner:
             if event_type in {"item.started", "item.updated", "item.completed"}:
                 if item is None:
                     raise RuntimeError("Invalid Codex item event")
+                if warning:
+                    continue
                 if event_type == "item.completed" and item_type == "agent_message":
                     # Match the pinned SDK: commentary may precede the final agent message.
                     # Validate its JSON only after the entire turn completes safely.

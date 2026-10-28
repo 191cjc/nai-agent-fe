@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import re
 from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -36,7 +37,13 @@ class AdviceResult(BaseModel):
 
 
 class ToolUseAttempt(Exception):
-    pass
+    def __init__(self, message: str = "Unexpected Codex item", *, item_type: object = None):
+        # Only a short identifier-like type is kept for diagnostics, never item text.
+        self.item_type = (
+            item_type if isinstance(item_type, str)
+            and re.fullmatch(r"[a-z][a-z0-9_.-]{0,39}", item_type) else "unknown"
+        )
+        super().__init__(message)
 
 
 class AdviceFailure(Exception):
@@ -71,7 +78,7 @@ class AdviceService:
                 logger.warning("AI advice timed out")
                 raise AdviceFailure(504, "advice_timeout", "AI advice timed out") from exception
             except ToolUseAttempt as exception:
-                logger.warning("AI advice rejected observed tool use")
+                logger.warning("AI advice rejected observed tool use (%s)", exception.item_type)
                 raise AdviceFailure(
                     502, "advice_tool_attempt", "AI advice unavailable"
                 ) from exception
