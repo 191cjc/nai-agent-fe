@@ -448,9 +448,12 @@ def test_sdk_configured_endpoint_and_model_preserve_isolation(
     sdk = FakeCodex(events)
     runner = isolated_runner(tmp_path, sdk, base_url=base_url, model=model)
     assert asyncio.run(runner.run("only this section text")) == {"suggestion": "中文解释"}
-    assert sdk.options.get("base_url") == base_url
+    # The pinned CLI ignores OPENAI_BASE_URL; the endpoint must be in its config file.
+    assert "base_url" not in sdk.options
+    assert tomllib.loads(observed["config"]).get("openai_base_url") == (
+        base_url.rstrip("/") if base_url else None
+    )
     assert sdk.thread_options.get("model") == model
-    assert ("base_url" in sdk.options) is (base_url is not None)
     assert ("model" in sdk.thread_options) is (model is not None)
     assert "api_key" not in sdk.options
     assert set(sdk.options["env"]) == {"CODEX_HOME", "HOME", "TMPDIR", "PATH", "LANG"}

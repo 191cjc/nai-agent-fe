@@ -125,12 +125,16 @@ def _cli_path() -> str:
     return str(path.resolve())
 
 
-def _config() -> str:
+def _config(base_url: str | None = None) -> str:
     lines = [
         'approval_policy = "never"',
         'sandbox_mode = "read-only"',
         'web_search = "disabled"',
         "allow_login_shell = false",
+        # The pinned CLI ignores the SDK's OPENAI_BASE_URL environment variable and
+        # would silently call the default endpoint; only this config key is honored.
+        # A JSON string literal is a valid TOML basic string for a validated URL.
+        *([f"openai_base_url = {json.dumps(base_url.rstrip('/'))}"] if base_url else []),
         "",
         "[features]",
         "skip_host_skill_discovery = true",
@@ -239,7 +243,9 @@ class CodexAdviceRunner:
                 runtime.mkdir(mode=0o700)
                 work.mkdir(mode=0o700)
                 temporary.mkdir(mode=0o700)
-                (runtime / "config.toml").write_text(_config(), encoding="utf-8")
+                (runtime / "config.toml").write_text(
+                    _config(self._base_url), encoding="utf-8",
+                )
                 (work / "AGENTS.md").write_text(INSTRUCTIONS + "\n", encoding="utf-8")
                 environment = {
                     "CODEX_HOME": str(runtime),
@@ -254,8 +260,6 @@ class CodexAdviceRunner:
                     "codex_path_override": cli_path,
                     "env": environment,
                 }
-                if self._base_url is not None:
-                    options["base_url"] = self._base_url
                 codex = self._codex_factory(options)
                 thread_options: dict[str, Any] = {
                     "sandbox_mode": "read-only",

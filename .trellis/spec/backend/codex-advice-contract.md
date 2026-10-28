@@ -34,9 +34,12 @@ proof that every tool is unavailable before execution.
   stdin. Do not inherit a host CLI login, project files or broad process
   environment. Alongside fixed NovelAI-oriented instructions, only submitted
   advice text becomes dynamic model input; no chat thread is reused or persisted.
-- Pass an explicit base through pinned SDK `options.base_url` (which adds only
-  `OPENAI_BASE_URL` to its isolated child environment), and an explicit model
-  through `thread.model`. Omit these options when absent. Keep API-key login
+- Write an explicit base as top-level `openai_base_url` (trailing `/`
+  stripped) in the isolated `config.toml`, and pass an explicit model through
+  `thread.model`. Omit both when absent. Never rely on SDK `options.base_url`:
+  it only sets `OPENAI_BASE_URL`, which pinned CLI 0.152.1 ignores, silently
+  sending turns to the default endpoint (verified 2026-10-28 with a local fake
+  relay: env var → 0 requests and a 45 s hang; config key → `/v1/responses`). Keep API-key login
   on stdin; never pass SDK `api_key`, which would inject `CODEX_API_KEY`, or
   inherit a host endpoint/model/credential. Endpoint/model are backend config,
   never browser fields, prompt context or a model catalog migration.
