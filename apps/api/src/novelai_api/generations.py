@@ -68,16 +68,35 @@ class ExperimentWeight(BaseModel):
         return value
 
 
+class DatasetItem(BaseModel):
+    id: str = Field(min_length=1, max_length=64, pattern=r"^[a-z0-9][a-z0-9-]*$")
+    prompt: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("prompt")
+    @classmethod
+    def nonblank_prompt(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Dataset prompt cannot be blank")
+        return value
+
+
 class ExperimentContext(BaseModel):
     id: UUID
     ordinal: PositiveDecimal
     total: PositiveDecimal
-    weights: list[ExperimentWeight] = Field(min_length=1, max_length=1500)
+    # Absent kind is a style weight group; stored style rows never carry these fields.
+    kind: Literal["dataset"] | None = Field(default=None, exclude_if=lambda value: value is None)
+    item: DatasetItem | None = Field(default=None, exclude_if=lambda value: value is None)
+    weights: list[ExperimentWeight] = Field(default_factory=list, max_length=1500)
 
     @model_validator(mode="after")
     def valid_context(self) -> Self:
         if (len(self.ordinal), self.ordinal) > (len(self.total), self.total):
             raise ValueError("Experiment ordinal exceeds total")
+        if self.kind is None and (self.item is not None or not self.weights):
+            raise ValueError("Style experiment groups require weights only")
+        if self.kind == "dataset" and (self.item is None or self.weights):
+            raise ValueError("Dataset groups require one item and no weights")
         if len({weight.tag_index for weight in self.weights}) != len(self.weights):
             raise ValueError("Duplicate experiment tag index")
         if sum(len(weight.label) for weight in self.weights) > 3000:
@@ -226,6 +245,7 @@ class HistoryPage(BaseModel):
 
 class ExperimentSummary(BaseModel):
     id: str
+    kind: Literal["style", "dataset"] = "style"
     total: str
     group_count: int
     completed_count: int
@@ -263,7 +283,9 @@ WITH experiment_rows AS (
 )
 """
 EXPERIMENT_SUMMARY = """
-SELECT experiment_id AS id, total, COUNT(*) AS group_count,
+SELECT experiment_id AS id,
+    COALESCE(MAX(json_extract(settings_json, '$.experiment.kind')), 'style') AS kind,
+    total, COUNT(*) AS group_count,
     SUM(CASE WHEN status IN ('succeeded', 'failed') THEN 1 ELSE 0 END) AS completed_count,
     SUM(image_count) AS image_count, MIN(created_at) AS created_at,
     MAX(updated_at) AS updated_at
@@ -311,7 +333,9 @@ class JobStore:
                 "AND (ordinal = ? OR total != ?) LIMIT 1",
                 (user_id, str(context.id), context.ordinal, context.total),
             ).fetchone()
-            if conflict or (server_run and not run_claim):
+            # Dataset groups exist only as claims of a durable server-owned run.
+            dataset = context.kind == "dataset" and not run_claim
+            if conflict or dataset or (server_run and not run_claim):
                 raise ExperimentConflict("Conflicting experiment group")
         connection.execute(
             "INSERT INTO generation_jobs "

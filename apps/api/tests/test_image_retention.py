@@ -538,7 +538,7 @@ def test_huge_ordinals_page_in_numeric_order_and_groups_survive_restart(database
             assert page["items"][0]["image_urls"] == []
             assert page["next_offset"] == (offset + 1 if offset + 1 < len(ordinals) else None)
             assert page["summary"] == {
-                "id": run_id, "total": total, "group_count": 5,
+                "id": run_id, "kind": "style", "total": total, "group_count": 5,
                 "completed_count": 5, "image_count": 10, "created_at": 100, "updated_at": 200,
             }
         ordered_runs = sorted([run_id, another_id], reverse=True)

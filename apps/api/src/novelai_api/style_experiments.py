@@ -10,9 +10,11 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
+from .dataset_plan import DatasetRunCreate, dataset_parameters, item_seed
 from .db import Database
 from .generations import (
     EXPERIMENT_ROWS,
+    DatasetItem,
     ExperimentContext,
     GenerationManager,
     GenerationNotConfigured,
@@ -49,6 +51,7 @@ class RunCreate(BaseModel):
 class RunState(BaseModel):
     _plan_version: Literal[1, 2] = PrivateAttr(default=2)
     id: str
+    kind: Literal["style", "dataset"] = "style"
     status: Literal["running", "stopping", "stopped", "completed"]
     total: str
     next_ordinal: str
@@ -61,6 +64,7 @@ class RunState(BaseModel):
     sample_count: int
     parameters: GenerationRequest
     ranges: list[ExperimentRange]
+    items: list[DatasetItem] = Field(default_factory=list)
     created_at: int
     updated_at: int
     error_code: str | None
@@ -83,22 +87,24 @@ class RunStore:
     @staticmethod
     def _state(row: sqlite3.Row) -> RunState:
         definition = json.loads(row["definition_json"])
+        kind = definition.get("kind", "style")
         version = definition.get("plan_version", 1)
-        if version not in (1, 2):
+        if kind not in ("style", "dataset") or version not in (1, 2):
             raise ValueError("Unsupported stored style plan version")
         state = RunState(
+            kind=kind, items=definition.get("items", []),
             **{key: row[key] for key in (
                 "id", "status", "total", "next_ordinal", "processed_count", "succeeded_count",
                 "failed_count", "current_ordinal", "current_job_id", "seed", "created_at",
                 "updated_at", "error_code",
             )},
-            parameters=definition["parameters"], ranges=definition["ranges"],
+            parameters=definition["parameters"], ranges=definition.get("ranges", []),
             sample_count=definition["parameters"]["sample_count"],
         )
         state._plan_version = version
         return state
 
-    def create(self, user_id: str, request: RunCreate) -> RunState:
+    def create(self, user_id: str, request: RunCreate | DatasetRunCreate) -> RunState:
         definition, total = request.definition()
         run_id = str(request.id)
         with self.database.connect(write=True) as connection:
@@ -289,6 +295,15 @@ class RunStore:
 
 
 def group_parameters(run: RunState) -> GenerationRequest:
+    if run.kind == "dataset":
+        ordinal = int(run.next_ordinal)
+        item = run.items[ordinal - 1]
+        return dataset_parameters(
+            run.parameters, item, seed=item_seed(run.seed, ordinal),
+            context=ExperimentContext(
+                id=run.id, ordinal=run.next_ordinal, total=run.total, kind="dataset", item=item,
+            ),
+        )
     plan = create_style_plan(run.parameters, run.ranges, plan_version=run._plan_version)
     source, weights = plan.combination(int(run.next_ordinal) - 1)
     return GenerationRequest.model_validate({

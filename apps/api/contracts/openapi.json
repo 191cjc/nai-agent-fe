@@ -220,12 +220,85 @@
         "title": "CharacterSnapshotEntry",
         "type": "object"
       },
+      "DatasetItem": {
+        "properties": {
+          "id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "title": "Id",
+            "type": "string"
+          },
+          "prompt": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Prompt",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "prompt"
+        ],
+        "title": "DatasetItem",
+        "type": "object"
+      },
+      "DatasetRunCreate": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DatasetItem"
+            },
+            "maxItems": 300,
+            "minItems": 1,
+            "title": "Items",
+            "type": "array"
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/GenerationRequest"
+          }
+        },
+        "required": [
+          "id",
+          "parameters",
+          "items"
+        ],
+        "title": "DatasetRunCreate",
+        "type": "object"
+      },
       "ExperimentContext": {
         "properties": {
           "id": {
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "item": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DatasetItem"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "const": "dataset",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
           },
           "ordinal": {
             "maxLength": 1000,
@@ -246,7 +319,6 @@
               "$ref": "#/components/schemas/ExperimentWeight"
             },
             "maxItems": 1500,
-            "minItems": 1,
             "title": "Weights",
             "type": "array"
           }
@@ -254,8 +326,7 @@
         "required": [
           "id",
           "ordinal",
-          "total",
-          "weights"
+          "total"
         ],
         "title": "ExperimentContext",
         "type": "object"
@@ -377,6 +448,15 @@
           "image_count": {
             "title": "Image Count",
             "type": "integer"
+          },
+          "kind": {
+            "default": "style",
+            "enum": [
+              "style",
+              "dataset"
+            ],
+            "title": "Kind",
+            "type": "string"
           },
           "total": {
             "title": "Total",
@@ -1050,6 +1130,22 @@
           },
           "id": {
             "title": "Id",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DatasetItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "kind": {
+            "default": "style",
+            "enum": [
+              "style",
+              "dataset"
+            ],
+            "title": "Kind",
             "type": "string"
           },
           "next_ordinal": {
@@ -1783,6 +1879,102 @@
           }
         },
         "summary": "Login"
+      }
+    },
+    "/api/dataset-runs": {
+      "post": {
+        "operationId": "create_dataset_run_api_dataset_runs_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "__Host-nai_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "  Host-Nai Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DatasetRunCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Create Dataset Run"
       }
     },
     "/api/generation-results/{job_id}/images/{image_id}": {

@@ -20,6 +20,7 @@ from .advice import AdviceFailure, AdviceRequest, AdviceResult, AdviceRunner, Ad
 from .auth import current_user, issue_session, revoke_session
 from .codex_advice import CodexAdviceRunner
 from .config import Settings
+from .dataset_plan import DatasetRunCreate
 from .db import Database
 from .generations import (
     ExperimentConflict,
@@ -480,6 +481,24 @@ def create_app(
     def create_style_run(
         payload: RunCreate, user: Annotated[UserInfo, Depends(require_user)],
     ) -> RunState | JSONResponse:
+        try:
+            return experiments.store.create(user.id, payload)
+        except RunConflict as exception:
+            return error(409, exception.code, "Experiment run conflicts with existing work")
+
+    @app.post(
+        "/api/dataset-runs",
+        status_code=202,
+        response_model=RunState,
+        responses={
+            401: {"model": ApiError}, 403: {"model": ApiError}, 409: {"model": ApiError},
+            422: {"model": ApiError}, 503: {"model": ApiError},
+        },
+    )
+    def create_dataset_run(
+        payload: DatasetRunCreate, user: Annotated[UserInfo, Depends(require_user)],
+    ) -> RunState | JSONResponse:
+        # Dataset runs share the durable run lifecycle; read/Stop use the style run routes.
         try:
             return experiments.store.create(user.id, payload)
         except RunConflict as exception:
