@@ -6,6 +6,8 @@ Use for exact weight previews, batch creation/observation/Stop, reattachment or
 saved comparisons. Experiments are server-owned durable runs. Browser close,
 refresh, logout and connection failure detach observation, not server work.
 See backend/durable-experiment-contract.md for the owning API/schema contract.
+Dataset runs reuse StyleRunStore (`startDataset`, `kind`) and every rule
+below; see backend/dataset-run-contract.md.
 
 Whole-line per-tag comments and raw/effective projections follow
 [Individual Hidden Tags](../backend/prompt-comments-contract.md). Syntax is opt-in per frozen request;

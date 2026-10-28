@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
+import { Suspense, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { observer } from 'mobx-react-lite'
 import {
   ArrowLeft, ArrowRight, Check, ChevronDown, ChevronUp,
-  FlaskConical, History, Image as ImageIcon, LogOut, RefreshCw, Search, Send, Settings2,
+  Download, FlaskConical, History, Image as ImageIcon, Layers, LogOut, RefreshCw, Search, Send, Settings2,
   Sparkles, Tags, Trash2, WandSparkles, X,
 } from 'lucide-react'
 import { ApiFailure, errorText } from './api'
@@ -13,6 +13,7 @@ import { effectiveCharacterPrompt, promptTextTargetKey, type PromptTextTarget } 
 import { SectionAssistantButton, SectionAssistantPopover, type AssistantOpening } from './SectionAssistant'
 import { PromptEditor } from './PromptEditor'
 import { StyleExperimentConfig, StyleExperimentProgress } from './StyleExperiment'
+import { DatasetExportPanel, DatasetRunConfig } from './dataset-lazy'
 import { PromptSummary } from './PromptSummary'
 import { GenerationParameters } from './GenerationParameters'
 import { SavedExperimentList, SavedResultViewer } from './SavedResults'
@@ -93,6 +94,9 @@ function NumericField({ label, name, value, onChange, min, max, step = 1, placeh
 const Editor = observer(({ store, active }: { store: AppStore; active: boolean }) => {
   const [panel, setPanel] = useState<PromptPanel>('positive')
   const [experimentOpen, setExperimentOpen] = useState(false)
+  const [datasetOpen, setDatasetOpen] = useState(false)
+  // Keep the lazy panel mounted after first use so collapsing never discards edited selections.
+  const [datasetLoaded, setDatasetLoaded] = useState(false)
   const [assistant, setAssistant] = useState<AssistantOpening | null>(null)
   const assistantSequence = useRef(0)
   const generation = store.generation
@@ -135,11 +139,15 @@ const Editor = observer(({ store, active }: { store: AppStore; active: boolean }
           <div className="field prompt-field"><div className="style-prompt-heading"><label htmlFor="style-prompt">画风</label>
             <div className="prompt-heading-actions"><SectionAssistantButton target={{ scope: 'style' }} label="画风" activeTarget={assistantValid ? assistant?.target ?? null : null} onOpen={openAssistant} />
             <button className="text-action" type="button" aria-expanded={experimentOpen} aria-controls="style-experiment-config"
-              onClick={() => setExperimentOpen(!experimentOpen)}><FlaskConical size={14} aria-hidden="true" /> 画风实验</button></div></div>
+              onClick={() => setExperimentOpen(!experimentOpen)}><FlaskConical size={14} aria-hidden="true" /> 画风实验</button>
+            <button className="text-action" type="button" aria-expanded={datasetOpen} aria-controls="dataset-run-config"
+              onClick={() => { setDatasetLoaded(true); setDatasetOpen(!datasetOpen) }}><Layers size={14} aria-hidden="true" /> 训练集批跑</button></div></div>
             <PromptEditor id="style-prompt" label="画风" value={draft.style_prompt} rows={2} placeholder="画风、媒介与画质标签"
               onFocus={() => generation.setPositiveTagTarget('style_prompt')}
               onChange={value => generation.setField('style_prompt', value)} />
-            <StyleExperimentConfig generation={generation} hidden={!experimentOpen} /></div>
+            <StyleExperimentConfig generation={generation} hidden={!experimentOpen} />
+            {datasetLoaded && <Suspense fallback={<p className="subtle" role="status">正在加载训练集提示词库...</p>}>
+              <DatasetRunConfig generation={generation} hidden={!datasetOpen} /></Suspense>}</div>
           <PromptSectionsEditor store={store} assistantTarget={assistantValid ? assistant?.target ?? null : null} onAssistant={openAssistant} />
         </div>
         <div className="prompt-panel" id="prompt-panel-negative" role="tabpanel" aria-labelledby="prompt-tab-negative" hidden={panel !== 'negative'}>
@@ -413,20 +421,44 @@ const HistoryPanel = observer(({ store, onView, onReuse, onResume, mode, onModeC
 }) => {
   const history = store.history
   const activeExperimentId = store.styleRuns.running ? store.styleRuns.run?.id : null
+  const [selecting, setSelecting] = useState(false)
+  const [selected, setSelected] = useState<readonly string[]>([])
+  const [exporting, setExporting] = useState(false)
+
+  function toggleSelected(id: string, value: boolean) {
+    setSelected(current => value ? [...current.filter(item => item !== id), id] : current.filter(item => item !== id))
+  }
+
+  function endSelection() {
+    setSelecting(false)
+    setExporting(false)
+    setSelected([])
+  }
+
   return <div className="tool-content">
     <div className="history-mode" aria-label="历史记录分类">
       <button className={mode === 'generations' ? 'active' : ''} type="button" aria-pressed={mode === 'generations'} onClick={() => onModeChange('generations')}>生成记录</button>
-      <button className={mode === 'experiments' ? 'active' : ''} type="button" aria-pressed={mode === 'experiments'} onClick={() => onModeChange('experiments')}>画风实验</button>
+      <button className={mode === 'experiments' ? 'active' : ''} type="button" aria-pressed={mode === 'experiments'} onClick={() => onModeChange('experiments')}>实验与训练集</button>
     </div>
     <div className="history-tab-content" hidden={mode !== 'generations'}>
     <div className="history-toolbar"><span>已保存的生成记录</span>
       <button type="button" className="icon-button" title="刷新历史" aria-label="刷新历史"
         onClick={() => void history.load()} disabled={history.loading || history.deletingId !== null}><RefreshCw size={17} /></button></div>
     <p className="prompt-hint">新图片私有保存 7 天，可查看和下载；已过期图片仍保留参数。删除记录也会删除它保存的图片。</p>
+    <div className="history-selection">
+      {selecting ? <>
+        <span>已选 {selected.length} 条（可跨页）</span>
+        <button className="text-action" type="button" disabled={!selected.length || exporting} onClick={() => setExporting(true)}><Download size={15} aria-hidden="true" /> 导出训练集</button>
+        <button className="text-action" type="button" onClick={endSelection}>取消选择</button>
+      </> : <button className="text-action" type="button" onClick={() => setSelecting(true)}><Layers size={15} aria-hidden="true" /> 选择图片导出训练集</button>}
+    </div>
+    {selecting && exporting && <Suspense fallback={null}><DatasetExportPanel key={selected.join(',')} api={store.api} source={{ kind: 'selection', ids: selected }} onClose={() => setExporting(false)} /></Suspense>}
     <Alert text={history.error} />
     {history.loading && <p className="subtle" role="status">正在加载历史...</p>}
     {!history.loading && !history.error && history.items.length === 0 && <p className="subtle">暂无历史记录</p>}
     <div className="history-list">{history.items.map(item => <article className="history-item" key={item.id}>
+      {selecting && item.status === 'succeeded' && <label className="history-select"><input type="checkbox" checked={selected.includes(item.id)} disabled={exporting}
+        onChange={event => toggleSelected(item.id, event.target.checked)} /> 选入训练集</label>}
       <div className="history-top"><time dateTime={new Date(item.created_at * 1000).toISOString()}>{new Date(item.created_at * 1000).toLocaleString()}</time><span className={`status status-${item.status}`}>{statusText(item.status)}</span></div>
       <PromptSummary parameters={item.parameters} />
       {item.parameters.negative_prompt && <p className="history-negative">排除：{item.parameters.negative_prompt}</p>}
@@ -453,7 +485,7 @@ const HistoryPanel = observer(({ store, onView, onReuse, onResume, mode, onModeC
         onClick={() => { if (history.nextOffset !== null) void history.load(history.nextOffset) }}><ArrowRight size={18} /></button>
     </div>
     </div>
-    <div className="history-tab-content" hidden={mode !== 'experiments'}><SavedExperimentList saved={store.savedResults} onView={onView} /></div>
+    <div className="history-tab-content" hidden={mode !== 'experiments'}><SavedExperimentList saved={store.savedResults} api={store.api} onView={onView} /></div>
   </div>
 })
 

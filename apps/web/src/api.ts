@@ -25,10 +25,18 @@ export interface ExperimentWeight {
   weight: string
 }
 
+export interface DatasetItem {
+  id: string
+  prompt: string
+}
+
 export interface ExperimentContext {
   id: string
   ordinal: string
   total: string
+  /** Absent for style weight groups; dataset groups carry one item and no weights. */
+  kind?: 'dataset'
+  item?: DatasetItem
   weights: ExperimentWeight[]
 }
 
@@ -76,8 +84,11 @@ export interface HistoryPage {
   next_offset: number | null
 }
 
+export type ExperimentKind = 'style' | 'dataset'
+
 export interface ExperimentSummary {
   id: string
+  kind?: ExperimentKind
   total: string
   group_count: number
   completed_count: number
@@ -106,8 +117,10 @@ export interface ExperimentRunRange {
 
 export interface ExperimentRunDefinition {
   id: string
+  kind?: ExperimentKind
   parameters: GenerationRequest
   ranges: ExperimentRunRange[]
+  items?: DatasetItem[]
 }
 
 export interface ExperimentRunState extends ExperimentRunDefinition {
@@ -185,8 +198,12 @@ function checkedRun(value: ExperimentRunState): ExperimentRunState {
     && Array.isArray(parameters.character_prompts) && parameters.character_prompts.every(character => character && typeof character.prompt === 'string'
       && (character.x === undefined || Number.isFinite(character.x)) && (character.y === undefined || Number.isFinite(character.y)))
     && validRequestSections(parameters)
-    && Array.isArray(value.ranges) && value.ranges.length > 0 && value.ranges.every(range => range && Number.isInteger(range.tag_index)
+    && (value.kind === undefined || value.kind === 'style' || value.kind === 'dataset')
+    && Array.isArray(value.ranges) && (value.kind === 'dataset' ? value.ranges.length === 0 : value.ranges.length > 0)
+    && value.ranges.every(range => range && Number.isInteger(range.tag_index)
       && typeof range.min === 'string' && typeof range.max === 'string' && typeof range.step === 'string')
+    && (value.kind !== 'dataset' || (Array.isArray(value.items) && value.items.length > 0
+      && value.items.every(item => item && typeof item.id === 'string' && typeof item.prompt === 'string')))
   if (!valid) throw new ApiFailure(0, 'invalid_response', '实验响应无效，请重新连接核对。')
   return value
 }
@@ -228,7 +245,7 @@ export function errorText(error: unknown): string {
       result_storage_unavailable: '图片保存空间暂不可用，本次未提交生成，请稍后再试或联系管理员。',
       result_storage_error: '图片保存失败，请检查历史记录；请勿自动重新生成。',
       experiment_conflict: '这组画风实验已经提交或实验信息不一致，请先检查历史记录。',
-      experiment_run_active: '已有进行中的画风实验，请查看其进度或手动停止。',
+      experiment_run_active: '已有进行中的画风实验或训练集批跑，请查看其进度或手动停止。',
       experiment_run_conflict: '实验编号已被其他定义使用，请检查已保存的实验。',
       prompt_snapshot_conflict: '此快照编号已用于其他内容，请关闭后重新保存。',
       experiment_run_unknown: '实验提交结果未知，请重新连接核对，不要重复开始。',
@@ -388,6 +405,13 @@ export class WorkspaceApi {
   async createExperimentRun(definition: ExperimentRunDefinition, signal?: AbortSignal): Promise<ExperimentRunState> {
     const run = checkedRun(await this.request<ExperimentRunState>('/api/style-experiment-runs', { method: 'POST', body: JSON.stringify(definition), signal }))
     if (run.id !== definition.id) throw new ApiFailure(0, 'invalid_response', '实验编号不匹配，请重新连接核对。')
+    return run
+  }
+
+  async createDatasetRun(definition: ExperimentRunDefinition, signal?: AbortSignal): Promise<ExperimentRunState> {
+    const body = { id: definition.id, parameters: definition.parameters, items: definition.items }
+    const run = checkedRun(await this.request<ExperimentRunState>('/api/dataset-runs', { method: 'POST', body: JSON.stringify(body), signal }))
+    if (run.id !== definition.id || run.kind !== 'dataset') throw new ApiFailure(0, 'invalid_response', '实验编号不匹配，请重新连接核对。')
     return run
   }
 

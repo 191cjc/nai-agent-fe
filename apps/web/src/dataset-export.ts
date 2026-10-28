@@ -1,0 +1,197 @@
+import { ApiFailure, type GenerationRequest, type GenerationView, type WorkspaceApi } from './api'
+import { sanitizedPng } from './png-export'
+import { compilePromptComments } from './prompt-weights'
+
+const MAX_ZIP_BYTES = 0xffff_ffff - 64 * 1024 * 1024
+
+let crcTable: Uint32Array | null = null
+
+function crc32(bytes: Uint8Array): number {
+  if (!crcTable) {
+    crcTable = new Uint32Array(256)
+    for (let index = 0; index < 256; index += 1) {
+      let value = index
+      for (let bit = 0; bit < 8; bit += 1) value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1
+      crcTable[index] = value >>> 0
+    }
+  }
+  let crc = 0xffffffff
+  for (const byte of bytes) crc = crcTable[(crc ^ byte) & 0xff] ^ (crc >>> 8)
+  return (crc ^ 0xffffffff) >>> 0
+}
+
+/** Minimal uncompressed (STORE) zip; PNGs are already compressed. */
+class ZipWriter {
+  private parts: BlobPart[] = []
+  private central: Uint8Array[] = []
+  private offset = 0
+  private count = 0
+
+  add(name: string, data: Uint8Array): void {
+    const encodedName = new TextEncoder().encode(name)
+    if (this.offset + data.length + encodedName.length + 30 > MAX_ZIP_BYTES || this.count >= 0xffff) {
+      throw new Error('训练集过大，超过单个 zip 的上限；请减少条目或分批导出。')
+    }
+    const crc = crc32(data)
+    const local = new DataView(new ArrayBuffer(30))
+    local.setUint32(0, 0x04034b50, true)
+    local.setUint16(4, 20, true)
+    local.setUint16(6, 0x0800, true)
+    local.setUint16(8, 0, true)
+    local.setUint16(10, 0, true)
+    local.setUint16(12, 0x21, true)
+    local.setUint32(14, crc, true)
+    local.setUint32(18, data.length, true)
+    local.setUint32(22, data.length, true)
+    local.setUint16(26, encodedName.length, true)
+    local.setUint16(28, 0, true)
+    const header = new DataView(new ArrayBuffer(46))
+    header.setUint32(0, 0x02014b50, true)
+    header.setUint16(4, 20, true)
+    header.setUint16(6, 20, true)
+    header.setUint16(8, 0x0800, true)
+    header.setUint16(10, 0, true)
+    header.setUint16(12, 0, true)
+    header.setUint16(14, 0x21, true)
+    header.setUint32(16, crc, true)
+    header.setUint32(20, data.length, true)
+    header.setUint32(24, data.length, true)
+    header.setUint16(28, encodedName.length, true)
+    header.setUint32(42, this.offset, true)
+    const centralEntry = new Uint8Array(46 + encodedName.length)
+    centralEntry.set(new Uint8Array(header.buffer), 0)
+    centralEntry.set(encodedName, 46)
+    this.parts.push(local.buffer, encodedName, data)
+    this.central.push(centralEntry)
+    this.offset += 30 + encodedName.length + data.length
+    this.count += 1
+  }
+
+  finish(): Blob {
+    const size = this.central.reduce((total, entry) => total + entry.length, 0)
+    const end = new DataView(new ArrayBuffer(22))
+    end.setUint32(0, 0x06054b50, true)
+    end.setUint16(8, this.count, true)
+    end.setUint16(10, this.count, true)
+    end.setUint32(12, size, true)
+    end.setUint32(16, this.offset, true)
+    return new Blob([...this.parts, ...this.central, end.buffer], { type: 'application/zip' })
+  }
+}
+
+/** Remove NovelAI emphasis syntax and normalize tag separators for training captions. */
+function captionTags(text: string): string[] {
+  return text
+    .replace(/(^|[\s,([{])[+-]?(?:\d+(?:\.\d+)?|\.\d+)::/g, '$1')
+    .replace(/::/g, '')
+    .replace(/[{}[\]]/g, '')
+    .split(/[,\r\n]+/)
+    .map(tag => tag.trim())
+    .filter(Boolean)
+}
+
+/** Content-only caption: the exact dataset item, or effective shared + character prompts. Never style. */
+export function datasetCaption(parameters: GenerationRequest, trigger: string): string {
+  const item = parameters.experiment?.kind === 'dataset' ? parameters.experiment.item : undefined
+  const compile = parameters.prompt_comments === true && !parameters.prompt_sections
+  const sources = item ? [item.prompt] : [
+    compile ? compilePromptComments(parameters.positive_prompt) : parameters.positive_prompt,
+    ...parameters.character_prompts.map(character => compile ? compilePromptComments(character.prompt) : character.prompt),
+  ]
+  const tags = sources.flatMap(captionTags)
+  const triggerTag = trigger.trim()
+  const unique = [...new Set(triggerTag ? [triggerTag, ...tags.filter(tag => tag !== triggerTag)] : tags)]
+  return unique.join(', ')
+}
+
+export interface DatasetExportProgress {
+  processedJobs: number
+  totalJobs: number
+  written: number
+  skipped: number
+}
+
+export interface DatasetExportResult {
+  blob: Blob | null
+  written: number
+  skipped: number
+}
+
+function aborted(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError'
+}
+
+/** Read each retained image once, sequentially, through the clean export path. Never generates. */
+export async function buildDatasetZip(
+  api: WorkspaceApi, jobs: readonly GenerationView[], trigger: string, signal: AbortSignal,
+  onProgress: (progress: DatasetExportProgress) => void,
+): Promise<DatasetExportResult> {
+  const zip = new ZipWriter()
+  const encoder = new TextEncoder()
+  let written = 0
+  let skipped = 0
+  for (const [jobIndex, job] of jobs.entries()) {
+    if (signal.aborted) throw new DOMException('Export cancelled.', 'AbortError')
+    if (job.status !== 'succeeded' || !job.image_urls.length) skipped += Math.max(1, job.parameters.sample_count)
+    else {
+      const caption = encoder.encode(datasetCaption(job.parameters, trigger) + '\n')
+      for (const path of job.image_urls) {
+        let png: Uint8Array
+        try {
+          const source = await api.image(path, signal)
+          const url = URL.createObjectURL(source)
+          try {
+            png = new Uint8Array(await (await sanitizedPng(url, signal)).arrayBuffer())
+          } finally {
+            URL.revokeObjectURL(url)
+          }
+        } catch (error) {
+          if (aborted(error) || (error instanceof ApiFailure && error.status === 401)) throw error
+          skipped += 1
+          continue
+        }
+        const name = String(written + 1).padStart(4, '0')
+        zip.add(`${name}.png`, png)
+        zip.add(`${name}.txt`, caption)
+        written += 1
+      }
+    }
+    onProgress({ processedJobs: jobIndex + 1, totalJobs: jobs.length, written, skipped })
+  }
+  return { blob: written ? zip.finish() : null, written, skipped }
+}
+
+/** Page through one saved experiment's groups (metadata only; images are read later). */
+export async function experimentJobs(api: WorkspaceApi, experimentId: string, signal: AbortSignal): Promise<GenerationView[]> {
+  const jobs: GenerationView[] = []
+  let offset: number | null = 0
+  while (offset !== null) {
+    const page = await api.experiment(experimentId, offset, 100, signal)
+    jobs.push(...page.items)
+    offset = page.next_offset
+  }
+  return jobs
+}
+
+export async function selectedJobs(api: WorkspaceApi, ids: readonly string[], signal: AbortSignal): Promise<GenerationView[]> {
+  const jobs: GenerationView[] = []
+  for (const id of ids) {
+    if (signal.aborted) throw new DOMException('Export cancelled.', 'AbortError')
+    jobs.push(await api.generation(id, signal))
+  }
+  return jobs
+}
+
+export function downloadZip(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  try {
+    link.href = url
+    link.download = filename
+    document.body.append(link)
+    link.click()
+  } finally {
+    link.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  }
+}

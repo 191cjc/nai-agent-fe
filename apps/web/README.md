@@ -31,3 +31,12 @@ or refreshing the page and logging out detach the UI without stopping the run.
 Login/reentry reconnects to the same active run; progress shows successes,
 failures and the fixed effective seed. Historical comparisons load one image
 at a time and never resubmit generation. No automatic retry of a failed group.
+
+Training-set runs (训练集批跑) apply the current style section to a selected
+set of built-in, content-only prompts as one durable server run. Each item is
+one **paid** generation with seed base + N − 1; Stop, failure continuation and
+reattachment work as for style experiments, and only one run of either kind
+may be active. Saved dataset runs and selected history images can be exported
+as a zip of clean PNGs plus content-only captions (optional trigger word),
+read from retained images only within the seven-day retention window. See
+`../../.trellis/spec/backend/dataset-run-contract.md`.

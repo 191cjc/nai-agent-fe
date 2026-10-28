@@ -40,6 +40,9 @@ and review how the web app consumes the change.
   runs; GET `/active`, GET `/{id}` and POST `/{id}/stop` are owner scoped.
   See [Durable Experiments](./durable-experiment-contract.md) for exact shapes,
   idempotency, failure continuation and migration3.
+- `POST /api/dataset-runs` creates a fixed-style dataset run of the same
+  durable kind; reads/Stop use the style run routes. See
+  [Dataset Runs and Export](./dataset-run-contract.md).
 - `POST /api/advice` has a typed suggestion response. A default runner is
   wired only when `NAI_CODEX_API_KEY` is configured. Optional endpoint/model
   settings remain backend-only and do not change the browser schema; see

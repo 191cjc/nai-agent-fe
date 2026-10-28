@@ -1,6 +1,6 @@
 import { makeAutoObservable, runInAction } from 'mobx'
 import { copyPromptMetadata } from './prompt-sections'
-import { ApiFailure, errorText, type ExperimentRunDefinition, type ExperimentRunRange, type ExperimentRunState, type GenerationRequest, WorkspaceApi } from './api'
+import { ApiFailure, errorText, type DatasetItem, type ExperimentRunDefinition, type ExperimentRunRange, type ExperimentRunState, type GenerationRequest, WorkspaceApi } from './api'
 
 /** Observes one server-owned run. Detaching never sends a stop request. */
 export class StyleRunStore {
@@ -27,6 +27,10 @@ export class StyleRunStore {
 
   get running(): boolean {
     return this.run?.status === 'running' || this.run?.status === 'stopping'
+  }
+
+  get kind(): 'style' | 'dataset' {
+    return (this.definition ?? this.run)?.kind ?? 'style'
   }
 
   get locked(): boolean {
@@ -106,20 +110,40 @@ export class StyleRunStore {
     }
   }
 
+  private newRunId(): string | null {
+    try { return crypto.randomUUID() } catch {
+      this.error = '浏览器无法创建实验编号，请通过 HTTPS 使用支持的浏览器。'
+      return null
+    }
+  }
+
+  private static frozenParameters(parameters: GenerationRequest): GenerationRequest {
+    return {
+      ...parameters, character_prompts: parameters.character_prompts.map(character => ({ ...character })),
+      ...(parameters.prompt_sections ? { prompt_sections: copyPromptMetadata(parameters.prompt_sections) } : {}),
+    }
+  }
+
   async start(parameters: GenerationRequest, ranges: ExperimentRunRange[]): Promise<void> {
     if (this.locked || !this.observing) return
-    let id: string
-    try { id = crypto.randomUUID() } catch {
-      this.error = '浏览器无法创建实验编号，请通过 HTTPS 使用支持的浏览器。'
-      return
-    }
-    const definition: ExperimentRunDefinition = {
-      id, parameters: {
-        ...parameters, character_prompts: parameters.character_prompts.map(character => ({ ...character })),
-        ...(parameters.prompt_sections ? { prompt_sections: copyPromptMetadata(parameters.prompt_sections) } : {}),
-      },
-      ranges: ranges.map(range => ({ ...range })),
-    }
+    const id = this.newRunId()
+    if (!id) return
+    await this.create({ id, parameters: StyleRunStore.frozenParameters(parameters), ranges: ranges.map(range => ({ ...range })) })
+  }
+
+  /** Fixed-style dataset run: same single POST, reconciliation and Stop safeguards. */
+  async startDataset(parameters: GenerationRequest, items: DatasetItem[]): Promise<void> {
+    if (this.locked || !this.observing) return
+    const id = this.newRunId()
+    if (!id) return
+    await this.create({
+      id, kind: 'dataset', parameters: StyleRunStore.frozenParameters(parameters), ranges: [],
+      items: items.map(item => ({ ...item })),
+    })
+  }
+
+  private async create(definition: ExperimentRunDefinition): Promise<void> {
+    const id = definition.id
     const { epoch, version, controller } = this.beginRequest()
     this.definition = definition
     this.pendingId = id
@@ -132,7 +156,9 @@ export class StyleRunStore {
     let reconcile = false
     let findActive = false
     try {
-      const run = await this.api.createExperimentRun(definition, controller.signal)
+      const run = definition.kind === 'dataset'
+        ? await this.api.createDatasetRun(definition, controller.signal)
+        : await this.api.createExperimentRun(definition, controller.signal)
       if (!this.isCurrent(epoch, version)) return
       runInAction(() => { this.accept(run) })
     } catch (error) {

@@ -343,6 +343,26 @@ h1, h2, h3 { letter-spacing: 0; }
 .experiment-range legend { margin: 0; padding: 0 5px; }
 .experiment-range-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .experiment-range-fields .field { gap: 5px; font-size: 11px; }
+.dataset-style-preview { display: grid; gap: 4px; min-width: 0; color: #d4c7df; font-size: 11px; font-weight: 650; }
+.dataset-style-preview p { margin: 0; padding: 7px 9px; border: 1px solid #44414c; border-radius: 4px; background: #25252e; color: #e8e4ee; font-weight: 400; overflow-wrap: anywhere; white-space: pre-wrap; }
+.dataset-categories { display: grid; gap: 6px; min-inline-size: 0; margin: 0; padding: 0; border: 0; }
+.dataset-categories legend { margin-bottom: 7px; padding: 0; color: #d4c7df; font-size: 11px; font-weight: 650; }
+.dataset-category { min-width: 0; border: 1px solid #44414c; border-radius: 4px; background: #25252e; }
+.dataset-category summary { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 9px; padding: 7px 9px; cursor: pointer; font-size: 12px; }
+.dataset-category summary span { color: var(--muted); font-size: 11px; }
+.dataset-category input[type="checkbox"], .dataset-items input[type="checkbox"], .history-select input { width: 15px; height: 15px; margin: 0; accent-color: var(--gold); }
+.dataset-items { display: grid; gap: 4px; max-height: 280px; margin: 0; padding: 0 9px 9px; overflow-y: auto; list-style: none; }
+.dataset-items li { display: grid; grid-template-columns: 15px minmax(0, 1fr) auto; align-items: center; gap: 7px; }
+.dataset-items li.muted input[type="text"] { color: var(--muted); }
+.dataset-items input[type="text"], .dataset-custom input { min-width: 0; padding: 5px 7px; font-size: 12px; }
+.dataset-custom { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+.dataset-custom input { flex: 1 1 220px; }
+.dataset-run-items { max-height: 220px; margin: 4px 0 0; padding-left: 22px; overflow-y: auto; }
+.dataset-item-prompt { margin: 0; color: #e8e4ee; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.dataset-export { display: grid; gap: 8px; min-width: 0; margin-top: 8px; padding: 10px; border: 1px solid #5a5144; border-radius: 4px; background: #292831; font-size: 12px; }
+.dataset-export p { margin: 0; }
+.history-selection { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 0 0 8px; font-size: 12px; }
+.history-select { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 5px; color: var(--gold); font-size: 12px; }
 .experiment-range-fields input { padding: 7px 8px; font-variant-numeric: tabular-nums; }
 .experiment-preview { min-width: 0; padding: 11px; border-radius: 4px; background: #1e2529; color: #c5d7d0; font-size: 12px; line-height: 1.5; }
 .experiment-preview ul { display: grid; gap: 5px; margin: 0 0 9px; padding: 0; list-style: none; }

@@ -1,0 +1,9 @@
+{"file": ".trellis/spec/backend/durable-experiment-contract.md", "reason": "spec for dataset runs"}
+{"file": ".trellis/spec/backend/api-contract.md", "reason": "spec for dataset runs"}
+{"file": ".trellis/spec/backend/prompt-sections-contract.md", "reason": "spec for dataset runs"}
+{"file": ".trellis/spec/backend/prompt-comments-contract.md", "reason": "spec for dataset runs"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "spec for dataset runs"}
+{"file": ".trellis/spec/frontend/style-experiment-contract.md", "reason": "spec for dataset runs"}
+{"file": ".trellis/spec/frontend/viewer-cache-contract.md", "reason": "spec for dataset runs"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "spec for dataset runs"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "spec for dataset runs"}

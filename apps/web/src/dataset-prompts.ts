@@ -1,0 +1,172 @@
+/**
+ * Built-in content prompts for style-LoRA training sets. Prompts describe only
+ * subject, framing, pose, setting and lighting; never artist, medium or quality
+ * tags, so captions stay content-only and the trained LoRA absorbs the style.
+ */
+
+export interface DatasetCategory {
+  id: string
+  label: string
+  description: string
+}
+
+export interface DatasetPrompt {
+  id: string
+  category: string
+  prompt: string
+}
+
+export const DATASET_CATEGORIES: readonly DatasetCategory[] = [
+  { id: 'portrait', label: '特写与表情', description: '脸部和肩部以上，覆盖多种表情与角度' },
+  { id: 'upper', label: '半身日常', description: '上半身构图，日常动作与服装' },
+  { id: 'full', label: '全身与动作', description: '全身构图，站坐跑跳等姿势' },
+  { id: 'scene', label: '人物与场景', description: '人物较小、环境占比大的远景' },
+  { id: 'light', label: '光照与时段', description: '逆光、夜景、室内暖光等光照条件' },
+  { id: 'multi', label: '多人互动', description: '两人及以上的构图与互动' },
+  { id: 'nohuman', label: '无人物', description: '风景、建筑、静物与动物' },
+]
+
+const PROMPTS: Record<string, readonly string[]> = {
+  portrait: [
+    '1girl, solo, portrait, looking at viewer, smile, long hair, black hair, simple background',
+    '1girl, solo, close-up, face, closed eyes, peaceful, short hair, blonde hair',
+    '1boy, solo, portrait, looking at viewer, serious, short hair, brown hair, white background',
+    '1girl, solo, portrait, from side, profile, ponytail, earrings, looking away',
+    '1girl, solo, close-up, open mouth, laughing, twintails, pink hair, hair ribbon',
+    '1boy, solo, portrait, smirk, glasses, black hair, looking at viewer, gradient background',
+    '1girl, solo, portrait, crying, tears, sad, blue eyes, wavy hair',
+    '1girl, solo, portrait, blush, embarrassed, hand on own cheek, bob cut',
+    '1boy, solo, close-up, angry, clenched teeth, spiky hair, red eyes',
+    '1girl, solo, portrait, from below, looking down, long hair, silver hair, hair flower',
+    '1girl, solo, portrait, from above, looking up, surprised, short hair, green eyes',
+    '1boy, solo, portrait, gentle smile, looking at viewer, white shirt, collared shirt',
+    '1girl, solo, portrait, wink, tongue out, peace sign, side ponytail',
+    '1girl, solo, close-up, half-closed eyes, sleepy, messy hair, pajamas',
+    '1boy, solo, portrait, from side, profile, scarf, cold, breath, winter',
+    '1girl, solo, portrait, hat, sun hat, smile, looking at viewer, outdoors',
+    '1girl, solo, portrait, hand on own chin, thinking, glasses, braid',
+    '1boy, solo, portrait, scar on face, eyepatch, determined, looking at viewer',
+    '1girl, solo, portrait, three-quarter view, looking back, long hair, hair over shoulder',
+    '1girl, solo, close-up, covering mouth, giggling, animal ears, cat ears',
+  ],
+  upper: [
+    '1girl, solo, upper body, school uniform, serafuku, holding book, classroom',
+    '1girl, solo, upper body, drinking, holding cup, coffee, cafe, sitting',
+    '1boy, solo, upper body, suit, necktie, adjusting necktie, office',
+    '1girl, solo, upper body, waving, smile, hoodie, street',
+    '1girl, solo, upper body, arms up, stretching, tank top, bedroom, morning',
+    '1boy, solo, upper body, holding sword, armor, cape, serious',
+    '1girl, solo, upper body, maid, maid headdress, holding tray, indoors',
+    '1girl, solo, upper body, holding umbrella, rain, raincoat, looking up',
+    '1boy, solo, upper body, headphones, listening to music, closed eyes, jacket',
+    '1girl, solo, upper body, kimono, holding fan, japanese clothes, smile',
+    '1girl, solo, upper body, eating, holding food, ice cream, summer',
+    '1boy, solo, upper body, apron, cooking, kitchen, holding ladle',
+    '1girl, solo, upper body, writing, holding pen, desk, notebook',
+    '1girl, solo, upper body, arms crossed, pout, jacket, looking at viewer',
+    '1boy, solo, upper body, reading, holding book, library, bookshelf',
+    '1girl, solo, upper body, holding phone, looking at phone, sweater, sitting',
+    '1girl, solo, upper body, hands on own hips, confident, military uniform',
+    '1boy, solo, upper body, hand in pocket, coat, looking to the side, city',
+    '1girl, solo, upper body, flower crown, holding flower, white dress',
+    '1girl, solo, upper body, witch hat, holding staff, cloak, magic',
+  ],
+  full: [
+    '1girl, solo, full body, standing, school uniform, pleated skirt, loafers, simple background',
+    '1boy, solo, full body, standing, casual, jeans, sneakers, hands in pockets',
+    '1girl, solo, full body, running, motion lines, sportswear, track',
+    '1girl, solo, full body, sitting, crossed legs, chair, dress, indoors',
+    '1boy, solo, full body, jumping, midair, basketball, outdoors',
+    '1girl, solo, full body, dancing, spinning, flowing skirt, smile',
+    '1girl, solo, full body, kneeling, praying, nun, church',
+    '1boy, solo, full body, fighting stance, martial arts, barefoot, dojo',
+    '1girl, solo, full body, lying, on back, grass, closed eyes, relaxing',
+    '1girl, solo, full body, squatting, petting cat, street, sneakers',
+    '1boy, solo, full body, walking, from behind, backpack, road',
+    '1girl, solo, full body, standing on one leg, arms out, balancing, wall',
+    '1girl, solo, full body, sitting, on floor, hugging own knees, bedroom',
+    '1boy, solo, full body, leaning against wall, arms crossed, alley',
+    '1girl, solo, full body, swimsuit, beach, standing, ocean',
+    '1girl, solo, full body, armor, holding shield, holding sword, battle stance',
+    '1boy, solo, full body, sitting, stairs, holding drink, evening',
+    '1girl, solo, full body, ballet, ballerina, tiptoes, stage',
+    '1girl, solo, full body, riding bicycle, countryside, summer',
+    '1boy, solo, full body, climbing, rock wall, rope, determined',
+  ],
+  scene: [
+    '1girl, solo, wide shot, standing, field, flowers, blue sky, clouds, wind',
+    '1boy, solo, wide shot, from behind, cliff, looking afar, mountains',
+    '1girl, solo, wide shot, sitting, bench, park, autumn, falling leaves',
+    '1girl, solo, wide shot, walking, city street, crowd, buildings, crosswalk',
+    '1boy, solo, wide shot, train station, platform, waiting, train',
+    '1girl, solo, wide shot, library, tall bookshelves, ladder, reading',
+    '1girl, solo, wide shot, forest, path, trees, sunlight filtering through trees',
+    '1boy, solo, wide shot, rooftop, fence, city skyline, sitting',
+    '1girl, solo, wide shot, snow, snowing, winter coat, footprints',
+    '1girl, solo, wide shot, beach, waves, barefoot, holding sandals',
+    '1boy, solo, wide shot, desert, walking, cloak, sand dunes',
+    '1girl, solo, wide shot, shrine, torii, stone stairs, kimono',
+    '1girl, solo, wide shot, greenhouse, plants, watering can',
+    '1boy, solo, wide shot, harbor, boats, pier, seagulls',
+    '1girl, solo, wide shot, castle, fantasy, courtyard, dress',
+    '1girl, solo, wide shot, underwater, bubbles, fish, floating',
+    '1boy, solo, wide shot, cyberpunk, neon lights, street, rain',
+    '1girl, solo, wide shot, cafe interior, window seat, plants, sitting',
+    '1girl, solo, wide shot, festival, food stall, lanterns, yukata',
+    '1boy, solo, wide shot, ruins, overgrown, moss, exploring',
+  ],
+  light: [
+    '1girl, solo, upper body, backlighting, sunset, orange sky, silhouette, wind',
+    '1girl, solo, cowboy shot, night, city lights, bokeh, coat',
+    '1boy, solo, upper body, campfire, night, warm light, sitting',
+    '1girl, solo, portrait, window, sunlight, light rays, curtains, indoors',
+    '1girl, solo, full body, moonlight, night sky, stars, field',
+    '1boy, solo, upper body, rim light, dark background, dramatic lighting',
+    '1girl, solo, cowboy shot, neon lights, purple lighting, night, street',
+    '1girl, solo, upper body, candlelight, dark room, holding candle',
+    '1boy, solo, full body, morning, sunrise, mist, lake',
+    '1girl, solo, portrait, dappled sunlight, leaves, shade, summer',
+    '1girl, solo, cowboy shot, overcast, rain, wet hair, gray sky',
+    '1boy, solo, upper body, screen light, dark room, computer, night',
+    '1girl, solo, full body, blue hour, twilight, street lamp',
+    '1girl, solo, upper body, fireworks, night, yukata, looking up',
+    '1boy, solo, cowboy shot, spotlight, stage, dark background, microphone',
+  ],
+  multi: [
+    '2girls, upper body, friends, smile, looking at viewer, school uniform',
+    '1girl, 1boy, full body, walking together, street, holding hands, evening',
+    '2boys, upper body, back-to-back, arms crossed, serious',
+    '2girls, sitting, bench, park, talking, eating, sandwich',
+    '1girl, 1boy, upper body, umbrella, sharing umbrella, rain',
+    '3girls, group, full body, standing, smile, casual clothes, outdoors',
+    '2boys, full body, fighting, sword clash, sparks, dynamic pose',
+    '2girls, full body, dancing together, holding hands, stage',
+    '1girl, 1boy, sitting, table, cafe, drinks, conversation',
+    'multiple girls, multiple boys, classroom, desks, students, wide shot',
+    '2girls, portrait, cheek-to-cheek, selfie, peace sign',
+    '1girl, 1boy, full body, piggyback, laughing, beach',
+    '2boys, upper body, playing video games, controller, sofa, indoors',
+    '2girls, full body, running, chasing, flowers, field',
+    '1girl, 1boy, upper body, looking at each other, blush, sunset',
+  ],
+  nohuman: [
+    'no humans, scenery, mountains, lake, reflection, clouds, sky',
+    'no humans, scenery, city, skyscrapers, night, lights',
+    'no humans, scenery, forest, river, rocks, moss',
+    'no humans, scenery, ocean, waves, lighthouse, cliff',
+    'no humans, indoors, bedroom, bed, window, plants, desk',
+    'no humans, still life, fruit, basket, table, cloth',
+    'no humans, cat, sitting, windowsill, curtains',
+    'no humans, dog, running, grass, outdoors',
+    'no humans, scenery, japanese street, power lines, vending machine',
+    'no humans, scenery, snow, village, houses, winter',
+    'no humans, food, ramen, bowl, chopsticks, steam',
+    'no humans, flower, bouquet, vase, white background',
+    'no humans, scenery, castle, fantasy, waterfall, floating island',
+    'no humans, bird, branch, cherry blossoms, spring',
+    'no humans, scenery, train, railroad, countryside, field',
+  ],
+}
+
+export const DATASET_PROMPTS: readonly DatasetPrompt[] = DATASET_CATEGORIES.flatMap(category =>
+  (PROMPTS[category.id] ?? []).map((prompt, index) => ({ id: `${category.id}-${index + 1}`, category: category.id, prompt })))

@@ -25,6 +25,7 @@ templates and do not establish project conventions.
 | [Browser API Contract](./api-contract.md) | OpenAPI snapshot, status responses, and secret-free browser boundary | In use |
 | [Image-service Balance](./account-balance-contract.md) | Read-only normalized Anlas, cache/freshness and protected header lifecycle | In use |
 | [Durable Experiments](./durable-experiment-contract.md) | Server runs, failure continuation, Stop and restart recovery | In use |
+| [Dataset Runs and Export](./dataset-run-contract.md) | Fixed-style LoRA training runs, per-item seeds, content-only captions and zip export | In use |
 | [Private Image Retention](./image-retention-contract.md) | Seven-day private disk images, capacity admission and saved experiments | In use |
 | [Native Character Prompt Contract](./native-character-contract.md) | Structured style/shared/character prompts, native mapping and legacy history | In use |
 | [Individual Hidden Tags](../backend/prompt-comments-contract.md) | Whole-line comments, blur formatting, effective provider projection and frozen syntax compatibility | In use |

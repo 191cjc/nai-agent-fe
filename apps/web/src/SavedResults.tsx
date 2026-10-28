@@ -1,14 +1,16 @@
-import { useEffect, useRef } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { observer } from 'mobx-react-lite'
-import { ArrowLeft, ArrowRight, FlaskConical, Images, RefreshCw, X } from 'lucide-react'
-import { ApiFailure, errorText } from './api'
+import { ArrowLeft, ArrowRight, Download, FlaskConical, Images, Layers, RefreshCw, X } from 'lucide-react'
+import { ApiFailure, errorText, type WorkspaceApi } from './api'
+import { DatasetExportPanel } from './dataset-lazy'
 import { GenerationParameters } from './GenerationParameters'
 import type { SavedResultsStore } from './saved-results'
 import { ImageSaveButton, ImageSeedButton } from './ImageActions'
 
-export const SavedExperimentList = observer(({ saved, onView }: { saved: SavedResultsStore; onView: () => void }) => {
+export const SavedExperimentList = observer(({ saved, api, onView }: { saved: SavedResultsStore; api: WorkspaceApi; onView: () => void }) => {
+  const [exportingId, setExportingId] = useState<string | null>(null)
   return <div className="saved-experiment-list">
-    <div className="history-toolbar"><span>已保存的画风实验</span>
+    <div className="history-toolbar"><span>已保存的画风实验与训练集</span>
       <button type="button" className="icon-button" title="刷新已保存实验" aria-label="刷新已保存实验" disabled={saved.listLoading}
         onClick={() => void saved.loadExperiments()}><RefreshCw size={17} /></button>
     </div>
@@ -19,11 +21,21 @@ export const SavedExperimentList = observer(({ saved, onView }: { saved: SavedRe
     {saved.listLoaded && !saved.listLoading && !saved.listError && !saved.experiments.length && <p className="subtle">暂无已保存的画风实验</p>}
     <div className="history-list">{saved.experiments.map(experiment => <article className="history-item saved-experiment-item" key={experiment.id}>
       <time dateTime={new Date(experiment.created_at * 1000).toISOString()}>{new Date(experiment.created_at * 1000).toLocaleString()}</time>
-      <p>已提交 <strong>{experiment.group_count}</strong> / {experiment.total} 组</p>
-      <p className="history-meta">已结束 {experiment.completed_count} 组 · 曾生成 {experiment.image_count} 张（含已过期图像）</p>
-      <button className="text-action" type="button" onClick={() => { void saved.openExperiment(experiment.id); onView() }}>
-        <FlaskConical size={15} aria-hidden="true" /> 打开对比
-      </button>
+      {experiment.kind === 'dataset' ? <>
+        <p><Layers size={14} aria-hidden="true" /> 训练集批跑 · 已提交 <strong>{experiment.group_count}</strong> / {experiment.total} 条</p>
+        <p className="history-meta">已结束 {experiment.completed_count} 条 · 曾生成 {experiment.image_count} 张（含已过期图像）</p>
+      </> : <>
+        <p>已提交 <strong>{experiment.group_count}</strong> / {experiment.total} 组</p>
+        <p className="history-meta">已结束 {experiment.completed_count} 组 · 曾生成 {experiment.image_count} 张（含已过期图像）</p>
+      </>}
+      <div className="history-actions">
+        <button className="text-action" type="button" onClick={() => { void saved.openExperiment(experiment.id); onView() }}>
+          <FlaskConical size={15} aria-hidden="true" /> {experiment.kind === 'dataset' ? '浏览图片' : '打开对比'}
+        </button>
+        {experiment.kind === 'dataset' && <button className="text-action" type="button" aria-expanded={exportingId === experiment.id}
+          onClick={() => setExportingId(exportingId === experiment.id ? null : experiment.id)}><Download size={15} aria-hidden="true" /> 导出训练集</button>}
+      </div>
+      {exportingId === experiment.id && <Suspense fallback={null}><DatasetExportPanel api={api} source={{ kind: 'experiment', id: experiment.id }} onClose={() => setExportingId(null)} /></Suspense>}
     </article>)}</div>
     {saved.listLoaded && <div className="pager">
       <button className="icon-button" type="button" title="上一页实验" aria-label="上一页实验" disabled={saved.listLoading || saved.listOffset === 0}
@@ -55,11 +67,12 @@ export const SavedResultViewer = observer(({ saved, onClose, onUseSeed, canSave 
   const image = saved.image
   const context = job?.parameters.experiment
   const isExperiment = selection.kind === 'experiment'
+  const isDataset = context?.kind === 'dataset'
   const preloadLabel = {
     idle: '', reading: '正在读取实验记录', loading: '正在加载图片', completed: '本次加载检查已结束',
     cancelled: '已取消加载，已缓存图片仍可使用', capacity: '已达到缓存容量限制，后续图片尚未加载', error: '加载检查中断，可重新开始',
   }[saved.preloadStatus]
-  const groupLabel = isExperiment ? context ? `第 ${context.ordinal} / ${context.total} 组` : '实验记录' : '历史图片'
+  const groupLabel = isExperiment ? context ? `第 ${context.ordinal} / ${context.total} ${isDataset ? '条' : '组'}` : '实验记录' : '历史图片'
   const placeholder = saved.loading ? '正在加载保存记录...'
     : saved.imageLoading ? '正在加载图片...'
       : saved.error ? '记录暂不可用，请查看下方信息。'
@@ -75,7 +88,7 @@ export const SavedResultViewer = observer(({ saved, onClose, onUseSeed, canSave 
 
   return <section id="saved-result-viewer" className="canvas-view saved-results" aria-labelledby="saved-result-title">
     <div className="canvas-toolbar">
-      <div className="canvas-title"><FlaskConical size={16} aria-hidden="true" /><h2 id="saved-result-title">{isExperiment ? '已保存的画风对比' : '已保存的图片'}</h2>
+      <div className="canvas-title"><FlaskConical size={16} aria-hidden="true" /><h2 id="saved-result-title">{isExperiment ? isDataset ? '已保存的训练集' : '已保存的画风对比' : '已保存的图片'}</h2>
         {job && <span className={`status status-${job.status}`}>{jobStatus(job.status)}</span>}
       </div>
       <div className="saved-viewer-toolbar-actions">
@@ -132,7 +145,8 @@ export const SavedResultViewer = observer(({ saved, onClose, onUseSeed, canSave 
         <div className="experiment-result-heading"><h3>{groupLabel}</h3>
           <span>请求种子 {job.parameters.seed ?? '随机'}</span><span>实际种子 {job.effective_seed}</span>
         </div>
-        {context && <ul className="experiment-result-weights" aria-label="保存的实验权重">{context.weights.map(weight =>
+        {context?.item && <p className="dataset-item-prompt" aria-label="训练集提示词">提示词（caption）：{context.item.prompt}</p>}
+        {context && context.weights.length > 0 && <ul className="experiment-result-weights" aria-label="保存的实验权重">{context.weights.map(weight =>
           <li key={weight.tag_index}><span>{weight.tag_index + 1}. {weight.label}</span><strong>{weight.weight}</strong></li>)}</ul>}
         {job.result_expires_at !== null && <p className="subtle saved-expiry">私有图片保存至 {new Date(job.result_expires_at * 1000).toLocaleString()}，查看不会延长保存时间。</p>}
         <details className="result-parameters"><summary>保存的完整生成参数</summary>

@@ -37,7 +37,8 @@ export const StyleExperimentConfig = observer(({ generation, hidden }: { generat
   const [configuration, setConfiguration] = useState<Configuration>({ source, ranges: [], notice: '' })
   const sourceChanged = configuration.source !== source
   const liveRanges = sourceChanged ? [] : configuration.ranges
-  const snapshot = generation.runs.snapshot
+  // A dataset run has no weight ranges; its own panel shows the frozen definition.
+  const snapshot = generation.runs.kind === 'style' ? generation.runs.snapshot : null
   const frozen = snapshot !== null
   const displayed = snapshot ? {
     source: snapshot.parameters.style_prompt,
@@ -143,15 +144,18 @@ export const StyleExperimentProgress = observer(({ generation, saved }: { genera
   const runs = generation.runs
   const run = runs.run
   if (!run && runs.initialized && !runs.pendingId && !runs.error && !runs.creating) return null
+  const dataset = runs.kind === 'dataset'
+  const unit = dataset ? '条' : '组'
+  const title = dataset ? '训练集批跑' : '画风实验'
   const stateLabel = run ? experimentStatus(run.status) : runs.creating ? '正在创建'
     : runs.pendingId ? '提交待核对' : runs.checking ? '正在检查服务器' : '等待连接'
-  return <div className="experiment-progress" aria-label="画风实验进度">
+  return <div className="experiment-progress" aria-label={`${title}进度`}>
     <div className="experiment-progress-line" role="status" aria-live="polite" aria-atomic="true">
-      <strong>画风实验 · {stateLabel}</strong>
+      <strong>{title} · {stateLabel}</strong>
       {run && <>
-        <span>已处理 {run.processed_count} / {run.total} 组</span>
+        <span>已处理 {run.processed_count} / {run.total} {unit}</span>
         <span>成功 {run.succeeded_count} · 失败 {run.failed_count}</span>
-        {run.current_ordinal !== null && <span>当前第 {run.current_ordinal} 组</span>}
+        {run.current_ordinal !== null && <span>当前第 {run.current_ordinal} {unit}</span>}
         {runs.running && !runs.connected && <span>进度连接中断，后台可能仍在运行</span>}
       </>}
       {runs.pendingId && <span>实验编号 {runs.pendingId}</span>}
@@ -173,18 +177,20 @@ export const StyleExperimentProgress = observer(({ generation, saved }: { genera
       onClick={() => {
         if (window.confirm('请先核对历史和已保存实验。解除锁后将再次检查服务器是否有活动实验，不会重新提交原实验。确认已核对？')) void runs.acknowledgeMissing()
       }}>已核对历史，解除未知提交锁</button>}
-    {run?.error_code && <p className="experiment-note">最近一组诊断：{errorText(new ApiFailure(0, run.error_code, '本组处理失败。'))}
-      {run.status === 'running' && ' 服务器会继续处理后续组，不会重试这一组。'}</p>}
-    {run && <details className="result-parameters server-run-snapshot"><summary>实验信息与固定配置</summary>
-      <p>每组 {run.sample_count} 张 · 计划 {(BigInt(run.total) * BigInt(run.sample_count)).toString()} 张 · 统一请求种子 {run.seed}</p>
+    {run?.error_code && <p className="experiment-note">最近一{unit}诊断：{errorText(new ApiFailure(0, run.error_code, `本${unit}处理失败。`))}
+      {run.status === 'running' && ` 服务器会继续处理后续${unit}，不会重试这一${unit}。`}</p>}
+    {run && <details className="result-parameters server-run-snapshot"><summary>{dataset ? '批跑信息与固定配置' : '实验信息与固定配置'}</summary>
+      <p>每{unit} {run.sample_count} 张 · 计划 {(BigInt(run.total) * BigInt(run.sample_count)).toString()} 张 · {dataset ? `基础种子 ${run.seed}，第 N 条使用基础种子 + N − 1` : `统一请求种子 ${run.seed}`}</p>
       <PromptSummary parameters={run.parameters} />
       {run.parameters.negative_prompt && <p>负向：{run.parameters.negative_prompt}</p>}
+      {dataset && <details><summary>{run.items?.length ?? 0} 条提示词</summary>
+        <ol className="dataset-run-items">{run.items?.map(item => <li key={item.id}>{item.prompt}</li>)}</ol></details>}
       <ul>{run.ranges.map(range => <li key={range.tag_index}>词条 {range.tag_index + 1} · {range.min} → {range.max} · 步长 {range.step}</li>)}</ul>
       <p>{run.parameters.model} · {run.parameters.width}×{run.parameters.height} · {run.parameters.sampler}</p>
-      <p>{run.parameters.steps} 步 · CFG {run.parameters.cfg_scale} · 每组 {run.sample_count} 张 · {run.parameters.quality ? '高质量' : '标准质量'}</p>
-      <p>原始请求种子 {run.parameters.seed ?? '随机'} · 统一实际种子 {run.seed}</p>
+      <p>{run.parameters.steps} 步 · CFG {run.parameters.cfg_scale} · 每{unit} {run.sample_count} 张 · {run.parameters.quality ? '高质量' : '标准质量'}</p>
+      <p>原始请求种子 {run.parameters.seed ?? '随机'} · {dataset ? '基础' : '统一'}实际种子 {run.seed}</p>
       <p>实验编号 {run.id} · {new Date(run.created_at * 1000).toLocaleString()}</p>
-      <p>服务器执行实验；离开页面或退出登录仅断开查看。单组失败会继续后续组，只有“停止实验”会阻止新的组。</p>
+      <p>服务器执行实验；离开页面或退出登录仅断开查看。单{unit}失败会继续后续{unit}，只有“停止实验”会阻止新的{unit}。</p>
     </details>}
   </div>
 })

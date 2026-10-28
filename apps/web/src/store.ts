@@ -15,6 +15,7 @@ import {
   type StyleExperimentRange,
 } from './style-experiment'
 import { SavedResultsStore } from './saved-results'
+import { datasetItems, type DatasetEntry } from './dataset-run'
 import { StyleRunStore } from './style-run-store'
 import { PromptSnapshotStore } from './prompt-snapshots'
 import { BalanceStore } from './balance-store'
@@ -484,6 +485,26 @@ export class GenerationStore {
     await this.runs.start(parameters, plan.dimensions.map(dimension => ({
       tag_index: dimension.tagIndex, min: dimension.min, max: dimension.max, step: dimension.step,
     })))
+  }
+
+  /** Freeze the draft's style and settings; each dataset item supplies all content. */
+  async startDatasetRun(entries: readonly DatasetEntry[]): Promise<void> {
+    if (this.operationLocked || this.busy || this.activeId || this.submitUncertain) return
+    this.error = ''
+    let parameters: GenerationRequest
+    let items
+    try {
+      items = datasetItems(entries, this.draft.style_prompt)
+      const base = requestFromDraft({ ...this.draft, shared_sections: emptySharedSections(), character_prompts: [] })
+      parameters = { ...base, positive_prompt: '', character_prompts: [], auto_character_position: false }
+      delete parameters.prompt_sections
+    } catch (error) {
+      this.error = error instanceof Error ? error.message : '训练集批跑参数无效。'
+      return
+    }
+    this.clearActiveResult()
+    this.operationVersion += 1
+    await this.runs.startDataset(parameters, items)
   }
 
   /** Ordinary generation only; server experiments never use this POST path. */

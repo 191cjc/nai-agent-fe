@@ -6,6 +6,8 @@ Use for batch creation, progress, Stop, API lifecycle, generation admission or
 schema changes affecting server-owned style experiments. The operator requires
 failure continuation and background execution independent of browser lifetime.
 This replaces earlier browser-only/no-continuation contracts.
+Fixed-style dataset runs are a second run kind sharing this lifecycle; see
+[Dataset Runs and Export](./dataset-run-contract.md).
 
 Whole-line per-tag comments and raw/effective projections follow
 [Individual Hidden Tags](./prompt-comments-contract.md). Syntax is opt-in per frozen request;
