@@ -16,7 +16,15 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from .account_balance import AccountBalance, BalanceFailure, BalanceProvider, BalanceService
-from .advice import AdviceFailure, AdviceRequest, AdviceResult, AdviceRunner, AdviceService
+from .advice import (
+    TRAIT_TIMEOUT_SECONDS,
+    AdviceFailure,
+    AdviceRequest,
+    AdviceResult,
+    AdviceRunner,
+    AdviceService,
+    trait_advice_text,
+)
 from .auth import current_user, issue_session, revoke_session
 from .codex_advice import CodexAdviceRunner
 from .config import Settings
@@ -32,6 +40,7 @@ from .generations import (
     GenerationView,
     HistoryPage,
     ImageProvider,
+    ReferenceImageUse,
     ResultStorageUnavailable,
     ResultStore,
 )
@@ -43,6 +52,13 @@ from .prompt_snapshots import (
     PromptSnapshotCreate,
     PromptSnapshotPage,
     PromptSnapshotStore,
+)
+from .reference_images import (
+    MAX_REFERENCE_BYTES,
+    ReferenceFailure,
+    ReferenceImage,
+    ReferenceImageList,
+    ReferenceImageStore,
 )
 from .security import SESSION_COOKIE, SESSION_LIFETIME_SECONDS
 from .style_experiments import (
@@ -130,6 +146,7 @@ def create_app(
     manager = GenerationManager(database, image_provider, cache=result_cache)
     experiments = StyleExperimentService(database, manager)
     snapshots = PromptSnapshotStore(database)
+    references = ReferenceImageStore(database)
     tag_search = tag_search or TagSearch(
         settings.tag_search_url, settings.public_origin, settings.tag_search_key
     )
@@ -402,6 +419,9 @@ def create_app(
     def submit_generation(
         payload: GenerationRequest, user: Annotated[UserInfo, Depends(require_user)]
     ) -> GenerationAccepted | JSONResponse:
+        if payload.reference is not None:
+            # Reference images are frozen only by server-owned character dataset runs.
+            return error(422, "validation_error", "Reference images are only used by dataset runs")
         try:
             job_id = manager.submit(user.id, payload)
         except GenerationNotConfigured:
@@ -499,8 +519,17 @@ def create_app(
         payload: DatasetRunCreate, user: Annotated[UserInfo, Depends(require_user)],
     ) -> RunState | JSONResponse:
         # Dataset runs share the durable run lifecycle; read/Stop use the style run routes.
+        resolved = None
+        if payload.character is not None:
+            # Pin each owner reference to its current digest; later edits cannot change a run.
+            resolved = []
+            for reference_id in payload.character.reference_ids:
+                item = references.get(user.id, str(reference_id))
+                if item is None:
+                    return error(422, "reference_not_found", "Reference image not found")
+                resolved.append(ReferenceImageUse(id=item.id, sha256=item.sha256))
         try:
-            return experiments.store.create(user.id, payload)
+            return experiments.store.create(user.id, payload, references=resolved)
         except RunConflict as exception:
             return error(409, exception.code, "Experiment run conflicts with existing work")
 
@@ -674,6 +703,160 @@ def create_app(
             if exception.status == 429 and exception.retry_after is not None:
                 response.headers["Retry-After"] = exception.retry_after
             return response
+
+    def reference_error(exception: ReferenceFailure) -> JSONResponse:
+        return error(exception.status, exception.code, exception.message)
+
+    @app.get(
+        "/api/reference-images",
+        response_model=ReferenceImageList,
+        responses={401: {"model": ApiError}, 422: {"model": ApiError}, 503: {"model": ApiError}},
+    )
+    def list_reference_images(
+        user: Annotated[UserInfo, Depends(require_user)],
+    ) -> ReferenceImageList:
+        return ReferenceImageList(items=references.list(user.id))
+
+    @app.post(
+        "/api/reference-images",
+        status_code=201,
+        response_model=ReferenceImage,
+        responses={
+            401: {"model": ApiError}, 403: {"model": ApiError}, 409: {"model": ApiError},
+            413: {"model": ApiError}, 415: {"model": ApiError}, 422: {"model": ApiError},
+            503: {"model": ApiError},
+        },
+        openapi_extra={"requestBody": {"required": True, "content": {
+            "image/png": {"schema": {"type": "string", "format": "binary"}},
+            "image/jpeg": {"schema": {"type": "string", "format": "binary"}},
+        }}},
+    )
+    async def upload_reference_image(
+        request: Request, user: Annotated[UserInfo, Depends(require_user)],
+    ) -> ReferenceImage | JSONResponse:
+        # Raw image body: no multipart dependency, bounded before decoding anything.
+        content_type = request.headers.get("content-type", "").split(";")[0].strip().lower()
+        if content_type not in ("image/png", "image/jpeg"):
+            return error(415, "unsupported_media_type", "Upload a PNG or JPEG image")
+        body = bytearray()
+        async for chunk in request.stream():
+            body.extend(chunk)
+            if len(body) > MAX_REFERENCE_BYTES:
+                return error(413, "reference_too_large", "Reference image exceeds 8 MiB")
+        try:
+            return await asyncio.to_thread(references.add, user.id, bytes(body), source="upload")
+        except ReferenceFailure as exception:
+            return reference_error(exception)
+
+    class ReferenceFromResult(BaseModel):
+        job_id: str = Field(min_length=1, max_length=64)
+        image_index: int = Field(ge=0, le=7)
+
+    @app.post(
+        "/api/reference-images/from-result",
+        status_code=201,
+        response_model=ReferenceImage,
+        responses={
+            401: {"model": ApiError}, 403: {"model": ApiError}, 404: {"model": ApiError},
+            409: {"model": ApiError}, 422: {"model": ApiError}, 503: {"model": ApiError},
+        },
+    )
+    def reference_from_result(
+        payload: ReferenceFromResult, user: Annotated[UserInfo, Depends(require_user)],
+    ) -> ReferenceImage | JSONResponse:
+        job = own_job(user, payload.job_id)
+        image = (
+            manager.cache.image(payload.job_id, user.id, payload.image_index)
+            if job.status == "succeeded" else None
+        )
+        if image is None:
+            return error(404, "not_found", "Image not found or expired")
+        try:
+            return references.add(user.id, image.data, source="result")
+        except ReferenceFailure as exception:
+            return reference_error(exception)
+
+    @app.get(
+        "/api/reference-images/{image_id}/image",
+        response_class=Response,
+        responses={
+            200: {"content": {"image/png": {}, "image/jpeg": {}}},
+            401: {"model": ApiError}, 404: {"model": ApiError},
+            422: {"model": ApiError}, 503: {"model": ApiError},
+        },
+    )
+    def get_reference_image(
+        image_id: UUID, user: Annotated[UserInfo, Depends(require_user)],
+    ) -> Response:
+        found = references.read(user.id, str(image_id))
+        if found is None:
+            raise HTTPException(
+                status_code=404,
+                detail=ApiError(code="not_found", message="Reference image not found").model_dump(),
+            )
+        item, data = found
+        return Response(
+            content=data, media_type=item.mime_type,
+            headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "no-store"},
+        )
+
+    @app.delete(
+        "/api/reference-images/{image_id}",
+        status_code=204,
+        responses={
+            401: {"model": ApiError}, 403: {"model": ApiError}, 404: {"model": ApiError},
+            409: {"model": ApiError}, 422: {"model": ApiError}, 503: {"model": ApiError},
+        },
+    )
+    def delete_reference_image(
+        image_id: UUID, user: Annotated[UserInfo, Depends(require_user)],
+    ) -> None:
+        try:
+            deleted = references.delete(user.id, str(image_id))
+        except ReferenceFailure as exception:
+            raise HTTPException(
+                status_code=exception.status,
+                detail=ApiError(code=exception.code, message=exception.message).model_dump(),
+            ) from exception
+        if not deleted:
+            raise HTTPException(
+                status_code=404,
+                detail=ApiError(code="not_found", message="Reference image not found").model_dump(),
+            )
+
+    class TraitAdviceRequest(BaseModel):
+        reference_ids: list[UUID] = Field(min_length=1, max_length=4)
+        traits: str = Field(default="", max_length=1000)
+
+    @app.post(
+        "/api/reference-images/trait-advice",
+        response_model=AdviceResult,
+        responses={
+            401: {"model": ApiError}, 403: {"model": ApiError}, 422: {"model": ApiError},
+            429: {"model": ApiError}, 502: {"model": ApiError}, 503: {"model": ApiError},
+            504: {"model": ApiError},
+        },
+    )
+    async def trait_advice(
+        payload: TraitAdviceRequest, user: Annotated[UserInfo, Depends(require_user)],
+    ) -> AdviceResult | JSONResponse:
+        if len(set(payload.reference_ids)) != len(payload.reference_ids):
+            return error(422, "validation_error", "Duplicate reference image")
+        images = []
+        for reference_id in payload.reference_ids:
+            found = await asyncio.to_thread(references.read, user.id, str(reference_id))
+            if found is None:
+                return error(422, "reference_not_found", "Reference image not found")
+            images.append(found[1])
+        try:
+            return await advice_service.advise(
+                trait_advice_text(payload.traits), images=images, timeout=TRAIT_TIMEOUT_SECONDS,
+            )
+        except AdviceFailure as exception:
+            return error(
+                exception.status, exception.code, exception.message,
+                retryable=exception.retryable,
+            )
 
     @app.post(
         "/api/advice",

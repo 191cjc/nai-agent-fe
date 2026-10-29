@@ -50,6 +50,32 @@ class CharacterPrompt(BaseModel):
         return value
 
 
+VIBE_MODELS = NATIVE_CHARACTER_MODELS - {"nai-diffusion-5-full", "nai-diffusion-5-curated"}
+
+
+class ReferenceImageUse(BaseModel):
+    id: str = Field(pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class ReferenceUse(BaseModel):
+    """Frozen reference images for one dataset group; bytes stay in the private store."""
+
+    mode: Literal["vibe", "img2img"]
+    images: list[ReferenceImageUse] = Field(min_length=1, max_length=4)
+    strength: float | None = Field(default=None, ge=0.01, le=0.99, allow_inf_nan=False)
+    noise: float | None = Field(default=None, ge=0, le=0.99, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def valid_mode(self) -> Self:
+        if self.mode == "img2img" and (len(self.images) != 1 or self.strength is None
+                                       or self.noise is None):
+            raise ValueError("Image-to-image uses one image with strength and noise")
+        if self.mode == "vibe" and (self.strength is not None or self.noise is not None):
+            raise ValueError("Vibe transfer has no strength or noise")
+        return self
+
+
 PositiveDecimal = Annotated[str, Field(min_length=1, max_length=1000, pattern=r"^[1-9][0-9]*$")]
 
 
@@ -126,6 +152,9 @@ class GenerationRequest(BaseModel):
     experiment: ExperimentContext | None = Field(
         default=None, exclude_if=lambda value: value is None,
     )
+    reference: ReferenceUse | None = Field(
+        default=None, exclude_if=lambda value: value is None,
+    )
 
     @field_validator("model", "sampler")
     @classmethod
@@ -190,6 +219,11 @@ class GenerationRequest(BaseModel):
             raise ValueError("Combined style and shared prompt must contain 1 to 3000 characters")
         if self.effective_character_prompts and self.model not in NATIVE_CHARACTER_MODELS:
             raise ValueError("Model does not support native character prompts")
+        if self.reference is not None:
+            if self.effective_character_prompts:
+                raise ValueError("Reference generation does not use native character prompts")
+            if self.reference.mode == "vibe" and self.model not in VIBE_MODELS:
+                raise ValueError("Vibe transfer requires a V4 or V4.5 model")
         return self
 
 
@@ -207,6 +241,7 @@ class ImageProvider(Protocol):
 class RequestRecordingImageProvider(ImageProvider, Protocol):
     def generate_with_request(
         self, parameters: GenerationRequest, record_request: Callable[[dict[str, Any]], None],
+        *, references: Sequence[bytes] = (),
     ) -> Sequence[GeneratedImage]: ...
 
 
@@ -647,11 +682,21 @@ class GenerationManager:
         provider: ImageProvider | None,
         *,
         cache: ResultStore | None = None,
+        references: Callable[[str, str, str], bytes | None] | None = None,
     ):
         from .image_results import DiskResultStore
+        from .reference_images import ReferenceImageStore
 
         self.store = JobStore(database)
         self.provider = provider
+        if references is None:
+            store = ReferenceImageStore(database)
+
+            def references(user_id: str, image_id: str, sha256: str) -> bytes | None:
+                found = store.read(user_id, image_id)
+                return found[1] if found is not None and found[0].sha256 == sha256 else None
+        # Returns bytes only when the owner's stored image still matches the frozen digest.
+        self.references = references
         self.cache = cache if cache is not None else DiskResultStore(
             database.path.parent / "generation-images",
         )
@@ -755,7 +800,21 @@ class GenerationManager:
                     if not self.store.record_provider_request(user_id, job_id, arguments):
                         raise RuntimeError("Provider request could not be recorded")
 
-                if isinstance(self.provider, RequestRecordingImageProvider):
+                if parameters.reference is not None:
+                    references = [
+                        self.references(user_id, image.id, image.sha256)
+                        for image in parameters.reference.images
+                    ]
+                    if any(data is None for data in references):
+                        self.store.finish(job_id, error_code="reference_unavailable")
+                        return
+                    if not isinstance(self.provider, RequestRecordingImageProvider):
+                        self.store.finish(job_id, error_code="unsupported_reference_mode")
+                        return
+                    images = self.provider.generate_with_request(
+                        parameters, record_request, references=references,
+                    )
+                elif isinstance(self.provider, RequestRecordingImageProvider):
                     images = self.provider.generate_with_request(parameters, record_request)
                 else:
                     images = self.provider.generate(parameters) if self.provider else ()

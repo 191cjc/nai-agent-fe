@@ -1004,3 +1004,52 @@ def test_cancelled_cli_login_kills_subprocess(
         assert process.killed
 
     asyncio.run(exercise())
+
+
+def test_sdk_trait_turn_attaches_private_images_and_cleans_up(tmp_path: Path) -> None:
+    observed = {}
+
+    async def events():
+        prompt = sdk.prompt
+        observed["prompt"] = prompt
+        observed["files"] = [Path(part["path"]).read_bytes() for part in prompt[1:]]
+        observed["modes"] = [Path(part["path"]).stat().st_mode & 0o777 for part in prompt[1:]]
+        observed["instructions"] = (
+            Path(sdk.thread_options["working_directory"]) / "AGENTS.md"
+        ).read_text()
+        yield sdk_event("item.completed", "agent_message", '{"suggestion":"1girl, red eyes"}')
+        yield sdk_event("turn.completed")
+
+    sdk = FakeCodex(events)
+    runner = isolated_runner(tmp_path, sdk)
+    images = [b"\x89PNG\r\n\x1a\nfirst", b"\xff\xd8second"]
+    result = asyncio.run(AdviceService(runner).advise("traits", images=images, timeout=90))
+    assert result.suggestion == "1girl, red eyes"
+    prompt = observed["prompt"]
+    assert prompt[0] == {"type": "text", "text": "traits"}
+    assert [part["type"] for part in prompt[1:]] == ["local_image", "local_image"]
+    assert [Path(part["path"]).suffix for part in prompt[1:]] == [".png", ".jpg"]
+    assert all(str(tmp_path) in part["path"] for part in prompt[1:])
+    assert observed["files"] == images
+    if os.name == "posix":
+        assert observed["modes"] == [0o600, 0o600]
+    assert "persistent character identity tags" in observed["instructions"]
+    assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize(
+    ("message", "code"),
+    [
+        ("Invalid content: image input is not supported by this model", "advice_image_unsupported"),
+        ("unexpected status 401 Unauthorized", "advice_failed"),
+    ],
+)
+def test_sdk_trait_turn_maps_image_rejection(tmp_path: Path, message: str, code: str) -> None:
+    async def events():
+        yield parse_thread_event({"type": "turn.failed", "error": {"message": message}})
+
+    runner = isolated_runner(tmp_path, FakeCodex(events))
+    with pytest.raises(AdviceFailure) as failure:
+        asyncio.run(AdviceService(runner).advise("traits", images=[b"\x89PNGx"]))
+    assert failure.value.code == code
+    assert not list(tmp_path.iterdir())

@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import re
+from collections.abc import Sequence
 from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -55,8 +56,20 @@ class AdviceFailure(Exception):
         super().__init__(message)
 
 
+class ImageInputUnsupported(Exception):
+    """The configured advice model rejected attached images."""
+
+
 class AdviceRunner(Protocol):
     async def run(self, text: str) -> dict: ...
+
+
+TRAIT_TIMEOUT_SECONDS = 90.0
+
+
+def trait_advice_text(traits: str) -> str:
+    current = traits.strip() or "(empty)"
+    return f"Current character trait tags:\n{current}"
 
 
 class AdviceService:
@@ -65,14 +78,18 @@ class AdviceService:
         self.timeout = timeout
         self._capacity = asyncio.Semaphore(2)
 
-    async def advise(self, text: str) -> AdviceResult:
+    async def advise(
+        self, text: str, *, images: Sequence[bytes] = (), timeout: float | None = None,
+    ) -> AdviceResult:
         if self.runner is None:
             raise AdviceFailure(503, "advice_unavailable", "AI advice is not configured")
         if self._capacity.locked():
             raise AdviceFailure(429, "advice_busy", "AI advice is busy", retryable=True)
         async with self._capacity:
             try:
-                payload = await asyncio.wait_for(self.runner.run(text), timeout=self.timeout)
+                # Image turns attach only the owner's chosen reference images (trait advice).
+                turn = self.runner.run(text, images=images) if images else self.runner.run(text)
+                payload = await asyncio.wait_for(turn, timeout=timeout or self.timeout)
                 return AdviceResult.model_validate(payload)
             except TimeoutError as exception:
                 logger.warning("AI advice timed out")
@@ -81,6 +98,11 @@ class AdviceService:
                 logger.warning("AI advice rejected observed tool use (%s)", exception.item_type)
                 raise AdviceFailure(
                     502, "advice_tool_attempt", "AI advice unavailable"
+                ) from exception
+            except ImageInputUnsupported as exception:
+                logger.warning("AI advice model rejected image input")
+                raise AdviceFailure(
+                    502, "advice_image_unsupported", "AI advice model does not accept images",
                 ) from exception
             except asyncio.CancelledError:
                 raise

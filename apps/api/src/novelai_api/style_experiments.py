@@ -10,7 +10,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
-from .dataset_plan import DatasetRunCreate, dataset_parameters, item_seed
+from .dataset_plan import CharacterPlan, DatasetRunCreate, dataset_parameters, item_seed
 from .db import Database
 from .generations import (
     EXPERIMENT_ROWS,
@@ -20,6 +20,7 @@ from .generations import (
     GenerationNotConfigured,
     GenerationRequest,
     JobStore,
+    ReferenceImageUse,
     ResultStorageUnavailable,
     _experiment_connection,
 )
@@ -65,6 +66,8 @@ class RunState(BaseModel):
     parameters: GenerationRequest
     ranges: list[ExperimentRange]
     items: list[DatasetItem] = Field(default_factory=list)
+    styles: list[str] | None = None
+    character: CharacterPlan | None = None
     created_at: int
     updated_at: int
     error_code: str | None
@@ -92,7 +95,8 @@ class RunStore:
         if kind not in ("style", "dataset") or version not in (1, 2):
             raise ValueError("Unsupported stored style plan version")
         state = RunState(
-            kind=kind, items=definition.get("items", []),
+            kind=kind, items=definition.get("items", []), styles=definition.get("styles"),
+            character=definition.get("character"),
             **{key: row[key] for key in (
                 "id", "status", "total", "next_ordinal", "processed_count", "succeeded_count",
                 "failed_count", "current_ordinal", "current_job_id", "seed", "created_at",
@@ -104,8 +108,14 @@ class RunStore:
         state._plan_version = version
         return state
 
-    def create(self, user_id: str, request: RunCreate | DatasetRunCreate) -> RunState:
-        definition, total = request.definition()
+    def create(
+        self, user_id: str, request: RunCreate | DatasetRunCreate,
+        *, references: list[ReferenceImageUse] | None = None,
+    ) -> RunState:
+        definition, total = (
+            request.definition(references) if isinstance(request, DatasetRunCreate)
+            else request.definition()
+        )
         run_id = str(request.id)
         with self.database.connect(write=True) as connection:
             existing = connection.execute(
@@ -303,6 +313,7 @@ def group_parameters(run: RunState) -> GenerationRequest:
             context=ExperimentContext(
                 id=run.id, ordinal=run.next_ordinal, total=run.total, kind="dataset", item=item,
             ),
+            ordinal=ordinal, styles=run.styles, character=run.character,
         )
     plan = create_style_plan(run.parameters, run.ranges, plan_version=run._plan_version)
     source, weights = plan.combination(int(run.next_ordinal) - 1)

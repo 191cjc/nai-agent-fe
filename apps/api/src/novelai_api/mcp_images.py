@@ -40,6 +40,7 @@ REQUIRED_FIELDS = frozenset(
         "quality",
     }
 )
+IMAGE_TO_IMAGE_FIELDS = REQUIRED_FIELDS | {"image", "strength", "noise"}
 SCHEMA_ANNOTATIONS = frozenset(
     {
         "title", "description", "default", "$comment", "examples", "deprecated",
@@ -135,7 +136,17 @@ class NovelAiMcpProvider:
 
     def generate_with_request(
         self, parameters: GenerationRequest, record_request: Callable[[dict[str, Any]], None],
+        *, references: Sequence[bytes] = (),
     ) -> Sequence[GeneratedImage]:
+        reference = parameters.reference
+        if (reference is None) != (not references) or (
+            reference is not None and len(references) != len(reference.images)
+        ):
+            raise ProviderFailure("reference_unavailable")
+        tool_name = (
+            "image_to_image" if reference is not None and reference.mode == "img2img"
+            else "generate_image"
+        )
         headers = {
             "Authorization": f"Bearer {self.token}",
             "Accept": "application/json, text/event-stream",
@@ -232,10 +243,17 @@ class NovelAiMcpProvider:
                 (
                     tool.get("inputSchema")
                     for tool in tools
-                    if isinstance(tool, dict) and tool.get("name") == "generate_image"
+                    if isinstance(tool, dict) and tool.get("name") == tool_name
                 ),
                 None,
             )
+            if reference is not None and (
+                not isinstance(schema, dict) or not isinstance(schema.get("properties"), dict)
+                or (reference.mode == "img2img"
+                    and not IMAGE_TO_IMAGE_FIELDS.issubset(schema["properties"]))
+                or (reference.mode == "vibe" and "references" not in schema["properties"])
+            ):
+                raise ProviderFailure("unsupported_reference_mode")
             if not isinstance(schema, dict) or not isinstance(schema.get("properties"), dict):
                 raise ProviderFailure("incompatible_mcp_server")
             properties = schema["properties"]
@@ -287,16 +305,36 @@ class NovelAiMcpProvider:
                 choices = field_schema.get("enum") if isinstance(field_schema, dict) else None
                 if isinstance(choices, list) and arguments[field] not in choices:
                     raise ProviderFailure("unsupported_setting")
+            encoded = [base64.b64encode(data).decode("ascii") for data in references]
+            if reference is not None and reference.mode == "img2img":
+                arguments.update(
+                    image=encoded[0], strength=reference.strength, noise=reference.noise,
+                )
+                if "extra_noise_seed" in properties:
+                    arguments["extra_noise_seed"] = parameters.seed
+            elif reference is not None:
+                arguments["references"] = encoded
             required = schema.get("required", [])
             if not isinstance(required, list) or not set(required).issubset(arguments):
                 raise ProviderFailure("incompatible_mcp_server")
             # Persist the exact allowlisted body before the sole paid call, including
-            # uncertain outcomes. Headers, credentials and editor metadata stay out.
-            record_request(arguments)
+            # uncertain outcomes. Headers, credentials and editor metadata stay out;
+            # image payloads are recorded only as their frozen digests and sizes.
+            snapshot = dict(arguments)
+            if reference is not None:
+                digests = [
+                    {"sha256": image.sha256, "byte_size": len(data)}
+                    for image, data in zip(reference.images, references, strict=True)
+                ]
+                if reference.mode == "img2img":
+                    snapshot["image"] = digests[0]
+                else:
+                    snapshot["references"] = digests
+            record_request(snapshot)
             result = send(
                 client,
                 "tools/call",
-                {"name": "generate_image", "arguments": arguments},
+                {"name": tool_name, "arguments": arguments},
                 paid=True,
             )
         if result.get("isError") is True:

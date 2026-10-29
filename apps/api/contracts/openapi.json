@@ -112,6 +112,61 @@
         "title": "ApiError",
         "type": "object"
       },
+      "CharacterPlan": {
+        "description": "Frozen character block: reference ids are pinned to their digests at creation.",
+        "properties": {
+          "mode": {
+            "enum": [
+              "vibe",
+              "img2img"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "noise": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Noise"
+          },
+          "references": {
+            "items": {
+              "$ref": "#/components/schemas/ReferenceImageUse"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "References",
+            "type": "array"
+          },
+          "strength": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strength"
+          },
+          "traits": {
+            "title": "Traits",
+            "type": "string"
+          }
+        },
+        "required": [
+          "traits",
+          "mode",
+          "references"
+        ],
+        "title": "CharacterPlan",
+        "type": "object"
+      },
       "CharacterPrompt": {
         "properties": {
           "prompt": {
@@ -139,6 +194,67 @@
           "prompt"
         ],
         "title": "CharacterPrompt",
+        "type": "object"
+      },
+      "CharacterRequest": {
+        "properties": {
+          "mode": {
+            "enum": [
+              "vibe",
+              "img2img"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "noise": {
+            "anyOf": [
+              {
+                "maximum": 0.99,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Noise"
+          },
+          "reference_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Reference Ids",
+            "type": "array"
+          },
+          "strength": {
+            "anyOf": [
+              {
+                "maximum": 0.99,
+                "minimum": 0.01,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strength"
+          },
+          "traits": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Traits",
+            "type": "string"
+          }
+        },
+        "required": [
+          "traits",
+          "mode",
+          "reference_ids"
+        ],
+        "title": "CharacterRequest",
         "type": "object"
       },
       "CharacterSections": {
@@ -245,6 +361,16 @@
       },
       "DatasetRunCreate": {
         "properties": {
+          "character": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CharacterRequest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -261,6 +387,22 @@
           },
           "parameters": {
             "$ref": "#/components/schemas/GenerationRequest"
+          },
+          "styles": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 8,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Styles"
           }
         },
         "required": [
@@ -600,6 +742,16 @@
           "quality": {
             "title": "Quality",
             "type": "boolean"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReferenceUse"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "sample_count": {
             "maximum": 8.0,
@@ -1057,6 +1209,174 @@
         "title": "PromptSnapshotSummary",
         "type": "object"
       },
+      "ReferenceFromResult": {
+        "properties": {
+          "image_index": {
+            "maximum": 7.0,
+            "minimum": 0.0,
+            "title": "Image Index",
+            "type": "integer"
+          },
+          "job_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Job Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "image_index"
+        ],
+        "title": "ReferenceFromResult",
+        "type": "object"
+      },
+      "ReferenceImage": {
+        "properties": {
+          "byte_size": {
+            "title": "Byte Size",
+            "type": "integer"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "integer"
+          },
+          "height": {
+            "title": "Height",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "mime_type": {
+            "enum": [
+              "image/png",
+              "image/jpeg"
+            ],
+            "title": "Mime Type",
+            "type": "string"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "upload",
+              "result"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "width": {
+            "title": "Width",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "sha256",
+          "mime_type",
+          "width",
+          "height",
+          "byte_size",
+          "source",
+          "created_at"
+        ],
+        "title": "ReferenceImage",
+        "type": "object"
+      },
+      "ReferenceImageList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReferenceImage"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ReferenceImageList",
+        "type": "object"
+      },
+      "ReferenceImageUse": {
+        "properties": {
+          "id": {
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sha256",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "sha256"
+        ],
+        "title": "ReferenceImageUse",
+        "type": "object"
+      },
+      "ReferenceUse": {
+        "description": "Frozen reference images for one dataset group; bytes stay in the private store.",
+        "properties": {
+          "images": {
+            "items": {
+              "$ref": "#/components/schemas/ReferenceImageUse"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Images",
+            "type": "array"
+          },
+          "mode": {
+            "enum": [
+              "vibe",
+              "img2img"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "noise": {
+            "anyOf": [
+              {
+                "maximum": 0.99,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Noise"
+          },
+          "strength": {
+            "anyOf": [
+              {
+                "maximum": 0.99,
+                "minimum": 0.01,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strength"
+          }
+        },
+        "required": [
+          "mode",
+          "images"
+        ],
+        "title": "ReferenceUse",
+        "type": "object"
+      },
       "RunCreate": {
         "properties": {
           "id": {
@@ -1087,6 +1407,16 @@
       },
       "RunState": {
         "properties": {
+          "character": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CharacterPlan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "created_at": {
             "title": "Created At",
             "type": "integer"
@@ -1183,6 +1513,20 @@
             ],
             "title": "Status",
             "type": "string"
+          },
+          "styles": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Styles"
           },
           "succeeded_count": {
             "title": "Succeeded Count",
@@ -1432,6 +1776,31 @@
           "tag"
         ],
         "title": "TagCandidate",
+        "type": "object"
+      },
+      "TraitAdviceRequest": {
+        "properties": {
+          "reference_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Reference Ids",
+            "type": "array"
+          },
+          "traits": {
+            "default": "",
+            "maxLength": 1000,
+            "title": "Traits",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reference_ids"
+        ],
+        "title": "TraitAdviceRequest",
         "type": "object"
       },
       "UserInfo": {
@@ -2843,6 +3212,597 @@
           }
         },
         "summary": "Get Prompt Snapshot"
+      }
+    },
+    "/api/reference-images": {
+      "get": {
+        "operationId": "list_reference_images_api_reference_images_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "__Host-nai_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "  Host-Nai Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReferenceImageList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List Reference Images"
+      },
+      "post": {
+        "operationId": "upload_reference_image_api_reference_images_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "__Host-nai_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "  Host-Nai Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "image/jpeg": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReferenceImage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Upload Reference Image"
+      }
+    },
+    "/api/reference-images/from-result": {
+      "post": {
+        "operationId": "reference_from_result_api_reference_images_from_result_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "__Host-nai_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "  Host-Nai Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReferenceFromResult"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReferenceImage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Reference From Result"
+      }
+    },
+    "/api/reference-images/trait-advice": {
+      "post": {
+        "operationId": "trait_advice_api_reference_images_trait_advice_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "__Host-nai_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "  Host-Nai Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TraitAdviceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdviceResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Gateway Timeout"
+          }
+        },
+        "summary": "Trait Advice"
+      }
+    },
+    "/api/reference-images/{image_id}": {
+      "delete": {
+        "operationId": "delete_reference_image_api_reference_images__image_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "image_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Image Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "__Host-nai_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "  Host-Nai Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Delete Reference Image"
+      }
+    },
+    "/api/reference-images/{image_id}/image": {
+      "get": {
+        "operationId": "get_reference_image_api_reference_images__image_id__image_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "image_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Image Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "__Host-nai_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "  Host-Nai Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/jpeg": {},
+              "image/png": {}
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Reference Image"
       }
     },
     "/api/style-experiment-runs": {
