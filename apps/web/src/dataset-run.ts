@@ -61,6 +61,8 @@ export interface CharacterSettings {
   noise: string
   /** Vibe only: encode_vibe information_extracted, 0.01–1. */
   information: string
+  /** Vibe only: generation-time influence of the vibes, 0.01–1. */
+  vibeStrength: string
 }
 
 function ratio(value: string, label: string, min: number, max: number): number {
@@ -80,6 +82,7 @@ export function characterRequest(settings: CharacterSettings, model: string, vib
     return {
       traits: settings.traits, mode: 'vibe', reference_ids: [...settings.referenceIds],
       information_extracted: ratio(settings.information, '信息提取度', 0.01, 1),
+      reference_strength: ratio(settings.vibeStrength, 'Vibe 强度', 0.01, 1),
     }
   }
   return {

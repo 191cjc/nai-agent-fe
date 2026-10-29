@@ -194,7 +194,7 @@ export const SavedResultViewer = observer(({ saved, api, onClose, onUseSeed, can
         </div>
         {context?.item && <p className="dataset-item-prompt" aria-label="训练集提示词">提示词（caption）：{context.item.prompt}</p>}
         {context?.item && job.parameters.reference && <p className="subtle">
-          {job.parameters.reference.mode === 'vibe' ? `Vibe Transfer · 信息提取度 ${job.parameters.reference.information_extracted ?? 1}` : `图生图 strength ${job.parameters.reference.strength} · noise ${job.parameters.reference.noise}`}
+          {job.parameters.reference.mode === 'vibe' ? `Vibe Transfer · 信息提取度 ${job.parameters.reference.information_extracted ?? 1} · 强度 ${job.parameters.reference.reference_strength ?? 1}` : `图生图 strength ${job.parameters.reference.strength} · noise ${job.parameters.reference.noise}`}
           {' · '}画风：{job.parameters.style_prompt}</p>}
         {context?.item && job.parameters.reference && <ReferenceThumbnails api={api} ids={job.parameters.reference.images.map(image => image.id)} />}
         {context && context.weights.length > 0 && <ul className="experiment-result-weights" aria-label="保存的实验权重">{context.weights.map(weight =>

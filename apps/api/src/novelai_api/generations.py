@@ -70,12 +70,18 @@ class ReferenceUse(BaseModel):
         default=None, ge=0.01, le=1.0, allow_inf_nan=False,
         exclude_if=lambda value: value is None,
     )
+    # Vibe only: generation-time influence (generate_image.reference_strengths), default 1.0.
+    reference_strength: float | None = Field(
+        default=None, ge=0.01, le=1.0, allow_inf_nan=False,
+        exclude_if=lambda value: value is None,
+    )
 
     @model_validator(mode="after")
     def valid_mode(self) -> Self:
         if self.mode == "img2img" and (len(self.images) != 1 or self.strength is None
                                        or self.noise is None
-                                       or self.information_extracted is not None):
+                                       or self.information_extracted is not None
+                                       or self.reference_strength is not None):
             raise ValueError("Image-to-image uses one image with strength and noise")
         if self.mode == "vibe" and (self.strength is not None or self.noise is not None):
             raise ValueError("Vibe transfer has no strength or noise")

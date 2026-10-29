@@ -145,6 +145,17 @@
             ],
             "title": "Noise"
           },
+          "reference_strength": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Strength"
+          },
           "references": {
             "items": {
               "$ref": "#/components/schemas/ReferenceImageUse"
@@ -252,6 +263,19 @@
             "minItems": 1,
             "title": "Reference Ids",
             "type": "array"
+          },
+          "reference_strength": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.01,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Strength"
           },
           "strength": {
             "anyOf": [
@@ -1392,6 +1416,19 @@
               }
             ],
             "title": "Noise"
+          },
+          "reference_strength": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.01,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Strength"
           },
           "strength": {
             "anyOf": [

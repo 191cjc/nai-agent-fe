@@ -39,6 +39,10 @@ class CharacterRequest(BaseModel):
     information_extracted: float | None = Field(
         default=None, ge=0.01, le=1.0, allow_inf_nan=False,
     )
+    # Vibe only: generation-time vibe influence (upstream default 1.0 when absent).
+    reference_strength: float | None = Field(
+        default=None, ge=0.01, le=1.0, allow_inf_nan=False,
+    )
 
     @field_validator("traits")
     @classmethod
@@ -55,8 +59,10 @@ class CharacterRequest(BaseModel):
             raise ValueError("Image-to-image requires strength and noise")
         if self.mode == "vibe" and (self.strength is not None or self.noise is not None):
             raise ValueError("Vibe transfer has no strength or noise")
-        if self.mode == "img2img" and self.information_extracted is not None:
-            raise ValueError("Image-to-image has no information_extracted")
+        if self.mode == "img2img" and (
+            self.information_extracted is not None or self.reference_strength is not None
+        ):
+            raise ValueError("Image-to-image has no information_extracted or reference_strength")
         return self
 
 
@@ -69,12 +75,14 @@ class CharacterPlan(BaseModel):
     strength: float | None = None
     noise: float | None = None
     information_extracted: float | None = None
+    reference_strength: float | None = None
 
     def use(self, ordinal: int) -> ReferenceUse:
         if self.mode == "vibe":
             return ReferenceUse(
                 mode="vibe", images=self.references,
                 information_extracted=self.information_extracted,
+                reference_strength=self.reference_strength,
             )
         image = self.references[(ordinal - 1) % len(self.references)]
         return ReferenceUse(
@@ -133,6 +141,7 @@ class DatasetRunCreate(BaseModel):
                 references=[_PLACEHOLDER_IMAGE] * len(self.character.reference_ids),
                 strength=self.character.strength, noise=self.character.noise,
                 information_extracted=self.character.information_extracted,
+                reference_strength=self.character.reference_strength,
             )
         # The longest effective style bounds every rotated style/item combination.
         longest = max(
@@ -169,5 +178,6 @@ class DatasetRunCreate(BaseModel):
                 traits=self.character.traits, mode=self.character.mode, references=references,
                 strength=self.character.strength, noise=self.character.noise,
                 information_extracted=self.character.information_extracted,
+                reference_strength=self.character.reference_strength,
             ).model_dump(mode="json", exclude_none=True)
         return json.dumps(definition, sort_keys=True, separators=(",", ":")), str(len(self.items))

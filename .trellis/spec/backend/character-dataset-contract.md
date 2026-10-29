@@ -55,8 +55,10 @@ runs are dataset runs (`kind: "dataset"`) and inherit every rule in
   for every vibe generation; after the service fix (2026-10-29) the same
   encode → token → `generate_image.references` flow succeeded (V4.5, one image
   ~65 s). The service now also accepts optional `reference_strengths` /
-  `reference_information` (0.01–1.0, default 1.0, one per reference); this
-  app does not send them yet. Image-to-image works (~132 s for one image) and
+  `reference_information` (0.01–1.0, default 1.0, one per reference). The
+  run's `reference_strength` (vibe only) is sent as `reference_strengths`
+  (one value per reference); if the service lacks that field the group fails
+  `unsupported_reference_mode` before any paid encode or generation. Image-to-image works (~132 s for one image) and
   uses a 600 s deadline.
 - Upstream tool errors are logged as one bounded, printable line
   (`NovelAI tool <name> failed: …`); they never contain images or tokens.

@@ -335,6 +335,14 @@ class NovelAiMcpProvider:
                 )
                 if "extra_noise_seed" in properties:
                     arguments["extra_noise_seed"] = parameters.seed
+            if reference is not None and reference.mode == "vibe" and (
+                reference.reference_strength is not None
+            ):
+                if "reference_strengths" not in properties:
+                    raise ProviderFailure("unsupported_reference_mode")
+                arguments["reference_strengths"] = (
+                    [reference.reference_strength] * len(reference.images)
+                )
             required = schema.get("required", [])
             if not isinstance(required, list) or not set(required).issubset(arguments):
                 raise ProviderFailure("incompatible_mcp_server")

@@ -684,3 +684,56 @@ def test_image_to_image_call_gets_the_longer_deadline() -> None:
         lambda _arguments: None,
     )
     assert seen == {"image_to_image": 600.0, "generate_image": 30}
+
+
+def test_vibe_reference_strength_is_sent_per_reference_and_required_upstream() -> None:
+    from novelai_api.generations import ProviderFailure
+
+    tools = [
+        {"name": "generate_image", "inputSchema": schema(
+            *BASE_FIELDS, "references", "reference_strengths",
+        )},
+        ENCODE_VIBE,
+    ]
+    transport, calls = reference_transport(tools)
+    provider = NovelAiMcpProvider("https://mcp.example/x", "token", transport=transport)
+    parameters = reference_parameters("vibe")
+    parameters = parameters.model_copy(update={
+        "reference": parameters.reference.model_copy(update={"reference_strength": 0.6}),
+    })
+    recorded = []
+    provider.generate_with_request(
+        parameters, recorded.append, references=[png(), jpeg()], vibe_tokens=MemoryVibes(),
+    )
+    assert tool_calls(calls, "generate_image")[-1]["arguments"]["reference_strengths"] == [0.6, 0.6]
+    assert recorded[0]["reference_strengths"] == [0.6, 0.6]
+    # Default strength sends nothing, preserving the upstream default 1.0.
+    provider.generate_with_request(
+        reference_parameters("vibe"), lambda _arguments: None,
+        references=[png(), jpeg()], vibe_tokens=MemoryVibes(),
+    )
+    assert "reference_strengths" not in tool_calls(calls, "generate_image")[-1]["arguments"]
+
+    old_transport, old_calls = reference_transport(TOOLS)  # service without the field
+    with pytest.raises(ProviderFailure) as failure:
+        NovelAiMcpProvider("https://mcp.example/x", "token", transport=old_transport) \
+            .generate_with_request(parameters, lambda _arguments: None,
+                                   references=[png(), jpeg()], vibe_tokens=MemoryVibes())
+    assert failure.value.code == "unsupported_reference_mode"
+    assert tool_calls(old_calls, "encode_vibe") == []  # nothing paid
+
+
+def test_vibe_reference_strength_is_frozen_and_rejected_for_img2img() -> None:
+    payload = character_run([uuid4()]).model_dump(mode="json")
+    payload["character"]["reference_strength"] = 0.7
+    request = DatasetRunCreate.model_validate(payload)
+    definition = json.loads(request.definition([
+        ReferenceImageUse(id=str(request.character.reference_ids[0]), sha256="c" * 64),
+    ])[0])
+    assert definition["character"]["reference_strength"] == 0.7
+    for invalid in ({"reference_strength": 0}, {"reference_strength": 1.2},
+                    {"mode": "img2img", "strength": 0.5, "noise": 0, "reference_strength": 0.5}):
+        bad = character_run([uuid4()]).model_dump(mode="json")
+        bad["character"].update(invalid)
+        with pytest.raises(ValidationError):
+            DatasetRunCreate.model_validate(bad)
