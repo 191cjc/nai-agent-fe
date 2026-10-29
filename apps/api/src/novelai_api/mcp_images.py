@@ -131,11 +131,15 @@ class NovelAiMcpProvider:
         *,
         transport: httpx.BaseTransport | None = None,
         timeout: float = 180.0,
+        image_to_image_timeout: float = 600.0,
     ):
         self.url = url
         self.token = token
         self.transport = transport
         self.timeout = timeout
+        # Upstream image_to_image took ~132 s for one image (2026-10-29); a short deadline
+        # would turn slow paid calls into outcome_unknown.
+        self.image_to_image_timeout = max(timeout, image_to_image_timeout)
 
     def generate(self, parameters: GenerationRequest) -> Sequence[GeneratedImage]:
         return self.generate_with_request(parameters, lambda _arguments: None)
@@ -169,6 +173,7 @@ class NovelAiMcpProvider:
             *,
             paid: bool = False,
             notification: bool = False,
+            timeout: float | None = None,
         ) -> dict:
             nonlocal request_id, session_id
             if not notification:
@@ -181,9 +186,13 @@ class NovelAiMcpProvider:
             if session_id:
                 headers["Mcp-Session-Id"] = session_id
                 headers["MCP-Protocol-Version"] = PROTOCOL_VERSION
-            deadline = time.monotonic() + self.timeout
+            limit = timeout or self.timeout
+            deadline = time.monotonic() + limit
             try:
-                with client.stream("POST", self.url, json=payload, headers=headers) as response:
+                with client.stream(
+                    "POST", self.url, json=payload, headers=headers,
+                    timeout=httpx.Timeout(limit, connect=5.0),
+                ) as response:
                     check_deadline(deadline, time.monotonic)
                     if response.status_code != 200 and not (
                         notification and response.status_code in (202, 204)
@@ -373,6 +382,7 @@ class NovelAiMcpProvider:
                 "tools/call",
                 {"name": tool_name, "arguments": arguments},
                 paid=True,
+                timeout=self.image_to_image_timeout if tool_name == "image_to_image" else None,
             )
         self._raise_tool_error(result, tool_name)
         content = result.get("content")

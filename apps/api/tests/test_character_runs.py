@@ -661,3 +661,26 @@ def test_vibe_information_extracted_is_frozen_into_every_group(database: Databas
         bad["character"].update(invalid)
         with pytest.raises(ValidationError):
             DatasetRunCreate.model_validate(bad)
+
+
+def test_image_to_image_call_gets_the_longer_deadline() -> None:
+    seen = {}
+    transport, calls = reference_transport(TOOLS)
+
+    def handler(request: httpx.Request):
+        payload = json.loads(request.content)
+        if payload.get("method") == "tools/call":
+            seen[payload["params"]["name"]] = request.extensions["timeout"]["read"]
+        return transport.handle_request(request)
+
+    provider = NovelAiMcpProvider(
+        "https://mcp.example/x", "token", transport=httpx.MockTransport(handler), timeout=30,
+    )
+    provider.generate_with_request(
+        reference_parameters("img2img"), lambda _arguments: None, references=[png()],
+    )
+    provider.generate_with_request(
+        GenerationRequest.model_validate({**INPUT, "sample_count": 1, "seed": 5}),
+        lambda _arguments: None,
+    )
+    assert seen == {"image_to_image": 600.0, "generate_image": 30}
