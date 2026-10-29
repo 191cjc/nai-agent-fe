@@ -65,15 +65,25 @@ class ReferenceUse(BaseModel):
     images: list[ReferenceImageUse] = Field(min_length=1, max_length=4)
     strength: float | None = Field(default=None, ge=0.01, le=0.99, allow_inf_nan=False)
     noise: float | None = Field(default=None, ge=0, le=0.99, allow_inf_nan=False)
+    # Vibe only: encode_vibe information_extracted; absent means the upstream default 1.0.
+    information_extracted: float | None = Field(
+        default=None, ge=0.01, le=1.0, allow_inf_nan=False,
+        exclude_if=lambda value: value is None,
+    )
 
     @model_validator(mode="after")
     def valid_mode(self) -> Self:
         if self.mode == "img2img" and (len(self.images) != 1 or self.strength is None
-                                       or self.noise is None):
+                                       or self.noise is None
+                                       or self.information_extracted is not None):
             raise ValueError("Image-to-image uses one image with strength and noise")
         if self.mode == "vibe" and (self.strength is not None or self.noise is not None):
             raise ValueError("Vibe transfer has no strength or noise")
         return self
+
+    @property
+    def vibe_information(self) -> float:
+        return 1.0 if self.information_extracted is None else self.information_extracted
 
 
 PositiveDecimal = Annotated[str, Field(min_length=1, max_length=1000, pattern=r"^[1-9][0-9]*$")]
@@ -237,11 +247,19 @@ class ImageProvider(Protocol):
     def generate(self, parameters: GenerationRequest) -> Sequence[GeneratedImage]: ...
 
 
+class VibeTokens(Protocol):
+    """Owner-bound cache of encoded vibe tokens keyed by image digest and encode settings."""
+
+    def get(self, sha256: str, model: str, information: float) -> str | None: ...
+
+    def put(self, sha256: str, model: str, information: float, token: str) -> None: ...
+
+
 @runtime_checkable
 class RequestRecordingImageProvider(ImageProvider, Protocol):
     def generate_with_request(
         self, parameters: GenerationRequest, record_request: Callable[[dict[str, Any]], None],
-        *, references: Sequence[bytes] = (),
+        *, references: Sequence[bytes] = (), vibe_tokens: VibeTokens | None = None,
     ) -> Sequence[GeneratedImage]: ...
 
 
@@ -683,15 +701,17 @@ class GenerationManager:
         *,
         cache: ResultStore | None = None,
         references: Callable[[str, str, str], bytes | None] | None = None,
+        vibe_tokens: Callable[[str], VibeTokens] | None = None,
     ):
         from .image_results import DiskResultStore
         from .reference_images import ReferenceImageStore
 
         self.store = JobStore(database)
         self.provider = provider
+        store = ReferenceImageStore(database)
+        # Encoded vibes are paid once per image/model/information and reused across groups.
+        self.vibe_tokens = vibe_tokens or store.vibe_tokens
         if references is None:
-            store = ReferenceImageStore(database)
-
             def references(user_id: str, image_id: str, sha256: str) -> bytes | None:
                 found = store.read(user_id, image_id)
                 return found[1] if found is not None and found[0].sha256 == sha256 else None
@@ -813,6 +833,7 @@ class GenerationManager:
                         return
                     images = self.provider.generate_with_request(
                         parameters, record_request, references=references,
+                        vibe_tokens=self.vibe_tokens(user_id),
                     )
                 elif isinstance(self.provider, RequestRecordingImageProvider):
                     images = self.provider.generate_with_request(parameters, record_request)

@@ -19,7 +19,7 @@ export interface CharacterState {
 
 /** Character run settings live in the dataset panel so collapsing it keeps them. */
 export function useCharacterSettings(draftStyle: string): CharacterState {
-  const [settings, setSettingsState] = useState<CharacterSettings>({ traits: '', mode: 'vibe', referenceIds: [], strength: '0.55', noise: '0' })
+  const [settings, setSettingsState] = useState<CharacterSettings>({ traits: '', mode: 'vibe', referenceIds: [], strength: '0.55', noise: '0', information: '1' })
   // Until the user edits the pool it follows the live draft style, like style mode.
   const [edited, setEdited] = useState<string[] | null>(null)
   const styles = edited ?? [draftStyle]
@@ -262,6 +262,11 @@ export function CharacterRunSettings({ api, state, model, draftStyle }: {
         onChange={() => setSettings(current => ({ ...current, mode: 'vibe' }))} /> Vibe Transfer（所有参考图一起使用；仅 V4 / V4.5 模型）</label>
       <label className="history-select"><input type="radio" name="character-mode" checked={settings.mode === 'img2img'}
         onChange={() => setSettings(current => ({ ...current, mode: 'img2img' }))} /> 图生图（参考图按条目轮流使用；所有模型）</label>
+      {settings.mode === 'vibe' && <div className="experiment-range-fields">
+        <label className="field"><span>信息提取度（0.01–1，越高越贴近参考图中的角色，越低越只取风格）</span>
+          <input type="text" inputMode="decimal" value={settings.information} onChange={event => setSettings(current => ({ ...current, information: event.target.value }))} /></label>
+      </div>}
+      {settings.mode === 'vibe' && <p className="prompt-hint">每张参考图会先编码成 vibe（NovelAI 对编码另行扣费），结果按参考图、模型和信息提取度缓存在服务器上，之后的条目和批跑会复用，不再重复扣费。</p>}
       {settings.mode === 'vibe' && !vibeSupported && <p className="experiment-note">当前模型不支持 Vibe Transfer，请在生成设置中选择 V4 / V4.5 模型，或改用图生图。</p>}
       {settings.mode === 'img2img' && <div className="experiment-range-fields">
         <label className="field"><span>strength（0.01–0.99，越大越偏离原图）</span>

@@ -41,6 +41,18 @@ runs are dataset runs (`kind: "dataset"`) and inherit every rule in
   seed `base + N − 1`. Vibe: all references, model must be V4/V4.5 (V5
   rejects vibe upstream). Img2img: reference `[(N−1) mod R]`, strength
   0.01–0.99, noise 0–0.99, `extra_noise_seed = seed`; no native characters.
+- Vibe on V4/V4.5 is two-step: each reference is first encoded with MCP
+  `encode_vibe {reference, information_extracted, model}` and the returned
+  token (not raw image base64) goes into `generate_image.references`. Raw
+  images make NovelAI fail with "stream error: Internal Server Error"
+  (verified 2026-10-29, PNG and JPEG). `information_extracted` (0.01–1.0,
+  default 1.0) is frozen per run. Tokens are cached privately per owner under
+  `reference-images/<user>/vibes/` keyed by sha256 + model + information and
+  removed with the last copy of the image; encoding is a paid call and runs
+  after the request snapshot is recorded. Missing `encode_vibe` →
+  `unsupported_reference_mode` before any paid call.
+- Upstream tool errors are logged as one bounded, printable line
+  (`NovelAI tool <name> failed: …`); they never contain images or tokens.
 - At call time the manager loads bytes and verifies the pinned sha256;
   missing/changed → that group fails `reference_unavailable`, run continues.
 - The provider checks `tools/list` for `references` / `image_to_image`

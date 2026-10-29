@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import re
 import stat
 import struct
 import time
@@ -19,6 +20,7 @@ MAX_REFERENCE_SIDE = 2048
 MIN_REFERENCE_SIDE = 64
 MAX_REFERENCES_PER_OWNER = 20
 MAX_REFERENCE_BYTES_PER_OWNER = 128 * 1024 * 1024
+MAX_VIBE_TOKEN_BYTES = 8 * 1024 * 1024
 DIRECTORY_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 FILE_FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
@@ -226,6 +228,9 @@ class ReferenceImageStore:
             return None
         return item, data
 
+    def vibe_tokens(self, user_id: str) -> "OwnerVibeTokens":
+        return OwnerVibeTokens(self, user_id)
+
     def in_use(self, connection, user_id: str, image_id: str) -> bool:
         rows = connection.execute(
             "SELECT definition_json FROM style_experiment_runs WHERE user_id = ? "
@@ -250,9 +255,20 @@ class ReferenceImageStore:
                 raise ReferenceFailure(
                     409, "reference_in_use", "Reference image is used by an active run",
                 )
+            sha256 = connection.execute(
+                "SELECT sha256 FROM reference_images WHERE user_id = ? AND id = ?",
+                (user_id, image_id),
+            ).fetchone()[0]
             connection.execute(
                 "DELETE FROM reference_images WHERE user_id = ? AND id = ?", (user_id, image_id),
             )
+            shared = connection.execute(
+                "SELECT 1 FROM reference_images WHERE user_id = ? AND sha256 = ?",
+                (user_id, sha256),
+            ).fetchone()
+        if shared is None:
+            # Cached vibes derive from the image; drop them with its last copy.
+            self.vibe_tokens(user_id).forget(sha256)
         try:
             directory = self._owner_directory(user_id, create=False)
         except OSError:
@@ -264,6 +280,102 @@ class ReferenceImageStore:
         finally:
             os.close(directory)
         return True
+
+
+class OwnerVibeTokens:
+    """Private on-disk cache of encode_vibe results for one owner (paid to create)."""
+
+    def __init__(self, store: "ReferenceImageStore", user_id: str):
+        self.store = store
+        self.user_id = user_id
+
+    @staticmethod
+    def _name(sha256: str, model: str, information: float) -> str:
+        settings = hashlib.sha256(f"{model}\0{information:.4f}".encode()).hexdigest()[:24]
+        return f"{sha256}-{settings}.vibe"
+
+    def _directory(self, *, create: bool) -> int:
+        owner = self.store._owner_directory(self.user_id, create=create)
+        try:
+            if create:
+                try:
+                    os.mkdir("vibes", 0o700, dir_fd=owner)
+                except FileExistsError:
+                    pass
+            return os.open("vibes", DIRECTORY_FLAGS, dir_fd=owner)
+        finally:
+            os.close(owner)
+
+    def get(self, sha256: str, model: str, information: float) -> str | None:
+        if not re.fullmatch(r"[0-9a-f]{64}", sha256):
+            return None
+        try:
+            directory = self._directory(create=False)
+        except OSError:
+            return None
+        try:
+            name = self._name(sha256, model, information)
+            descriptor = os.open(name, FILE_FLAGS, dir_fd=directory)
+            try:
+                details = os.fstat(descriptor)
+                size = details.st_size
+                if not stat.S_ISREG(details.st_mode) or not 0 < size <= MAX_VIBE_TOKEN_BYTES:
+                    return None
+                chunks = bytearray()
+                while chunk := os.read(descriptor, 65536):
+                    chunks.extend(chunk)
+                    if len(chunks) > MAX_VIBE_TOKEN_BYTES:
+                        return None
+            finally:
+                os.close(descriptor)
+        except OSError:
+            return None
+        finally:
+            os.close(directory)
+        return chunks.decode("ascii", errors="replace")
+
+    def put(self, sha256: str, model: str, information: float, token: str) -> None:
+        data = token.encode("ascii")
+        if not re.fullmatch(r"[0-9a-f]{64}", sha256) or not 0 < len(data) <= MAX_VIBE_TOKEN_BYTES:
+            return
+        directory = self._directory(create=True)
+        name = self._name(sha256, model, information)
+        temporary = f".{name}.{uuid4().hex}"
+        try:
+            descriptor = os.open(
+                temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600,
+                dir_fd=directory,
+            )
+            try:
+                view = memoryview(data)
+                while view:
+                    written = os.write(descriptor, view)
+                    if written <= 0:
+                        raise OSError("Vibe token write failed")
+                    view = view[written:]
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+            os.replace(temporary, name, src_dir_fd=directory, dst_dir_fd=directory)
+        except OSError:
+            try:
+                os.unlink(temporary, dir_fd=directory)
+            except OSError:
+                pass
+        finally:
+            os.close(directory)
+
+    def forget(self, sha256: str) -> None:
+        try:
+            directory = self._directory(create=False)
+        except OSError:
+            return
+        try:
+            for name in os.listdir(directory):
+                if name.startswith(f"{sha256}-"):
+                    os.unlink(name, dir_fd=directory)
+        finally:
+            os.close(directory)
 
 
 def _uuid(value: str) -> bool:

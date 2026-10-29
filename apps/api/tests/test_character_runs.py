@@ -63,7 +63,7 @@ class ReferenceProvider:
     def generate(self, parameters):
         raise AssertionError("reference groups must use generate_with_request")
 
-    def generate_with_request(self, parameters, record_request, *, references=()):
+    def generate_with_request(self, parameters, record_request, *, references=(), vibe_tokens=None):
         self.calls.append((parameters, list(references)))
         record_request({"prompt": parameters.base_prompt, "references": len(references)})
         return [GeneratedImage(png(), "image/png")] * parameters.sample_count
@@ -285,7 +285,12 @@ BASE_FIELDS = (
 )
 
 
-def reference_transport(tools):
+ENCODE_VIBE = {"name": "encode_vibe", "inputSchema": schema(
+    "reference", "information_extracted", "model",
+)}
+
+
+def reference_transport(tools, *, encode_error=None):
     calls = []
 
     def handler(request: httpx.Request):
@@ -298,6 +303,16 @@ def reference_transport(tools):
             result = {"protocolVersion": "2025-06-18"}
         elif method == "tools/list":
             result = {"tools": tools}
+        elif payload["params"]["name"] == "encode_vibe":
+            encodes = sum(
+                1 for call in calls
+                if call["method"] == "tools/call" and call["params"]["name"] == "encode_vibe"
+            )
+            result = (
+                {"isError": True, "content": [{"type": "text", "text": encode_error}]}
+                if encode_error else
+                {"content": [{"type": "text", "text": f"VIBETOKEN{encodes - 1:08d}abcdef=="}]}
+            )
         else:
             image = base64.b64encode(png()).decode()
             result = {"content": [{"type": "image", "mimeType": "image/png", "data": image}]}
@@ -309,10 +324,12 @@ def reference_transport(tools):
     return httpx.MockTransport(handler), calls
 
 
-def reference_parameters(mode):
+def reference_parameters(mode, information=None):
     reference = {"mode": mode, "images": [
         {"id": str(uuid4()), "sha256": "a" * 64}, {"id": str(uuid4()), "sha256": "b" * 64},
     ]}
+    if information is not None:
+        reference["information_extracted"] = information
     if mode == "img2img":
         reference.update(images=reference["images"][:1], strength=0.5, noise=0.2)
     return GenerationRequest.model_validate({
@@ -321,28 +338,64 @@ def reference_parameters(mode):
     })
 
 
-def test_mcp_vibe_and_img2img_arguments_and_redacted_snapshot() -> None:
-    tools = [
-        {"name": "generate_image", "inputSchema": schema(*BASE_FIELDS, "references")},
-        {"name": "image_to_image", "inputSchema": schema(
-            *BASE_FIELDS, "image", "strength", "noise", "extra_noise_seed",
-        )},
-    ]
-    transport, calls = reference_transport(tools)
+class MemoryVibes:
+    def __init__(self):
+        self.tokens = {}
+
+    def get(self, sha256, model, information):
+        return self.tokens.get((sha256, model, information))
+
+    def put(self, sha256, model, information, token):
+        self.tokens[(sha256, model, information)] = token
+
+
+def tool_calls(calls, name):
+    return [call["params"] for call in calls
+            if call["method"] == "tools/call" and call["params"]["name"] == name]
+
+
+TOOLS = [
+    {"name": "generate_image", "inputSchema": schema(*BASE_FIELDS, "references")},
+    {"name": "image_to_image", "inputSchema": schema(
+        *BASE_FIELDS, "image", "strength", "noise", "extra_noise_seed",
+    )},
+    ENCODE_VIBE,
+]
+
+
+def test_mcp_vibe_encodes_references_once_and_img2img_arguments_are_redacted() -> None:
+    transport, calls = reference_transport(TOOLS)
     provider = NovelAiMcpProvider("https://mcp.example/x", "token", transport=transport)
     recorded = []
+    vibes = MemoryVibes()
+    parameters = reference_parameters("vibe", information=0.7)
     provider.generate_with_request(
-        reference_parameters("vibe"), recorded.append, references=[png(), jpeg()],
+        parameters, recorded.append, references=[png(), jpeg()], vibe_tokens=vibes,
     )
-    tool_call = calls[-1]["params"]
-    assert tool_call["name"] == "generate_image"
-    assert tool_call["arguments"]["references"] == [
-        base64.b64encode(png()).decode(), base64.b64encode(jpeg()).decode(),
+    encodes = tool_calls(calls, "encode_vibe")
+    assert [call["arguments"] for call in encodes] == [
+        {"reference": base64.b64encode(png()).decode(), "information_extracted": 0.7,
+         "model": "nai-diffusion-4-5-full"},
+        {"reference": base64.b64encode(jpeg()).decode(), "information_extracted": 0.7,
+         "model": "nai-diffusion-4-5-full"},
+    ]
+    generate = tool_calls(calls, "generate_image")[-1]
+    # NovelAI V4/V4.5 receives encoded vibe tokens, never raw image bytes.
+    assert generate["arguments"]["references"] == [
+        "VIBETOKEN00000000abcdef==", "VIBETOKEN00000001abcdef==",
     ]
     assert recorded[0]["references"] == [
-        {"sha256": "a" * 64, "byte_size": len(png())},
-        {"sha256": "b" * 64, "byte_size": len(jpeg())},
+        {"sha256": "a" * 64, "byte_size": len(png()), "information_extracted": 0.7},
+        {"sha256": "b" * 64, "byte_size": len(jpeg()), "information_extracted": 0.7},
     ]
+    assert "VIBETOKEN" not in json.dumps(recorded)
+    provider.generate_with_request(
+        parameters, recorded.append, references=[png(), jpeg()], vibe_tokens=vibes,
+    )
+    assert len(tool_calls(calls, "encode_vibe")) == 2  # cached tokens: no second paid encode
+    assert tool_calls(calls, "generate_image")[-1]["arguments"]["references"] == (
+        generate["arguments"]["references"]
+    )
     provider.generate_with_request(
         reference_parameters("img2img"), recorded.append, references=[png()],
     )
@@ -354,15 +407,21 @@ def test_mcp_vibe_and_img2img_arguments_and_redacted_snapshot() -> None:
         0.5, 0.2, 5,
     )
     assert "character_prompts" not in arguments and "references" not in arguments
-    assert recorded[1]["image"] == {"sha256": "a" * 64, "byte_size": len(png())}
+    assert recorded[-1]["image"] == {"sha256": "a" * 64, "byte_size": len(png())}
     assert base64.b64encode(png()).decode() not in json.dumps(recorded)
 
 
-@pytest.mark.parametrize("mode", ["vibe", "img2img"])
-def test_mcp_missing_reference_support_fails_before_paid_call(mode) -> None:
-    transport, calls = reference_transport(
-        [{"name": "generate_image", "inputSchema": schema(*BASE_FIELDS)}],
-    )
+@pytest.mark.parametrize(
+    ("mode", "tools"),
+    [
+        ("vibe", [{"name": "generate_image", "inputSchema": schema(*BASE_FIELDS)}]),
+        # References without encode_vibe would send raw images, which NovelAI rejects.
+        ("vibe", [{"name": "generate_image", "inputSchema": schema(*BASE_FIELDS, "references")}]),
+        ("img2img", [{"name": "generate_image", "inputSchema": schema(*BASE_FIELDS)}]),
+    ],
+)
+def test_mcp_missing_reference_support_fails_before_paid_call(mode, tools) -> None:
+    transport, calls = reference_transport(tools)
     provider = NovelAiMcpProvider("https://mcp.example/x", "token", transport=transport)
     references = [png(), jpeg()] if mode == "vibe" else [png()]
     from novelai_api.generations import ProviderFailure
@@ -527,3 +586,78 @@ def test_run_creation_rechecks_references_inside_the_insert_transaction(
     with pytest.raises(ReferenceMissing):
         service.store.create(user, character_run([image.id]), references=pinned)
     assert service.store.active(user) is None
+
+
+def test_mcp_encode_failure_logs_upstream_text_and_skips_generation(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from novelai_api.generations import ProviderFailure
+
+    transport, calls = reference_transport(
+        TOOLS, encode_error="NovelAI stream error: Internal Server Error",
+    )
+    provider = NovelAiMcpProvider("https://mcp.example/x", "token", transport=transport)
+    vibes = MemoryVibes()
+    caplog.set_level("WARNING", logger="novelai_api.mcp_images")
+    with pytest.raises(ProviderFailure) as failure:
+        provider.generate_with_request(
+            reference_parameters("vibe"), lambda _arguments: None,
+            references=[png(), jpeg()], vibe_tokens=vibes,
+        )
+    assert failure.value.code == "provider_error"
+    assert "encode_vibe failed: NovelAI stream error: Internal Server Error" in caplog.text
+    assert "token" not in caplog.text.lower().replace("vibe token", "")
+    assert tool_calls(calls, "generate_image") == [] and vibes.tokens == {}
+
+
+def test_owner_vibe_cache_is_private_keyed_and_dropped_with_last_image_copy(
+    database: Database,
+) -> None:
+    user = owner(database)
+    store = ReferenceImageStore(database)
+    first = store.add(user, png(), source="upload")
+    second = store.add(user, png(), source="result")
+    cache = store.vibe_tokens(user)
+    cache.put(first.sha256, "nai-diffusion-4-5-full", 1.0, "VIBETOKEN00000000abcdef==")
+    assert cache.get(first.sha256, "nai-diffusion-4-5-full", 1.0) == "VIBETOKEN00000000abcdef=="
+    assert cache.get(first.sha256, "nai-diffusion-4-5-full", 0.5) is None
+    assert cache.get(first.sha256, "nai-diffusion-4-full", 1.0) is None
+    assert store.vibe_tokens(owner(database, "bob")).get(
+        first.sha256, "nai-diffusion-4-5-full", 1.0,
+    ) is None
+    files = list((store.path / user / "vibes").iterdir())
+    if os.name == "posix":
+        assert all(stat.S_IMODE(path.stat().st_mode) == 0o600 for path in files)
+    store.delete(user, first.id)
+    assert cache.get(first.sha256, "nai-diffusion-4-5-full", 1.0) is not None  # copy remains
+    store.delete(user, second.id)
+    assert cache.get(first.sha256, "nai-diffusion-4-5-full", 1.0) is None
+
+
+def test_vibe_information_extracted_is_frozen_into_every_group(database: Database) -> None:
+    user = owner(database)
+    store = ReferenceImageStore(database)
+    image = store.add(user, png(), source="upload")
+    provider = ReferenceProvider()
+    manager = GenerationManager(database, provider, cache=ResultCache())
+    service = StyleExperimentService(database, manager)
+    payload = character_run([image.id]).model_dump(mode="json")
+    payload["character"]["information_extracted"] = 0.6
+    run = service.store.create(
+        user, DatasetRunCreate.model_validate(payload),
+        references=[ReferenceImageUse(id=image.id, sha256=image.sha256)],
+    )
+    assert run.character.information_extracted == 0.6
+    manager.start()
+    try:
+        pump(service, user, run.id)
+    finally:
+        service.stop()
+        manager.stop()
+    assert [call.reference.vibe_information for call, _refs in provider.calls] == [0.6] * 3
+    for invalid in ({"information_extracted": 0}, {"information_extracted": 1.5},
+                    {"mode": "img2img", "strength": 0.5, "noise": 0, "information_extracted": 0.5}):
+        bad = character_run([image.id]).model_dump(mode="json")
+        bad["character"].update(invalid)
+        with pytest.raises(ValidationError):
+            DatasetRunCreate.model_validate(bad)

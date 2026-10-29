@@ -41,6 +41,7 @@ export interface ReferenceUse {
   images: ReferenceImageUse[]
   strength?: number | null
   noise?: number | null
+  information_extracted?: number | null
 }
 
 export interface ReferenceImage {
@@ -60,6 +61,7 @@ export interface CharacterRunRequest {
   reference_ids: string[]
   strength?: number
   noise?: number
+  information_extracted?: number
 }
 
 export interface CharacterRunPlan {
@@ -68,6 +70,7 @@ export interface CharacterRunPlan {
   references: ReferenceImageUse[]
   strength?: number | null
   noise?: number | null
+  information_extracted?: number | null
 }
 
 export interface ExperimentContext {

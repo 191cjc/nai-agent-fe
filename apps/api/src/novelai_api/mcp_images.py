@@ -3,6 +3,7 @@
 import base64
 import binascii
 import json
+import logging
 import re
 import time
 from collections.abc import Callable, Sequence
@@ -21,9 +22,14 @@ from .generations import (
     GeneratedImage,
     GenerationRequest,
     ProviderFailure,
+    VibeTokens,
 )
 
+logger = logging.getLogger(__name__)
+
 MAX_RESPONSE_BYTES = 48 * 1024 * 1024
+MAX_VIBE_TOKEN_CHARS = 8 * 1024 * 1024
+VIBE_TOKEN = re.compile(r"[A-Za-z0-9+/=_-]{16,}")
 PROTOCOL_VERSION = "2025-06-18"
 REQUIRED_FIELDS = frozenset(
     {
@@ -136,7 +142,7 @@ class NovelAiMcpProvider:
 
     def generate_with_request(
         self, parameters: GenerationRequest, record_request: Callable[[dict[str, Any]], None],
-        *, references: Sequence[bytes] = (),
+        *, references: Sequence[bytes] = (), vibe_tokens: VibeTokens | None = None,
     ) -> Sequence[GeneratedImage]:
         reference = parameters.reference
         if (reference is None) != (not references) or (
@@ -251,7 +257,15 @@ class NovelAiMcpProvider:
                 not isinstance(schema, dict) or not isinstance(schema.get("properties"), dict)
                 or (reference.mode == "img2img"
                     and not IMAGE_TO_IMAGE_FIELDS.issubset(schema["properties"]))
-                or (reference.mode == "vibe" and "references" not in schema["properties"])
+                or (reference.mode == "vibe" and (
+                    "references" not in schema["properties"]
+                    # V4/V4.5 vibes must be pre-encoded; raw images make NovelAI fail (500).
+                    or not any(
+                        isinstance(tool, dict) and tool.get("name") == "encode_vibe"
+                        and "reference" in ((tool.get("inputSchema") or {}).get("properties") or {})
+                        for tool in tools
+                    )
+                ))
             ):
                 raise ProviderFailure("unsupported_reference_mode")
             if not isinstance(schema, dict) or not isinstance(schema.get("properties"), dict):
@@ -312,8 +326,6 @@ class NovelAiMcpProvider:
                 )
                 if "extra_noise_seed" in properties:
                     arguments["extra_noise_seed"] = parameters.seed
-            elif reference is not None:
-                arguments["references"] = encoded
             required = schema.get("required", [])
             if not isinstance(required, list) or not set(required).issubset(arguments):
                 raise ProviderFailure("incompatible_mcp_server")
@@ -329,28 +341,40 @@ class NovelAiMcpProvider:
                 if reference.mode == "img2img":
                     snapshot["image"] = digests[0]
                 else:
-                    snapshot["references"] = digests
+                    snapshot["references"] = [
+                        {**digest, "information_extracted": reference.vibe_information}
+                        for digest in digests
+                    ]
+            # Recorded before any paid call (vibe encoding included).
             record_request(snapshot)
+            if reference is not None and reference.mode == "vibe":
+                tokens = []
+                for image, data in zip(reference.images, encoded, strict=True):
+                    information = reference.vibe_information
+                    token = (
+                        vibe_tokens.get(image.sha256, parameters.model, information)
+                        if vibe_tokens is not None else None
+                    )
+                    if token is None:
+                        token = self._vibe_token(send(
+                            client, "tools/call",
+                            {"name": "encode_vibe", "arguments": {
+                                "reference": data, "information_extracted": information,
+                                "model": parameters.model,
+                            }},
+                            paid=True,
+                        ))
+                        if vibe_tokens is not None:
+                            vibe_tokens.put(image.sha256, parameters.model, information, token)
+                    tokens.append(token)
+                arguments["references"] = tokens
             result = send(
                 client,
                 "tools/call",
                 {"name": tool_name, "arguments": arguments},
                 paid=True,
             )
-        if result.get("isError") is True:
-            content = result.get("content")
-            text = (
-                " ".join(
-                    item["text"][:256].lower()
-                    for item in content
-                    if isinstance(item, dict) and isinstance(item.get("text"), str)
-                )
-                if isinstance(content, list)
-                else ""
-            )
-            if "anlas" in text or "insufficient" in text or "balance" in text:
-                raise ProviderFailure("insufficient_balance")
-            raise ProviderFailure("provider_error")
+        self._raise_tool_error(result, tool_name)
         content = result.get("content")
         if not isinstance(content, list):
             raise ProviderFailure("invalid_result")
@@ -371,6 +395,51 @@ class NovelAiMcpProvider:
         if len(images) != parameters.sample_count:
             raise ProviderFailure("invalid_result")
         return images
+
+    @staticmethod
+    def _raise_tool_error(result: dict, tool_name: str) -> None:
+        if result.get("isError") is not True:
+            return
+        content = result.get("content")
+        text = (
+            " ".join(
+                item["text"][:256]
+                for item in content
+                if isinstance(item, dict) and isinstance(item.get("text"), str)
+            )
+            if isinstance(content, list)
+            else ""
+        )
+        # Upstream error text names no credentials; keep a bounded single-line copy for
+        # diagnosis (it never echoes request images or tokens).
+        logger.warning(
+            "NovelAI tool %s failed: %s", tool_name,
+            re.sub(r"[^\x20-\x7e]+", " ", text)[:300] or "(no message)",
+        )
+        lowered = text.lower()
+        if "anlas" in lowered or "insufficient" in lowered or "balance" in lowered:
+            raise ProviderFailure("insufficient_balance")
+        raise ProviderFailure("provider_error")
+
+    @classmethod
+    def _vibe_token(cls, result: dict) -> str:
+        cls._raise_tool_error(result, "encode_vibe")
+        candidates: list[Any] = []
+        structured = result.get("structuredContent")
+        if isinstance(structured, dict):
+            candidates.extend(structured.values())
+        content = result.get("content")
+        if isinstance(content, list):
+            candidates.extend(
+                item.get("text") for item in content
+                if isinstance(item, dict) and item.get("type") == "text"
+            )
+        for candidate in candidates:
+            if isinstance(candidate, str):
+                token = candidate.strip()
+                if len(token) <= MAX_VIBE_TOKEN_CHARS and VIBE_TOKEN.fullmatch(token):
+                    return token
+        raise ProviderFailure("invalid_result")
 
     @staticmethod
     def _check_status(status: int, *, paid: bool) -> None:

@@ -59,6 +59,8 @@ export interface CharacterSettings {
   referenceIds: string[]
   strength: string
   noise: string
+  /** Vibe only: encode_vibe information_extracted, 0.01–1. */
+  information: string
 }
 
 function ratio(value: string, label: string, min: number, max: number): number {
@@ -75,7 +77,10 @@ export function characterRequest(settings: CharacterSettings, model: string, vib
   if (settings.referenceIds.length > MAX_REFERENCES) throw new Error(`最多选择 ${MAX_REFERENCES} 张参考图。`)
   if (settings.mode === 'vibe') {
     if (!vibeModels.includes(model.trim())) throw new Error('Vibe Transfer 只支持 V4 / V4.5 模型，请在生成设置中切换模型或改用图生图。')
-    return { traits: settings.traits, mode: 'vibe', reference_ids: [...settings.referenceIds] }
+    return {
+      traits: settings.traits, mode: 'vibe', reference_ids: [...settings.referenceIds],
+      information_extracted: ratio(settings.information, '信息提取度', 0.01, 1),
+    }
   }
   return {
     traits: settings.traits, mode: 'img2img', reference_ids: [...settings.referenceIds],

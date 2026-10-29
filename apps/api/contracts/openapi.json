@@ -115,6 +115,17 @@
       "CharacterPlan": {
         "description": "Frozen character block: reference ids are pinned to their digests at creation.",
         "properties": {
+          "information_extracted": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Information Extracted"
+          },
           "mode": {
             "enum": [
               "vibe",
@@ -198,6 +209,19 @@
       },
       "CharacterRequest": {
         "properties": {
+          "information_extracted": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.01,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Information Extracted"
+          },
           "mode": {
             "enum": [
               "vibe",
@@ -1334,6 +1358,19 @@
             "minItems": 1,
             "title": "Images",
             "type": "array"
+          },
+          "information_extracted": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.01,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Information Extracted"
           },
           "mode": {
             "enum": [
