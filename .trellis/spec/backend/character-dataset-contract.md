@@ -51,6 +51,13 @@ runs are dataset runs (`kind: "dataset"`) and inherit every rule in
   removed with the last copy of the image; encoding is a paid call and runs
   after the request snapshot is recorded. Missing `encode_vibe` →
   `unsupported_reference_mode` before any paid call.
+- Known upstream defect (verified 2026-10-29, MCP `novelai-image` 4.0.0b3):
+  `encode_vibe` returns a valid token (`structuredContent.result`), but any
+  `generate_image` call with `references` fails within ~0.6 s with
+  "NovelAI HTTP 500" for V4 and V4.5, even with minimal parameters. The web UI
+  therefore defaults to image-to-image and marks vibe as unavailable; remove
+  that notice only after a successful paid vibe probe. Image-to-image works
+  (one image took ~132 s, close to the 180 s MCP deadline).
 - Upstream tool errors are logged as one bounded, printable line
   (`NovelAI tool <name> failed: …`); they never contain images or tokens.
 - At call time the manager loads bytes and verifies the pinned sha256;
