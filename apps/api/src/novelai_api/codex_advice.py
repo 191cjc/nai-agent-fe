@@ -131,10 +131,23 @@ def _config(base_url: str | None = None) -> str:
         'sandbox_mode = "read-only"',
         'web_search = "disabled"',
         "allow_login_shell = false",
-        # The pinned CLI ignores the SDK's OPENAI_BASE_URL environment variable and
-        # would silently call the default endpoint; only this config key is honored.
+    ]
+    if base_url:
+        # The pinned CLI ignores the SDK's OPENAI_BASE_URL environment variable, and its
+        # built-in provider first tries Responses WebSockets that relays may close. A
+        # custom provider sends HTTPS only and reuses the isolated API-key login.
         # A JSON string literal is a valid TOML basic string for a validated URL.
-        *([f"openai_base_url = {json.dumps(base_url.rstrip('/'))}"] if base_url else []),
+        lines[:0] = ['model_provider = "relay"']
+        lines += [
+            "",
+            "[model_providers.relay]",
+            'name = "relay"',
+            f"base_url = {json.dumps(base_url.rstrip('/'))}",
+            'wire_api = "responses"',
+            "requires_openai_auth = true",
+            "supports_websockets = false",
+        ]
+    lines += [
         "",
         "[features]",
         "skip_host_skill_discovery = true",
@@ -327,6 +340,10 @@ class CodexAdviceRunner:
                 continue
             if event_type == "turn.completed":
                 completed = True
+                continue
+            if event_type == "error":
+                # Transport notices such as "Reconnecting... n/5" are non-fatal; a fatal
+                # outcome always ends with turn.failed or without turn.completed.
                 continue
             raise RuntimeError("Codex turn failed or returned an unknown event")
         if not completed or message is None:

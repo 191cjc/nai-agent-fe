@@ -400,6 +400,42 @@ def test_sdk_warnings_never_release_advice_without_a_completed_turn(tmp_path: Pa
     assert failure.value.code == "advice_failed"
 
 
+def test_sdk_reconnect_notices_before_https_fallback_still_return_advice(tmp_path: Path) -> None:
+    async def events():
+        yield parse_thread_event({"type": "turn.started"})
+        for attempt in range(2, 6):
+            yield parse_thread_event({
+                "type": "error",
+                "message": f"Reconnecting... {attempt}/5 (websocket closed by server)",
+            })
+        yield parse_thread_event({
+            "type": "item.completed",
+            "item": {"id": "fallback", "type": "error",
+                     "message": "Falling back from WebSockets to HTTPS transport."},
+        })
+        yield sdk_event("item.completed", "agent_message", '{"suggestion":"rim lighting"}')
+        yield sdk_event("turn.completed")
+
+    runner = isolated_runner(tmp_path, FakeCodex(events))
+    assert asyncio.run(AdviceService(runner).advise("lighting")).suggestion == "rim lighting"
+
+
+@pytest.mark.parametrize("terminal", ["turn.failed", None])
+def test_sdk_error_notices_never_rescue_a_failed_or_unfinished_turn(
+    tmp_path: Path, terminal: str | None,
+) -> None:
+    async def events():
+        yield parse_thread_event({"type": "error", "message": "unexpected status 401"})
+        yield sdk_event("item.completed", "agent_message", '{"suggestion":"partial"}')
+        if terminal:
+            yield parse_thread_event({"type": terminal, "error": {"message": "401"}})
+
+    runner = isolated_runner(tmp_path, FakeCodex(events))
+    with pytest.raises(AdviceFailure) as failure:
+        asyncio.run(AdviceService(runner).advise("lighting"))
+    assert failure.value.code == "advice_failed"
+
+
 @pytest.mark.parametrize("event_type", ["item.started", "item.updated"])
 def test_sdk_rejects_error_items_that_are_not_completed_warnings(
     tmp_path: Path, event_type: str, caplog: pytest.LogCaptureFixture,
@@ -450,9 +486,17 @@ def test_sdk_configured_endpoint_and_model_preserve_isolation(
     assert asyncio.run(runner.run("only this section text")) == {"suggestion": "中文解释"}
     # The pinned CLI ignores OPENAI_BASE_URL; the endpoint must be in its config file.
     assert "base_url" not in sdk.options
-    assert tomllib.loads(observed["config"]).get("openai_base_url") == (
-        base_url.rstrip("/") if base_url else None
-    )
+    config = tomllib.loads(observed["config"])
+    if base_url:
+        # HTTPS-only custom provider: relays may close the default WebSocket transport.
+        assert config["model_provider"] == "relay"
+        assert config["model_providers"]["relay"] == {
+            "name": "relay", "base_url": base_url.rstrip("/"), "wire_api": "responses",
+            "requires_openai_auth": True, "supports_websockets": False,
+        }
+    else:
+        assert "model_provider" not in config and "model_providers" not in config
+    assert "openai_base_url" not in config
     assert sdk.thread_options.get("model") == model
     assert ("model" in sdk.thread_options) is (model is not None)
     assert "api_key" not in sdk.options

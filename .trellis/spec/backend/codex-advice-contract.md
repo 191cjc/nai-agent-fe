@@ -34,12 +34,16 @@ proof that every tool is unavailable before execution.
   stdin. Do not inherit a host CLI login, project files or broad process
   environment. Alongside fixed NovelAI-oriented instructions, only submitted
   advice text becomes dynamic model input; no chat thread is reused or persisted.
-- Write an explicit base as top-level `openai_base_url` (trailing `/`
-  stripped) in the isolated `config.toml`, and pass an explicit model through
-  `thread.model`. Omit both when absent. Never rely on SDK `options.base_url`:
-  it only sets `OPENAI_BASE_URL`, which pinned CLI 0.152.1 ignores, silently
-  sending turns to the default endpoint (verified 2026-10-28 with a local fake
-  relay: env var → 0 requests and a 45 s hang; config key → `/v1/responses`). Keep API-key login
+- Configure an explicit base as an isolated custom provider in `config.toml`:
+  `model_provider = "relay"` with `[model_providers.relay]` `base_url`
+  (trailing `/` stripped), `wire_api = "responses"`,
+  `requires_openai_auth = true` (reuses the stdin API-key login) and
+  `supports_websockets = false`. Pass an explicit model through
+  `thread.model`. Omit both when absent. Never rely on SDK `options.base_url`
+  or top-level `openai_base_url`: pinned CLI 0.152.1 ignores
+  `OPENAI_BASE_URL` (calls the default endpoint and hangs), and the built-in
+  provider first tries Responses WebSockets, which relays may close, adding
+  five reconnect notices before HTTPS fallback (verified 2026-10-29). Keep API-key login
   on stdin; never pass SDK `api_key`, which would inject `CODEX_API_KEY`, or
   inherit a host endpoint/model/credential. Endpoint/model are backend config,
   never browser fields, prompt context or a model catalog migration.
@@ -82,6 +86,9 @@ proof that every tool is unavailable before execution.
   other non-message item (command, file, MCP, web search, todo list, unknown)
   remain tool attempts. Fatal failures arrive as `turn.failed`/`error` events.
   Rejection logs record only a sanitized item type, never item text.
+- Top-level `error` events (e.g. `Reconnecting... n/5`) are transport notices.
+  Ignore them; success still requires `turn.completed` with a valid final
+  message, and `turn.failed` or a stream without completion fails.
   Keep message/event bounds and reject tool items anywhere, including after
   turn completion; intermediate messages never bypass tool/stream validation.
 - Failure logs contain only a fixed timeout/tool category or the exception's
