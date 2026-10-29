@@ -55,8 +55,10 @@ runs are dataset runs (`kind: "dataset"`) and inherit every rule in
 - Legacy dataset/style definitions (no `styles`/`character`) are unchanged.
 - The web style pool offers built-in presets (`apps/web/src/style-presets.ts`):
   eight medium/technique tag sets, never artist tags, optionally prefixed with
-  the draft style; they are ordinary editable pool entries (overwrite asks to
-  confirm; append caps at 8). No server change.
+  a user-entered prefix that is empty by default (quality tags only). Never
+  prefix the draft style: it is itself a style and mixes into every preset.
+  Entries are ordinary editable pool items (overwrite asks to confirm; append
+  caps at 8). No server change.
 
 ## Tests Required
 

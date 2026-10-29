@@ -242,8 +242,9 @@ export function CharacterRunSettings({ api, state, model, draftStyle }: {
   api: WorkspaceApi; state: CharacterState; model: string; draftStyle: string
 }) {
   const { settings, setSettings, styles, setStyles } = state
-  const [usePrefix, setUsePrefix] = useState(true)
-  const prefix = usePrefix ? draftStyle : ''
+  // Optional shared prefix (e.g. quality tags), empty by default. Never the draft style:
+  // that is itself a style and would mix into every preset.
+  const [prefix, setPrefix] = useState('')
   const vibeSupported = VIBE_MODELS.includes(model.trim())
 
   return <>
@@ -287,8 +288,9 @@ export function CharacterRunSettings({ api, state, model, draftStyle }: {
       </div>
       <div className="dataset-style-presets">
         <span>预设画风组（{STYLE_PRESETS.map(preset => preset.label).join('、')}）</span>
-        <label className="history-select"><input type="checkbox" checked={usePrefix} disabled={!draftStyle.trim()}
-          onChange={event => setUsePrefix(event.target.checked)} /> 把当前草稿画风作为每个预设的公共前缀（如质量词）</label>
+        <input type="text" value={prefix} spellCheck={false} aria-label="预设公共前缀"
+          placeholder="可选：公共前缀，只填质量词等非画风标签，例如 best quality, very aesthetic"
+          onChange={event => setPrefix(event.target.value)} />
         <div className="dataset-custom">
           <button className="secondary" type="button" onClick={() => {
             if (styles.some(item => item.trim()) && !window.confirm('用预设画风组覆盖当前画风池？')) return

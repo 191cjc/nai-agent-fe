@@ -19,7 +19,7 @@ export const STYLE_PRESETS: readonly StylePreset[] = [
   { label: '像素风', tags: 'pixel art' },
 ]
 
-/** Optionally prefix each preset with the draft style (e.g. shared quality tags). */
+/** Optionally prefix each preset with user-entered non-style tags (e.g. quality tags). */
 export function presetStyles(prefix: string): string[] {
   const shared = prefix.trim()
   return STYLE_PRESETS.map(preset => shared ? `${shared}, ${preset.tags}` : preset.tags)
