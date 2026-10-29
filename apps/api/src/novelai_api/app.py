@@ -63,6 +63,7 @@ from .reference_images import (
 from .security import SESSION_COOKIE, SESSION_LIFETIME_SECONDS
 from .style_experiments import (
     ActiveRun,
+    ReferenceMissing,
     RunConflict,
     RunCreate,
     RunState,
@@ -530,6 +531,8 @@ def create_app(
                 resolved.append(ReferenceImageUse(id=item.id, sha256=item.sha256))
         try:
             return experiments.store.create(user.id, payload, references=resolved)
+        except ReferenceMissing:
+            return error(422, "reference_not_found", "Reference image not found")
         except RunConflict as exception:
             return error(409, exception.code, "Experiment run conflicts with existing work")
 

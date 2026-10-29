@@ -34,8 +34,9 @@ class RunCreate(BaseModel):
 
     @model_validator(mode="after")
     def valid_plan(self) -> Self:
-        if self.parameters.experiment is not None:
-            raise ValueError("Run parameters must not inherit experiment identity")
+        if self.parameters.experiment is not None or self.parameters.reference is not None:
+            # Reference images belong only to character dataset runs.
+            raise ValueError("Run parameters must not inherit experiment or reference identity")
         create_style_plan(self.parameters, self.ranges)
         return self
 
@@ -81,6 +82,10 @@ class RunConflict(Exception):
     def __init__(self, code: Literal["experiment_run_conflict", "experiment_run_active"]):
         self.code = code
         super().__init__(code)
+
+
+class ReferenceMissing(Exception):
+    """A pinned reference image disappeared before the run could be created."""
 
 
 class RunStore:
@@ -149,6 +154,14 @@ class RunStore:
             ).fetchone()
             if used:
                 raise RunConflict("experiment_run_conflict")
+            # Re-check pinned references in this write transaction so a concurrent delete
+            # cannot leave a new run pointing at missing bytes.
+            for reference in references or ():
+                if connection.execute(
+                    "SELECT 1 FROM reference_images WHERE user_id = ? AND id = ? AND sha256 = ?",
+                    (user_id, reference.id, reference.sha256),
+                ).fetchone() is None:
+                    raise ReferenceMissing("reference_not_found")
             seed = request.parameters.seed
             if seed is None:
                 seed = secrets.randbelow(4294967295) + 1

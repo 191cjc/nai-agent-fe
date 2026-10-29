@@ -496,3 +496,34 @@ def test_legacy_dataset_definition_is_unchanged_and_conflicts_with_character_sam
         service.store.create(user, DatasetRunCreate.model_validate({
             **request.model_dump(mode="json"), "id": str(plain.id),
         }), references=[ReferenceImageUse(id=image.id, sha256=image.sha256)])
+
+
+def test_style_experiment_runs_reject_reference_parameters() -> None:
+    from novelai_api.style_experiments import RunCreate
+
+    reference = {"mode": "vibe", "images": [{"id": str(uuid4()), "sha256": "a" * 64}]}
+    with pytest.raises(ValidationError, match="reference identity"):
+        RunCreate.model_validate({
+            "id": str(uuid4()),
+            "parameters": {**INPUT, "model": "nai-diffusion-4-5-full", "style_prompt": "a",
+                           "reference": reference},
+            "ranges": [{"tag_index": 0, "min": "0.5", "max": "1", "step": "0.5"}],
+        })
+
+
+def test_run_creation_rechecks_references_inside_the_insert_transaction(
+    database: Database,
+) -> None:
+    from novelai_api.style_experiments import ReferenceMissing
+
+    user = owner(database)
+    store = ReferenceImageStore(database)
+    image = store.add(user, png(), source="upload")
+    pinned = [ReferenceImageUse(id=image.id, sha256=image.sha256)]
+    store.delete(user, image.id)  # deleted after the route resolved it
+    service = StyleExperimentService(
+        database, GenerationManager(database, ReferenceProvider(), cache=ResultCache()),
+    )
+    with pytest.raises(ReferenceMissing):
+        service.store.create(user, character_run([image.id]), references=pinned)
+    assert service.store.active(user) is None
