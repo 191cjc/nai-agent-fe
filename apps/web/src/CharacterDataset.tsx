@@ -19,7 +19,7 @@ export interface CharacterState {
 
 /** Character run settings live in the dataset panel so collapsing it keeps them. */
 export function useCharacterSettings(draftStyle: string): CharacterState {
-  const [settings, setSettingsState] = useState<CharacterSettings>({ traits: '', mode: 'img2img', referenceIds: [], strength: '0.55', noise: '0', information: '1' })
+  const [settings, setSettingsState] = useState<CharacterSettings>({ traits: '', mode: 'vibe', referenceIds: [], strength: '0.55', noise: '0', information: '1' })
   // Until the user edits the pool it follows the live draft style, like style mode.
   const [edited, setEdited] = useState<string[] | null>(null)
   const styles = edited ?? [draftStyle]
@@ -259,10 +259,9 @@ export function CharacterRunSettings({ api, state, model, draftStyle }: {
     <fieldset className="dataset-categories">
       <legend>生成方式</legend>
       <label className="history-select"><input type="radio" name="character-mode" checked={settings.mode === 'vibe'}
-        onChange={() => setSettings(current => ({ ...current, mode: 'vibe' }))} /> Vibe Transfer（所有参考图一起使用；仅 V4 / V4.5 模型；当前服务不可用）</label>
+        onChange={() => setSettings(current => ({ ...current, mode: 'vibe' }))} /> Vibe Transfer（所有参考图一起使用；仅 V4 / V4.5 模型）</label>
       <label className="history-select"><input type="radio" name="character-mode" checked={settings.mode === 'img2img'}
         onChange={() => setSettings(current => ({ ...current, mode: 'img2img' }))} /> 图生图（参考图按条目轮流使用；所有模型）</label>
-      {settings.mode === 'vibe' && <p className="alert" role="alert">当前 NovelAI 服务的 Vibe Transfer 生成会失败（服务端返回 500，2026-10-29 已确认，与参数和图片无关），每条都会被记为失败，但参考图编码仍会扣费。请改用图生图，等服务方修复后再使用。</p>}
       {settings.mode === 'vibe' && <div className="experiment-range-fields">
         <label className="field"><span>信息提取度（0.01–1，越高越贴近参考图中的角色，越低越只取风格）</span>
           <input type="text" inputMode="decimal" value={settings.information} onChange={event => setSettings(current => ({ ...current, information: event.target.value }))} /></label>
