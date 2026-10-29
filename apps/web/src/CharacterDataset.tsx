@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Plus, Sparkles, Trash2, Upload, X } from 'lucide-react'
+import { Palette, Plus, Sparkles, Trash2, Upload, X } from 'lucide-react'
 import { ApiFailure, errorText, type ReferenceImage, type WorkspaceApi } from './api'
 import { MAX_REFERENCES, MAX_STYLE_POOL, MAX_TRAITS_LENGTH, characterRequest, type CharacterSettings } from './dataset-run'
 import { VIBE_MODELS } from './store'
+import { STYLE_PRESETS, presetStyles } from './style-presets'
 
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 
@@ -241,6 +242,8 @@ export function CharacterRunSettings({ api, state, model, draftStyle }: {
   api: WorkspaceApi; state: CharacterState; model: string; draftStyle: string
 }) {
   const { settings, setSettings, styles, setStyles } = state
+  const [usePrefix, setUsePrefix] = useState(true)
+  const prefix = usePrefix ? draftStyle : ''
   const vibeSupported = VIBE_MODELS.includes(model.trim())
 
   return <>
@@ -281,6 +284,24 @@ export function CharacterRunSettings({ api, state, model, draftStyle }: {
           <Plus size={14} aria-hidden="true" /> 添加画风</button>
         <button className="text-action" type="button" disabled={!draftStyle.trim() || styles.length >= MAX_STYLE_POOL}
           onClick={() => setStyles(current => [...current.filter(item => item.trim()), draftStyle])}>加入当前草稿画风</button>
+      </div>
+      <div className="dataset-style-presets">
+        <span>预设画风组（{STYLE_PRESETS.map(preset => preset.label).join('、')}）</span>
+        <label className="history-select"><input type="checkbox" checked={usePrefix} disabled={!draftStyle.trim()}
+          onChange={event => setUsePrefix(event.target.checked)} /> 把当前草稿画风作为每个预设的公共前缀（如质量词）</label>
+        <div className="dataset-custom">
+          <button className="secondary" type="button" onClick={() => {
+            if (styles.some(item => item.trim()) && !window.confirm('用预设画风组覆盖当前画风池？')) return
+            setStyles(() => presetStyles(prefix))
+          }}><Palette size={14} aria-hidden="true" /> 填入预设（覆盖）</button>
+          <button className="text-action" type="button" disabled={styles.filter(item => item.trim()).length >= MAX_STYLE_POOL}
+            onClick={() => setStyles(current => {
+              const kept = current.filter(item => item.trim())
+              const added = presetStyles(prefix).filter(item => !kept.includes(item))
+              return [...kept, ...added].slice(0, MAX_STYLE_POOL)
+            })}>追加预设（最多 {MAX_STYLE_POOL} 个）</button>
+        </div>
+        <p className="prompt-hint">预设只用媒介和技法标签，不含画师标签；填入后可自由修改。不同模型效果不同，建议先用 3–5 条试跑。</p>
       </div>
     </fieldset>
   </>

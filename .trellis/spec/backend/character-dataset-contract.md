@@ -53,6 +53,10 @@ runs are dataset runs (`kind: "dataset"`) and inherit every rule in
   disabled; 90 s timeout; dedicated identity-tag instructions. Each click is
   one paid call; the UI states images go to the configured advice provider.
 - Legacy dataset/style definitions (no `styles`/`character`) are unchanged.
+- The web style pool offers built-in presets (`apps/web/src/style-presets.ts`):
+  eight medium/technique tag sets, never artist tags, optionally prefixed with
+  the draft style; they are ordinary editable pool entries (overwrite asks to
+  confirm; append caps at 8). No server change.
 
 ## Tests Required
 
