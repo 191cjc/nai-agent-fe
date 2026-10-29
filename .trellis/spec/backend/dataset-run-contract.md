@@ -10,6 +10,9 @@ reconciliation, failure continuation, explicit Stop, no paid retry, restart
 reconciliation, one active run per owner). Frontend lifecycle rules follow
 [Style Experiment Contract](../frontend/style-experiment-contract.md).
 
+Character runs (reference images, style pools, traits) extend this contract;
+see [Character Dataset Runs](./character-dataset-contract.md).
+
 ## Signatures
 
 - `POST /api/dataset-runs`: `{id: UUID, parameters: GenerationRequest,

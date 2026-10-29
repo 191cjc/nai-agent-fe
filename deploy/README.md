@@ -413,3 +413,21 @@ drill, disable copied active runs before starting any application lifespan,
 keep all image/advice providers unconfigured and use a separate state/image
 root. Do not let a backup clone resume work against live paid credentials.
 Private image files require their own backup and keep their original expiry.
+
+## Character reference images (schema 6)
+
+Character dataset runs keep owner-uploaded and history-picked reference
+images under `/var/lib/novelai/reference-images/<user>/<id>` (directories
+0700, files 0600, service-owned), with metadata in SQLite. They have no
+seven-day expiry: they stay until the owner deletes them (max 20 images /
+128 MiB per owner). `novelai-admin backup` copies only SQLite, so back up this
+directory privately alongside `generation-images/` if references must
+survive disk loss; a restored database without its files makes the affected
+run groups fail with `reference_unavailable` instead of using other bytes.
+Never expose this directory through Nginx.
+
+This release migrates schema 5 → 6 at `ExecStartPre`. Take the verified
+private online backup and confirm no active jobs/runs before the restart;
+deploy the API before the web release. Rolling the API back below schema 6
+requires restoring the pre-upgrade backup. Trait advice sends the selected
+reference images to the configured advice provider only on an explicit click.

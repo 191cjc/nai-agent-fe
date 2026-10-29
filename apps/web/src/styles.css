@@ -363,6 +363,20 @@ h1, h2, h3 { letter-spacing: 0; }
 .dataset-export p { margin: 0; }
 .history-selection { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 0 0 8px; font-size: 12px; }
 .history-select { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 5px; color: var(--gold); font-size: 12px; }
+.dataset-mode { margin: 0; }
+.dataset-mode button { display: inline-flex; align-items: center; gap: 6px; }
+.reference-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+.reference-tile { display: grid; grid-template-rows: 110px auto; gap: 4px; min-width: 0; padding: 5px; border: 1px solid #44414c; border-radius: 4px; background: #25252e; color: var(--muted); font-size: 11px; cursor: pointer; }
+.reference-tile.selected { border-color: var(--gold); background: #39342d; }
+.reference-tile img { width: 100%; height: 110px; object-fit: contain; }
+.reference-placeholder { display: grid; place-items: center; height: 110px; }
+.reference-thumbnails { display: flex; flex-wrap: wrap; gap: 6px; }
+.reference-thumbnails img { width: 64px; height: 64px; object-fit: contain; border: 1px solid #44414c; border-radius: 4px; background: #25252e; }
+.reference-meta { display: flex; align-items: center; gap: 5px; }
+.reference-meta .icon-button { margin-left: auto; }
+.reference-meta input { width: 14px; height: 14px; margin: 0; accent-color: var(--gold); }
+.reference-upload { grid-template-rows: none; place-items: center; align-content: center; gap: 6px; min-height: 140px; border-style: dashed; }
+.trait-advice textarea, .dataset-run-config textarea { width: 100%; min-width: 0; resize: vertical; }
 .experiment-range-fields input { padding: 7px 8px; font-variant-numeric: tabular-nums; }
 .experiment-preview { min-width: 0; padding: 11px; border-radius: 4px; background: #1e2529; color: #c5d7d0; font-size: 12px; line-height: 1.5; }
 .experiment-preview ul { display: grid; gap: 5px; margin: 0 0 9px; padding: 0; list-style: none; }

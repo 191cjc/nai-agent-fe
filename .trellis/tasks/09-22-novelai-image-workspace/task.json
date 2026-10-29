@@ -23,7 +23,8 @@
     "09-23-novelai-web",
     "09-23-novelai-compose",
     "10-14-native-character-prompts",
-    "10-28-lora-dataset-runs"
+    "10-28-lora-dataset-runs",
+    "10-29-character-lora-dataset"
   ],
   "parent": null,
   "relatedFiles": [],

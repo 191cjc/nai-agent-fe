@@ -98,7 +98,12 @@ export function datasetCaption(parameters: GenerationRequest, trigger: string): 
     compile ? compilePromptComments(parameters.positive_prompt) : parameters.positive_prompt,
     ...parameters.character_prompts.map(character => compile ? compilePromptComments(character.prompt) : character.prompt),
   ]
-  const tags = sources.flatMap(captionTags)
+  // Character groups prefix fixed traits before the item; those must bind to the trigger
+  // word, so they never appear in captions even if an item repeats one of them.
+  const traits = item && parameters.reference
+    ? new Set(captionTags(parameters.positive_prompt.trim().slice(0, -item.prompt.trim().length || undefined)))
+    : new Set<string>()
+  const tags = sources.flatMap(captionTags).filter(tag => !traits.has(tag))
   const triggerTag = trigger.trim()
   const unique = [...new Set(triggerTag ? [triggerTag, ...tags.filter(tag => tag !== triggerTag)] : tags)]
   return unique.join(', ')

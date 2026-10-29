@@ -1,33 +1,35 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { observer } from 'mobx-react-lite'
-import { Download, Layers, Plus, RotateCcw, Trash2, X } from 'lucide-react'
-import { ApiFailure, errorText, type WorkspaceApi } from './api'
-import { DATASET_CATEGORIES } from './dataset-prompts'
-import { CUSTOM_CATEGORY, MAX_DATASET_ITEMS, MAX_DATASET_PROMPT_LENGTH, datasetItems, defaultDatasetEntries, nextCustomId, type DatasetEntry } from './dataset-run'
+import { Download, Layers, Plus, RotateCcw, Trash2, UserRound, X } from 'lucide-react'
+import { ApiFailure, errorText, type GenerationView, type WorkspaceApi } from './api'
+import { DATASET_CATEGORIES, type DatasetCategory } from './dataset-prompts'
+import { CHARACTER_CATEGORIES } from './character-prompts'
+import { CUSTOM_CATEGORY, MAX_DATASET_ITEMS, MAX_DATASET_PROMPT_LENGTH, datasetItems, nextCustomId, type DatasetEntry } from './dataset-run'
+import { defaultCharacterEntries, defaultDatasetEntries } from './dataset-defaults'
 import { buildDatasetZip, downloadZip, experimentJobs, selectedJobs, type DatasetExportProgress } from './dataset-export'
+import { CharacterRunSettings, characterSnapshotSummary, useCharacterSettings } from './CharacterDataset'
 import type { GenerationStore } from './store'
 
-const CATEGORIES = [...DATASET_CATEGORIES, { id: CUSTOM_CATEGORY, label: '自定义', description: '手动添加的提示词' }]
+const CUSTOM: DatasetCategory = { id: CUSTOM_CATEGORY, label: '自定义', description: '手动添加的提示词' }
 
-function validationError(entries: readonly DatasetEntry[], style: string): string {
+function validationError(entries: readonly DatasetEntry[], styles: readonly string[], traits?: string): string {
   try {
-    datasetItems(entries, style)
+    datasetItems(entries, styles, traits)
     return ''
   } catch (error) {
     return error instanceof Error ? error.message : '训练集提示词无效。'
   }
 }
 
-export const DatasetRunConfig = observer(({ generation, hidden }: { generation: GenerationStore; hidden: boolean }) => {
-  const [entries, setEntries] = useState<DatasetEntry[]>(defaultDatasetEntries)
+/** Category/item picker shared by the style and character libraries. */
+export function PromptLibrary({ entries, setEntries, categories, defaults, placeholder }: {
+  entries: DatasetEntry[]
+  setEntries: Dispatch<SetStateAction<DatasetEntry[]>>
+  categories: readonly DatasetCategory[]
+  defaults: () => DatasetEntry[]
+  placeholder: string
+}) {
   const [custom, setCustom] = useState('')
-  const runs = generation.runs
-  const snapshot = runs.kind === 'dataset' ? runs.snapshot : null
-  const style = generation.draft.style_prompt
-  const selected = entries.filter(entry => entry.selected)
-  const samples = /^\d+$/.test(generation.draft.sample_count) ? Number(generation.draft.sample_count) : null
-  const error = selected.length ? validationError(entries, style) : ''
-  const locked = generation.operationLocked || generation.activeId !== null || generation.busy || generation.submitUncertain
 
   function update(id: string, change: Partial<DatasetEntry>) {
     setEntries(current => current.map(entry => entry.id === id ? { ...entry, ...change } : entry))
@@ -44,65 +46,105 @@ export const DatasetRunConfig = observer(({ generation, hidden }: { generation: 
     setCustom('')
   }
 
+  return <>
+    <fieldset className="dataset-categories">
+      <legend>按分类选择</legend>
+      {[...categories, CUSTOM].map(category => {
+        const members = entries.filter(entry => entry.category === category.id)
+        if (!members.length) return null
+        const count = members.filter(entry => entry.selected).length
+        return <details className="dataset-category" key={category.id}>
+          <summary>
+            <input type="checkbox" checked={count === members.length} aria-label={`选择全部「${category.label}」`}
+              ref={input => { if (input) input.indeterminate = count > 0 && count < members.length }}
+              onClick={event => event.stopPropagation()} onChange={event => selectCategory(category.id, event.target.checked)} />
+            <strong>{category.label}</strong><span>{count} / {members.length}</span>
+            <span className="prompt-hint">{category.description}</span>
+          </summary>
+          <ul className="dataset-items">{members.map(entry => <li key={entry.id} className={entry.selected ? '' : 'muted'}>
+            <input type="checkbox" checked={entry.selected} aria-label={`选择提示词 ${entry.id}`}
+              onChange={event => update(entry.id, { selected: event.target.checked })} />
+            <input type="text" value={entry.prompt} maxLength={MAX_DATASET_PROMPT_LENGTH} spellCheck={false} aria-label={`编辑提示词 ${entry.id}`}
+              onChange={event => update(entry.id, { prompt: event.target.value })} />
+            <button className="icon-button" type="button" title="移除这条提示词" aria-label={`移除提示词 ${entry.id}`}
+              onClick={() => setEntries(current => current.filter(item => item.id !== entry.id))}><Trash2 size={14} /></button>
+          </li>)}</ul>
+        </details>
+      })}
+    </fieldset>
+    <div className="dataset-custom">
+      <input type="text" value={custom} maxLength={MAX_DATASET_PROMPT_LENGTH} spellCheck={false} placeholder={placeholder}
+        aria-label="自定义提示词" onChange={event => setCustom(event.target.value)}
+        onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); addCustom() } }} />
+      <button className="secondary" type="button" disabled={!custom.trim()} onClick={addCustom}><Plus size={14} aria-hidden="true" /> 添加</button>
+      <button className="text-action" type="button" onClick={() => { if (window.confirm('恢复为内置提示词库？自定义和编辑内容将丢失。')) setEntries(defaults()) }}>
+        <RotateCcw size={14} aria-hidden="true" /> 恢复默认</button>
+    </div>
+  </>
+}
+
+type DatasetMode = 'style' | 'character'
+
+export const DatasetRunConfig = observer(({ generation, api, hidden }: { generation: GenerationStore; api: WorkspaceApi; hidden: boolean }) => {
+  const [mode, setMode] = useState<DatasetMode>('style')
+  const [entries, setEntries] = useState<DatasetEntry[]>(defaultDatasetEntries)
+  const [characterEntries, setCharacterEntries] = useState<DatasetEntry[]>(defaultCharacterEntries)
+  const character = useCharacterSettings(generation.draft.style_prompt)
+  const runs = generation.runs
+  const snapshot = runs.kind === 'dataset' ? runs.snapshot : null
+  const style = generation.draft.style_prompt
+  const active = mode === 'style' ? entries : characterEntries
+  const selected = active.filter(entry => entry.selected)
+  const samples = /^\d+$/.test(generation.draft.sample_count) ? Number(generation.draft.sample_count) : null
+  const error = !selected.length ? '' : mode === 'style'
+    ? validationError(entries, [style])
+    : validationError(characterEntries, character.styles, character.settings.traits) || character.error(generation.draft.model)
+  const locked = generation.operationLocked || generation.activeId !== null || generation.busy || generation.submitUncertain
+
   function start() {
     if (locked || error || !selected.length) return
-    void generation.startDatasetRun(entries)
+    if (mode === 'style') void generation.startDatasetRun(entries)
+    else void generation.startDatasetRun(characterEntries, { styles: character.styles, character: character.settings })
   }
+
+  const frozenCharacter = snapshot?.character && 'references' in snapshot.character ? snapshot.character : null
 
   return <section id="dataset-run-config" className="style-experiment-config dataset-run-config" aria-labelledby="dataset-run-config-title" hidden={hidden}
     onKeyDown={event => { if (event.key === 'Enter' && event.target instanceof HTMLInputElement) event.preventDefault() }}>
     <h3 id="dataset-run-config-title"><Layers size={15} aria-hidden="true" /> 训练集批跑</h3>
-    <p className="prompt-hint">用当前「画风」固定风格，逐条运行下面的内容提示词，生成用于训练画风 LoRA 的图片。提示词只描述内容，不含画风与质量词；导出时作为 caption。</p>
+    {!snapshot && <div className="history-mode dataset-mode" role="group" aria-label="训练集类型">
+      <button type="button" className={mode === 'style' ? 'active' : ''} aria-pressed={mode === 'style'} onClick={() => setMode('style')}><Layers size={14} aria-hidden="true" /> 画风训练集</button>
+      <button type="button" className={mode === 'character' ? 'active' : ''} aria-pressed={mode === 'character'} onClick={() => setMode('character')}><UserRound size={14} aria-hidden="true" /> 角色训练集</button>
+    </div>}
+    {mode === 'style'
+      ? <p className="prompt-hint">用当前「画风」固定风格，逐条运行下面的内容提示词，生成用于训练画风 LoRA 的图片。提示词只描述内容，不含画风与质量词；导出时作为 caption。</p>
+      : <p className="prompt-hint">用参考图和固定的角色特征，逐条运行景别、表情、姿势、场景等内容提示词，生成用于训练角色 LoRA 的图片。导出的 caption 只含内容提示词，不含画风和角色特征。</p>}
     <p className="prompt-hint">公共分区和人物卡片不参与批跑；负面提示词、模型、尺寸、步数、CFG、采样器和每条张数取自当前生成设置。</p>
     {snapshot ? <div className="experiment-note" role="status">
-      <p>这里展示本次训练集批跑固定的画风与 {snapshot.items?.length ?? 0} 条提示词。编辑草稿不会改变服务器批跑。</p>
-      <p>画风：{snapshot.parameters.style_prompt}</p>
-    </div> : <>
+      <p>这里展示本次训练集批跑固定的配置与 {snapshot.items?.length ?? 0} 条提示词。编辑草稿不会改变服务器批跑。</p>
+      <p>画风：{snapshot.styles?.length ? snapshot.styles.join(' ｜ ') : snapshot.parameters.style_prompt}</p>
+      {frozenCharacter && <p>{characterSnapshotSummary(frozenCharacter)}</p>}
+    </div> : mode === 'style' ? <>
       <div className="dataset-style-preview"><span>将应用的画风</span>
         <p>{style.trim() ? style : '（未填写画风）'}</p></div>
-      <fieldset className="dataset-categories">
-        <legend>按分类选择</legend>
-        {CATEGORIES.map(category => {
-          const members = entries.filter(entry => entry.category === category.id)
-          if (!members.length) return null
-          const count = members.filter(entry => entry.selected).length
-          return <details className="dataset-category" key={category.id}>
-            <summary>
-              <input type="checkbox" checked={count === members.length} aria-label={`选择全部「${category.label}」`}
-                ref={input => { if (input) input.indeterminate = count > 0 && count < members.length }}
-                onClick={event => event.stopPropagation()} onChange={event => selectCategory(category.id, event.target.checked)} />
-              <strong>{category.label}</strong><span>{count} / {members.length}</span>
-              <span className="prompt-hint">{category.description}</span>
-            </summary>
-            <ul className="dataset-items">{members.map(entry => <li key={entry.id} className={entry.selected ? '' : 'muted'}>
-              <input type="checkbox" checked={entry.selected} aria-label={`选择提示词 ${entry.id}`}
-                onChange={event => update(entry.id, { selected: event.target.checked })} />
-              <input type="text" value={entry.prompt} maxLength={MAX_DATASET_PROMPT_LENGTH} spellCheck={false} aria-label={`编辑提示词 ${entry.id}`}
-                onChange={event => update(entry.id, { prompt: event.target.value })} />
-              <button className="icon-button" type="button" title="移除这条提示词" aria-label={`移除提示词 ${entry.id}`}
-                onClick={() => setEntries(current => current.filter(item => item.id !== entry.id))}><Trash2 size={14} /></button>
-            </li>)}</ul>
-          </details>
-        })}
-      </fieldset>
-      <div className="dataset-custom">
-        <input type="text" value={custom} maxLength={MAX_DATASET_PROMPT_LENGTH} spellCheck={false} placeholder="添加自定义内容提示词，例如 1girl, solo, sitting, library"
-          aria-label="自定义提示词" onChange={event => setCustom(event.target.value)}
-          onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); addCustom() } }} />
-        <button className="secondary" type="button" disabled={!custom.trim()} onClick={addCustom}><Plus size={14} aria-hidden="true" /> 添加</button>
-        <button className="text-action" type="button" onClick={() => { if (window.confirm('恢复为内置提示词库？自定义和编辑内容将丢失。')) setEntries(defaultDatasetEntries()) }}>
-          <RotateCcw size={14} aria-hidden="true" /> 恢复默认</button>
-      </div>
+      <PromptLibrary entries={entries} setEntries={setEntries} categories={DATASET_CATEGORIES} defaults={defaultDatasetEntries}
+        placeholder="添加自定义内容提示词，例如 1girl, solo, sitting, library" />
+    </> : <>
+      <CharacterRunSettings api={api} state={character} model={generation.draft.model} draftStyle={style} />
+      <PromptLibrary entries={characterEntries} setEntries={setCharacterEntries} categories={CHARACTER_CATEGORIES} defaults={defaultCharacterEntries}
+        placeholder="添加自定义内容提示词（不写性别、人数和外貌），例如 sitting, library, reading" />
     </>}
     {!snapshot && error && <p className="alert" role="alert">{error}</p>}
     {!snapshot && <div className="experiment-preview" aria-live="polite" aria-atomic="true">
       <p><strong>{selected.length} 条</strong>{samples !== null && samples >= 1 && samples <= 8 && <> × 每条 {samples} 张 = <strong>{selected.length * samples} 张图像</strong></>}
         {selected.length > MAX_DATASET_ITEMS && `（上限 ${MAX_DATASET_ITEMS} 条）`}</p>
-      <p className="prompt-hint">每条提示词是一次付费生成。画风 LoRA 一般 30–150 张精选图即可。</p>
+      <p className="prompt-hint">{mode === 'style'
+        ? '每条提示词是一次付费生成。画风 LoRA 一般 30–150 张精选图即可。'
+        : '每条提示词是一次付费生成，Vibe Transfer / 图生图可能额外消耗 Anlas。角色 LoRA 一般 15–40 张一致的精选图即可，跑完请人工筛掉不像的图。'}</p>
     </div>}
     <p className="prompt-hint">每条使用不同种子：生成设置中的种子作为基础种子（留空则服务器随机一次），第 N 条使用基础种子 + N − 1，便于复现。</p>
     <p className="prompt-hint">批跑在服务器依次执行，单条失败后继续下一条，不会自动重试。刷新、关闭页面或退出登录不会停止；只有“停止实验”会阻止后续条目。与画风实验共用“同时只能运行一个”的限制。</p>
-    <p className="prompt-hint">图片私有保存 7 天，请在过期前从历史记录的「画风实验」中导出训练集。</p>
+    <p className="prompt-hint">图片私有保存 7 天，请在过期前从历史记录的「实验与训练集」中导出训练集。</p>
     {!snapshot && generation.error && !generation.submitUncertain && <p className="alert" role="alert">{generation.error}</p>}
     <div className="experiment-config-actions">
       <button className="primary" type="button" disabled={locked || Boolean(error) || !selected.length || selected.length > MAX_DATASET_ITEMS} onClick={start}>
@@ -116,12 +158,35 @@ export type DatasetExportSource = { kind: 'experiment'; id: string } | { kind: '
 
 export function DatasetExportPanel({ api, source, onClose }: { api: WorkspaceApi; source: DatasetExportSource; onClose: () => void }) {
   const [trigger, setTrigger] = useState('')
+  // Experiment exports load their groups first so the user can drop off-model items.
+  const [jobs, setJobs] = useState<GenerationView[] | null>(null)
+  const [excluded, setExcluded] = useState<ReadonlySet<string>>(new Set())
   const [running, setRunning] = useState(false)
   const [progress, setProgress] = useState<DatasetExportProgress | null>(null)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const controller = useRef<AbortController | null>(null)
   useEffect(() => () => controller.current?.abort(), [])
+
+  async function loadGroups() {
+    controller.current?.abort()
+    const current = new AbortController()
+    controller.current = current
+    setRunning(true)
+    setError('')
+    try {
+      if (source.kind !== 'experiment') return
+      const loaded = await experimentJobs(api, source.id, current.signal)
+      if (controller.current === current) setJobs(loaded)
+    } catch (exception) {
+      if (!current.signal.aborted) setError(exception instanceof ApiFailure ? errorText(exception) : '读取记录失败，请重试。')
+    } finally {
+      if (controller.current === current) {
+        controller.current = null
+        setRunning(false)
+      }
+    }
+  }
 
   async function run() {
     controller.current?.abort()
@@ -132,10 +197,12 @@ export function DatasetExportPanel({ api, source, onClose }: { api: WorkspaceApi
     setMessage('')
     setProgress(null)
     try {
-      const jobs = source.kind === 'experiment'
+      // Always re-read: groups may have finished since the checklist was loaded.
+      const all = source.kind === 'experiment'
         ? await experimentJobs(api, source.id, current.signal)
         : await selectedJobs(api, source.ids, current.signal)
-      const result = await buildDatasetZip(api, jobs, trigger, current.signal, setProgress)
+      const chosen = all.filter(job => !excluded.has(job.id))
+      const result = await buildDatasetZip(api, chosen, trigger, current.signal, setProgress)
       if (current.signal.aborted) return
       if (!result.blob) setError(`没有可导出的图片（跳过 ${result.skipped} 张：失败、已过期或不可用）。`)
       else {
@@ -157,7 +224,25 @@ export function DatasetExportPanel({ api, source, onClose }: { api: WorkspaceApi
     <label className="field"><span>触发词（可选，加在每个 caption 开头）</span>
       <input type="text" value={trigger} maxLength={100} spellCheck={false} disabled={running} placeholder="例如 mystyle"
         onChange={event => setTrigger(event.target.value)} /></label>
-    <p className="prompt-hint">zip 内为 0001.png + 0001.txt 成对文件。图片去除元数据与隐写信息；caption 只含内容提示词，不含画风。导出只读取已保存图片，不会生成。</p>
+    <p className="prompt-hint">zip 内为 0001.png + 0001.txt 成对文件。图片去除元数据与隐写信息；caption 只含内容提示词，不含画风和角色特征。导出只读取已保存图片，不会生成。</p>
+    {source.kind === 'experiment' && (jobs === null
+      ? <button className="text-action" type="button" disabled={running} onClick={() => void loadGroups()}>筛选条目（可选：取消不像角色或不满意的条目）</button>
+      : <details className="dataset-category" open><summary><strong>导出条目</strong><span>{jobs.length - excluded.size} / {jobs.length}</span>
+          <span className="prompt-hint">可先在「浏览图片」中查看第 N 条，再在这里取消</span></summary>
+        <ul className="dataset-items">{jobs.map(job => {
+          const context = job.parameters.experiment
+          return <li key={job.id} className={excluded.has(job.id) ? 'muted' : ''}>
+            <input type="checkbox" checked={!excluded.has(job.id)} disabled={running} aria-label={`导出第 ${context?.ordinal ?? '?'} 条`}
+              onChange={event => setExcluded(current => {
+                const next = new Set(current)
+                if (event.target.checked) next.delete(job.id)
+                else next.add(job.id)
+                return next
+              })} />
+            <span>第 {context?.ordinal ?? '?'} 条 · {job.status === 'succeeded' ? `${job.image_urls.length} 张` : '无可用图片'} · {context?.item?.prompt ?? ''}</span>
+            <span />
+          </li>
+        })}</ul></details>)}
     {progress && <p role="status" aria-live="polite">已处理 {progress.processedJobs} / {progress.totalJobs} 条记录 · 已写入 {progress.written} 张 · 跳过 {progress.skipped} 张</p>}
     {message && <p className="experiment-note" role="status">{message}</p>}
     {error && <p className="alert" role="alert">{error}</p>}

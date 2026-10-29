@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useRef, useState } from 'react'
 import { observer } from 'mobx-react-lite'
-import { ArrowLeft, ArrowRight, Download, FlaskConical, Images, Layers, RefreshCw, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Download, FlaskConical, Images, Layers, RefreshCw, UserRound, X } from 'lucide-react'
 import { ApiFailure, errorText, type WorkspaceApi } from './api'
 import { DatasetExportPanel } from './dataset-lazy'
 import { GenerationParameters } from './GenerationParameters'
@@ -51,8 +51,54 @@ function jobStatus(status: string): string {
   return { queued: '排队中', running: '生成中', succeeded: '已完成', failed: '失败' }[status] ?? status
 }
 
-export const SavedResultViewer = observer(({ saved, onClose, onUseSeed, canSave }: {
+/** Thumbnails of the references a character group used; deleted references are omitted. */
+function ReferenceThumbnails({ api, ids }: { api: WorkspaceApi; ids: string[] }) {
+  const [urls, setUrls] = useState<string[]>([])
+  const key = ids.join(',')
+  useEffect(() => {
+    const controller = new AbortController()
+    const created: string[] = []
+    void Promise.all(ids.map(id => api.referenceImage(id, controller.signal).then(blob => {
+      const url = URL.createObjectURL(blob)
+      created.push(url)
+      return url
+    }).catch(() => null))).then(loaded => {
+      if (!controller.signal.aborted) setUrls(loaded.filter((url): url is string => url !== null))
+    })
+    return () => {
+      controller.abort()
+      created.forEach(url => URL.revokeObjectURL(url))
+      setUrls([])
+    }
+    // ids are compared by value through key.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [api, key])
+  if (!urls.length) return null
+  return <div className="reference-thumbnails" aria-label="本条使用的参考图">{urls.map(url => <img key={url} src={url} alt="参考图" />)}</div>
+}
+
+/** Copies the shown retained image into the owner's private reference images. */
+function UseAsReferenceButton({ api, jobId, index }: { api: WorkspaceApi; jobId: string; index: number }) {
+  const [state, setState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [message, setMessage] = useState('')
+  return <>
+    <button className="text-action" type="button" disabled={state === 'saving' || state === 'saved'} onClick={() => {
+      setState('saving')
+      api.referenceFromResult(jobId, index).then(() => {
+        setState('saved')
+        setMessage('已加入参考图，可在「训练集批跑 → 角色训练集」中选择。')
+      }).catch(error => {
+        setState('error')
+        setMessage(error instanceof ApiFailure ? errorText(error) : '设为参考图失败，请重试。')
+      })
+    }}><UserRound size={15} aria-hidden="true" /> {state === 'saved' ? '已设为参考图' : state === 'saving' ? '正在保存...' : '设为参考图'}</button>
+    {message && <span className={state === 'error' ? 'alert' : 'subtle'} role="status">{message}</span>}
+  </>
+}
+
+export const SavedResultViewer = observer(({ saved, api, onClose, onUseSeed, canSave }: {
   saved: SavedResultsStore
+  api: WorkspaceApi
   onClose: () => void
   onUseSeed: (seed: number) => void
   canSave: () => boolean
@@ -123,6 +169,7 @@ export const SavedResultViewer = observer(({ saved, onClose, onUseSeed, canSave 
           <span aria-live="polite" aria-atomic="true">{groupLabel}{job && (job.image_urls.length ? ` · 图像 ${saved.imageIndex + 1} / ${saved.imageSlots}` : ' · 无可用图片')}</span>
           {image && job && <ImageSaveButton key={image.url} url={image.url} filename={isExperiment ? `style-experiment-${image.filename}` : image.filename}
             isCurrent={() => canSave() && saved.selection === selection && saved.job?.id === job.id && saved.image?.url === image.url} />}
+          {image && job && <UseAsReferenceButton key={`${job.id}:${image.index}`} api={api} jobId={job.id} index={image.index} />}
         </figcaption>
       </figure>
     <div className="canvas-metadata">
@@ -146,6 +193,10 @@ export const SavedResultViewer = observer(({ saved, onClose, onUseSeed, canSave 
           <span>请求种子 {job.parameters.seed ?? '随机'}</span><span>实际种子 {job.effective_seed}</span>
         </div>
         {context?.item && <p className="dataset-item-prompt" aria-label="训练集提示词">提示词（caption）：{context.item.prompt}</p>}
+        {context?.item && job.parameters.reference && <p className="subtle">
+          {job.parameters.reference.mode === 'vibe' ? 'Vibe Transfer' : `图生图 strength ${job.parameters.reference.strength} · noise ${job.parameters.reference.noise}`}
+          {' · '}画风：{job.parameters.style_prompt}</p>}
+        {context?.item && job.parameters.reference && <ReferenceThumbnails api={api} ids={job.parameters.reference.images.map(image => image.id)} />}
         {context && context.weights.length > 0 && <ul className="experiment-result-weights" aria-label="保存的实验权重">{context.weights.map(weight =>
           <li key={weight.tag_index}><span>{weight.tag_index + 1}. {weight.label}</span><strong>{weight.weight}</strong></li>)}</ul>}
         {job.result_expires_at !== null && <p className="subtle saved-expiry">私有图片保存至 {new Date(job.result_expires_at * 1000).toLocaleString()}，查看不会延长保存时间。</p>}

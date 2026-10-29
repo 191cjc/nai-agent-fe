@@ -147,7 +147,7 @@ const Editor = observer(({ store, active }: { store: AppStore; active: boolean }
               onChange={value => generation.setField('style_prompt', value)} />
             <StyleExperimentConfig generation={generation} hidden={!experimentOpen} />
             {datasetLoaded && <Suspense fallback={<p className="subtle" role="status">正在加载训练集提示词库...</p>}>
-              <DatasetRunConfig generation={generation} hidden={!datasetOpen} /></Suspense>}</div>
+              <DatasetRunConfig generation={generation} api={store.api} hidden={!datasetOpen} /></Suspense>}</div>
           <PromptSectionsEditor store={store} assistantTarget={assistantValid ? assistant?.target ?? null : null} onAssistant={openAssistant} />
         </div>
         <div className="prompt-panel" id="prompt-panel-negative" role="tabpanel" aria-labelledby="prompt-tab-negative" hidden={panel !== 'negative'}>
@@ -604,7 +604,7 @@ const Workspace = observer(({ store }: { store: AppStore }) => {
         <div className="canvas-stage">
           <div className="canvas-region" aria-label="图像画布">
             <Result store={store} hidden={store.savedResults.selection !== null} />
-            <SavedResultViewer saved={store.savedResults} onClose={closeSavedResult}
+            <SavedResultViewer saved={store.savedResults} api={store.api} onClose={closeSavedResult}
               onUseSeed={seed => store.generation.setField('seed', String(seed))}
               canSave={() => store.auth.status === 'ready' && !store.auth.loggingOut} />
           </div>

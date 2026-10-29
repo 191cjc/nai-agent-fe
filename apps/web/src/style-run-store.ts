@@ -1,6 +1,6 @@
 import { makeAutoObservable, runInAction } from 'mobx'
 import { copyPromptMetadata } from './prompt-sections'
-import { ApiFailure, errorText, type DatasetItem, type ExperimentRunDefinition, type ExperimentRunRange, type ExperimentRunState, type GenerationRequest, WorkspaceApi } from './api'
+import { ApiFailure, errorText, type CharacterRunRequest, type DatasetItem, type ExperimentRunDefinition, type ExperimentRunRange, type ExperimentRunState, type GenerationRequest, WorkspaceApi } from './api'
 
 /** Observes one server-owned run. Detaching never sends a stop request. */
 export class StyleRunStore {
@@ -132,13 +132,15 @@ export class StyleRunStore {
   }
 
   /** Fixed-style dataset run: same single POST, reconciliation and Stop safeguards. */
-  async startDataset(parameters: GenerationRequest, items: DatasetItem[]): Promise<void> {
+  async startDataset(parameters: GenerationRequest, items: DatasetItem[], extra: { styles?: string[]; character?: CharacterRunRequest } = {}): Promise<void> {
     if (this.locked || !this.observing) return
     const id = this.newRunId()
     if (!id) return
     await this.create({
       id, kind: 'dataset', parameters: StyleRunStore.frozenParameters(parameters), ranges: [],
       items: items.map(item => ({ ...item })),
+      ...(extra.styles ? { styles: [...extra.styles] } : {}),
+      ...(extra.character ? { character: { ...extra.character, reference_ids: [...extra.character.reference_ids] } } : {}),
     })
   }
 

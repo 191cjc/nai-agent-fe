@@ -1,0 +1,12 @@
+{"file": ".trellis/spec/backend/dataset-run-contract.md", "reason": "spec for character dataset runs"}
+{"file": ".trellis/spec/backend/durable-experiment-contract.md", "reason": "spec for character dataset runs"}
+{"file": ".trellis/spec/backend/image-retention-contract.md", "reason": "spec for character dataset runs"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "spec for character dataset runs"}
+{"file": ".trellis/spec/backend/deployment-contract.md", "reason": "spec for character dataset runs"}
+{"file": ".trellis/spec/backend/api-contract.md", "reason": "spec for character dataset runs"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "spec for character dataset runs"}
+{"file": ".trellis/spec/frontend/style-experiment-contract.md", "reason": "spec for character dataset runs"}
+{"file": ".trellis/spec/frontend/viewer-cache-contract.md", "reason": "spec for character dataset runs"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "spec for character dataset runs"}
+{"file": ".trellis/spec/backend/codex-advice-contract.md", "reason": "trait advice uses advice runner"}
+{"file": ".trellis/spec/frontend/section-assistant-contract.md", "reason": "assistant popover pattern"}

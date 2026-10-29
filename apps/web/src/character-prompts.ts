@@ -1,0 +1,138 @@
+/**
+ * Built-in content prompts for character-LoRA training sets. Prompts vary only
+ * framing, expression, pose, setting, lighting and (optionally) outfit. They
+ * never name gender, subject count or appearance: the run's trait tags supply
+ * those, and captions exclude them so the traits bind to the trigger word.
+ */
+import type { DatasetCategory, DatasetPrompt } from './dataset-prompts'
+
+export interface CharacterCategory extends DatasetCategory {
+  defaultSelected: boolean
+}
+
+export const CHARACTER_CATEGORIES: readonly CharacterCategory[] = [
+  { id: 'framing', label: '景别与角度', description: '特写到全身、正侧背与俯仰视角', defaultSelected: true },
+  { id: 'expression', label: '表情', description: '多种情绪与视线方向', defaultSelected: true },
+  { id: 'pose', label: '姿势动作', description: '站坐卧跑跳与日常动作', defaultSelected: true },
+  { id: 'setting', label: '场景', description: '室内外不同环境', defaultSelected: true },
+  { id: 'light', label: '光照', description: '逆光、夜景、暖光等光照条件', defaultSelected: true },
+  { id: 'outfit', label: '服装变化', description: '换装；角色特征里写了固定服装时不建议勾选', defaultSelected: false },
+]
+
+const PROMPTS: Record<string, readonly string[]> = {
+  framing: [
+    'portrait, looking at viewer, simple background',
+    'close-up, face focus, white background',
+    'upper body, looking at viewer, simple background',
+    'cowboy shot, standing, simple background',
+    'full body, standing, white background',
+    'from side, profile, upper body',
+    'from behind, looking back, upper body',
+    'from above, looking up, full body',
+    'from below, upper body, sky',
+    'three-quarter view, portrait, gradient background',
+    'dutch angle, cowboy shot, dynamic pose',
+    'wide shot, full body, scenery',
+    'portrait, head tilt, looking at viewer',
+    'upper body, from side, looking ahead',
+    'full body, from behind, walking away',
+    'close-up, eye focus, looking at viewer',
+    'cowboy shot, from above, looking up at viewer',
+    'full body, three-quarter view, standing, grey background',
+  ],
+  expression: [
+    'portrait, smile, looking at viewer',
+    'portrait, open mouth, laughing, closed eyes',
+    'upper body, serious, looking at viewer',
+    'portrait, angry, frown, clenched teeth',
+    'portrait, sad, tears, looking down',
+    'upper body, surprised, open mouth, wide-eyed',
+    'portrait, blush, embarrassed, looking away',
+    'portrait, smug, smirk, half-closed eyes',
+    'upper body, sleepy, yawning, hand over mouth',
+    'portrait, wink, tongue out',
+    'upper body, pout, puffed cheeks, arms crossed',
+    'portrait, gentle smile, closed eyes',
+    'upper body, nervous, sweatdrop, looking to the side',
+    'portrait, determined, looking at viewer, wind',
+    'portrait, crying, wiping tears',
+    'upper body, thinking, hand on own chin, looking up',
+    'portrait, expressionless, looking at viewer',
+    'upper body, excited, sparkling eyes, hands up',
+  ],
+  pose: [
+    'full body, standing, hands on own hips',
+    'full body, sitting, on chair, crossed legs',
+    'full body, running, motion lines',
+    'full body, jumping, midair, arms up',
+    'full body, walking, street',
+    'full body, kneeling, hands on own knees',
+    'full body, lying, on back, grass',
+    'full body, squatting, looking at viewer',
+    'cowboy shot, arms crossed, leaning against wall',
+    'upper body, waving, smile',
+    'upper body, peace sign, looking at viewer',
+    'upper body, stretching, arms up',
+    'full body, sitting, on floor, hugging own knees',
+    'upper body, holding cup, drinking',
+    'upper body, reading, holding book',
+    'full body, dancing, spinning',
+    'cowboy shot, hand in pocket, looking to the side',
+    'upper body, hands together, praying',
+    'full body, sitting, on bench, holding umbrella',
+    'upper body, holding phone, looking at phone',
+    'full body, fighting stance, clenched hands',
+    'upper body, reaching towards viewer, outstretched hand',
+  ],
+  setting: [
+    'upper body, classroom, desk, window',
+    'full body, city street, buildings, crosswalk',
+    'upper body, cafe, sitting, table, cup',
+    'full body, park, trees, bench',
+    'full body, beach, ocean, sand',
+    'upper body, bedroom, bed, indoors',
+    'full body, forest, path, sunlight filtering through trees',
+    'upper body, library, bookshelf',
+    'full body, rooftop, fence, city skyline',
+    'full body, snow, winter, snowing',
+    'upper body, train interior, window, sitting',
+    'full body, flower field, wind, blue sky',
+    'upper body, kitchen, cooking, apron',
+    'full body, shrine, torii, stone stairs',
+    'full body, rain, street, puddle',
+    'upper body, festival, lanterns, night',
+    'full body, fantasy, castle, courtyard',
+    'upper body, office, desk, computer',
+  ],
+  light: [
+    'upper body, backlighting, sunset, orange sky',
+    'cowboy shot, night, city lights, bokeh',
+    'portrait, window light, indoors, curtains',
+    'full body, moonlight, night sky, stars',
+    'upper body, rim light, dark background',
+    'portrait, dappled sunlight, leaves, shade',
+    'upper body, campfire, night, warm light',
+    'cowboy shot, neon lights, purple lighting, night',
+    'portrait, candlelight, dark room',
+    'full body, morning, sunrise, mist',
+    'upper body, overcast, rain, wet hair',
+    'portrait, spotlight, stage, dark background',
+  ],
+  outfit: [
+    'full body, school uniform, pleated skirt',
+    'full body, casual, hoodie, jeans',
+    'full body, swimsuit, beach',
+    'full body, kimono, japanese clothes',
+    'full body, suit, necktie',
+    'full body, pajamas, bedroom',
+    'full body, winter coat, scarf, snow',
+    'full body, maid, maid headdress, apron',
+    'full body, sportswear, track',
+    'full body, armor, holding sword',
+    'full body, dress, formal, ballroom',
+    'full body, yukata, festival',
+  ],
+}
+
+export const CHARACTER_PROMPTS: readonly DatasetPrompt[] = CHARACTER_CATEGORIES.flatMap(category =>
+  (PROMPTS[category.id] ?? []).map((prompt, index) => ({ id: `char-${category.id}-${index + 1}`, category: category.id, prompt })))

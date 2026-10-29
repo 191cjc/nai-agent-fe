@@ -15,7 +15,7 @@ import {
   type StyleExperimentRange,
 } from './style-experiment'
 import { SavedResultsStore } from './saved-results'
-import { datasetItems, type DatasetEntry } from './dataset-run'
+import { characterRequest, datasetItems, type CharacterSettings, type DatasetEntry } from './dataset-run'
 import { StyleRunStore } from './style-run-store'
 import { PromptSnapshotStore } from './prompt-snapshots'
 import { BalanceStore } from './balance-store'
@@ -65,6 +65,9 @@ function newCharacter(sections: CharacterSections = emptyCharacterSections(), x 
 function validCharacterPosition(value: number): boolean {
   return Number.isFinite(value) && value >= CHARACTER_POSITION_MIN && value <= CHARACTER_POSITION_MAX
 }
+
+/** Vibe transfer is V4/V4.5 only; the image service rejects it for V5. */
+export const VIBE_MODELS: readonly string[] = NATIVE_CHARACTER_MODELS.filter(model => !model.startsWith('nai-diffusion-5'))
 
 export function supportsNativeCharacters(model: string): boolean {
   return NATIVE_CHARACTER_MODELS.some(candidate => candidate === model.trim())
@@ -487,24 +490,30 @@ export class GenerationStore {
     })))
   }
 
-  /** Freeze the draft's style and settings; each dataset item supplies all content. */
-  async startDatasetRun(entries: readonly DatasetEntry[]): Promise<void> {
+  /**
+   * Freeze the draft's settings; each dataset item supplies all content. An optional
+   * style pool (first entry becomes the frozen style) and character block are frozen too.
+   */
+  async startDatasetRun(entries: readonly DatasetEntry[], options: { styles?: string[]; character?: CharacterSettings } = {}): Promise<void> {
     if (this.operationLocked || this.busy || this.activeId || this.submitUncertain) return
     this.error = ''
     let parameters: GenerationRequest
     let items
+    let character
     try {
-      items = datasetItems(entries, this.draft.style_prompt)
-      const base = requestFromDraft({ ...this.draft, shared_sections: emptySharedSections(), character_prompts: [] })
+      const styles = options.styles ?? [this.draft.style_prompt]
+      items = datasetItems(entries, styles, options.character?.traits)
+      const base = requestFromDraft({ ...this.draft, style_prompt: styles[0], shared_sections: emptySharedSections(), character_prompts: [] })
       parameters = { ...base, positive_prompt: '', character_prompts: [], auto_character_position: false }
       delete parameters.prompt_sections
+      if (options.character) character = characterRequest(options.character, parameters.model, VIBE_MODELS)
     } catch (error) {
       this.error = error instanceof Error ? error.message : '训练集批跑参数无效。'
       return
     }
     this.clearActiveResult()
     this.operationVersion += 1
-    await this.runs.startDataset(parameters, items)
+    await this.runs.startDataset(parameters, items, { styles: options.styles, character })
   }
 
   /** Ordinary generation only; server experiments never use this POST path. */

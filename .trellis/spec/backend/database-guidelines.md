@@ -29,7 +29,7 @@ generated image bytes to it.
 - Admin migrations run before API readiness. DB schema lives in
   `migrations/0001_auth.sql`, `0002_generations.sql` and
   `0003_style_experiments.sql`, `0004_prompt_snapshots.sql` and
-  `0005_provider_requests.sql` (current schema5), with
+  `0005_provider_requests.sql` and `0006_reference_images.sql` (current schema6), with
   `PRAGMA user_version` and transactional scripts. Store job parameters, effective
   seed, timestamps and outcome, including optional experiment metadata in
   settings_json. Durable compact run/cursor/seed/Stop state uses the schema3 run table; see
@@ -45,6 +45,11 @@ generated image bytes to it.
   online backups preserve it. Owner-scoped write-once capture uses the existing
   private job lifecycle, not a new public table or image expiry. See
   [Browser API](./api-contract.md) for capture and null-snapshot semantics.
+- Schema6 adds owner/id-keyed `reference_images` metadata only. Image bytes
+  live in private `reference-images/<user>/<id>` files beside SQLite (not in
+  online backups; back them up separately like generation images). Readiness
+  probes the table. Provider-request snapshots of reference groups store only
+  `{sha256, byte_size}`. See [Character Dataset Runs](./character-dataset-contract.md).
 - Deploy the API on a trusted, private data volume. Existing parent directory
   modes and Windows ACLs require operator review; these POSIX modes do not
   protect against an attacker who can replace paths inside the directory.

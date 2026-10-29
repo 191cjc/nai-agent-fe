@@ -6,6 +6,7 @@ import { parsePromptTags } from './prompt-weights'
 import { createStyleExperimentPlan, type StyleExperimentPlan, type StyleExperimentRange } from './style-experiment'
 import { supportsNativeCharacters, type GenerationStore } from './store'
 import { PromptSummary } from './PromptSummary'
+import { characterSnapshotSummary } from './character-summary'
 import type { SavedResultsStore } from './saved-results'
 import { sharedPrompt } from './prompt-sections'
 
@@ -183,6 +184,8 @@ export const StyleExperimentProgress = observer(({ generation, saved }: { genera
       <p>每{unit} {run.sample_count} 张 · 计划 {(BigInt(run.total) * BigInt(run.sample_count)).toString()} 张 · {dataset ? `基础种子 ${run.seed}，第 N 条使用基础种子 + N − 1` : `统一请求种子 ${run.seed}`}</p>
       <PromptSummary parameters={run.parameters} />
       {run.parameters.negative_prompt && <p>负向：{run.parameters.negative_prompt}</p>}
+      {run.character && 'references' in run.character && <p>{characterSnapshotSummary(run.character)}</p>}
+      {run.styles && run.styles.length > 1 && <p>画风池：{run.styles.join(' ｜ ')}</p>}
       {dataset && <details><summary>{run.items?.length ?? 0} 条提示词</summary>
         <ol className="dataset-run-items">{run.items?.map(item => <li key={item.id}>{item.prompt}</li>)}</ol></details>}
       <ul>{run.ranges.map(range => <li key={range.tag_index}>词条 {range.tag_index + 1} · {range.min} → {range.max} · 步长 {range.step}</li>)}</ul>

@@ -30,6 +30,46 @@ export interface DatasetItem {
   prompt: string
 }
 
+export interface ReferenceImageUse {
+  id: string
+  sha256: string
+}
+
+/** Frozen reference images for one character dataset group; bytes stay on the server. */
+export interface ReferenceUse {
+  mode: 'vibe' | 'img2img'
+  images: ReferenceImageUse[]
+  strength?: number | null
+  noise?: number | null
+}
+
+export interface ReferenceImage {
+  id: string
+  sha256: string
+  mime_type: 'image/png' | 'image/jpeg'
+  width: number
+  height: number
+  byte_size: number
+  source: 'upload' | 'result'
+  created_at: number
+}
+
+export interface CharacterRunRequest {
+  traits: string
+  mode: 'vibe' | 'img2img'
+  reference_ids: string[]
+  strength?: number
+  noise?: number
+}
+
+export interface CharacterRunPlan {
+  traits: string
+  mode: 'vibe' | 'img2img'
+  references: ReferenceImageUse[]
+  strength?: number | null
+  noise?: number | null
+}
+
 export interface ExperimentContext {
   id: string
   ordinal: string
@@ -58,6 +98,7 @@ export interface GenerationRequest {
   quality: boolean
   experiment?: ExperimentContext | null
   prompt_sections?: PromptSections | null
+  reference?: ReferenceUse | null
 }
 
 export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed'
@@ -121,6 +162,9 @@ export interface ExperimentRunDefinition {
   parameters: GenerationRequest
   ranges: ExperimentRunRange[]
   items?: DatasetItem[]
+  styles?: string[] | null
+  /** Request shape on create; the server answers with the frozen CharacterRunPlan. */
+  character?: CharacterRunRequest | CharacterRunPlan | null
 }
 
 export interface ExperimentRunState extends ExperimentRunDefinition {
@@ -280,6 +324,15 @@ export function errorText(error: unknown): string {
       advice_timeout: '建议服务超时，请重试。',
       advice_unavailable: '建议服务暂不可用，请重试。',
       advice_failed: '建议生成失败，请重试。',
+      advice_image_unsupported: '当前 AI 模型不支持读取图片，请更换支持图片的模型。',
+      reference_too_large: '参考图超过 8 MB。',
+      invalid_reference_image: '仅支持 PNG 或 JPEG，且宽高需在 64–2048 像素之间。',
+      unsupported_media_type: '仅支持 PNG 或 JPEG 图片。',
+      reference_quota_exceeded: '参考图已达上限（20 张 / 128 MB），请先删除不用的参考图。',
+      reference_in_use: '这张参考图正被进行中的批跑使用，结束后才能删除。',
+      reference_not_found: '参考图不存在或已删除，请重新选择。',
+      reference_unavailable: '参考图已被删除或内容变化，本条已跳过。',
+      unsupported_reference_mode: 'NovelAI 服务不支持该参考图模式。',
       not_ready: '服务暂不可用，请稍后重试。',
     }
     const detail = messages[error.code] ?? error.message
@@ -409,7 +462,11 @@ export class WorkspaceApi {
   }
 
   async createDatasetRun(definition: ExperimentRunDefinition, signal?: AbortSignal): Promise<ExperimentRunState> {
-    const body = { id: definition.id, parameters: definition.parameters, items: definition.items }
+    const body = {
+      id: definition.id, parameters: definition.parameters, items: definition.items,
+      ...(definition.styles ? { styles: definition.styles } : {}),
+      ...(definition.character ? { character: definition.character } : {}),
+    }
     const run = checkedRun(await this.request<ExperimentRunState>('/api/dataset-runs', { method: 'POST', body: JSON.stringify(body), signal }))
     if (run.id !== definition.id || run.kind !== 'dataset') throw new ApiFailure(0, 'invalid_response', '实验编号不匹配，请重新连接核对。')
     return run
@@ -441,6 +498,44 @@ export class WorkspaceApi {
       method: 'POST',
       body: JSON.stringify({ query, limit: 10 }),
       signal,
+    })
+  }
+
+  referenceImages(signal?: AbortSignal): Promise<{ items: ReferenceImage[] }> {
+    return this.request('/api/reference-images', { signal })
+  }
+
+  uploadReferenceImage(file: Blob, signal?: AbortSignal): Promise<ReferenceImage> {
+    return this.request('/api/reference-images', {
+      method: 'POST', body: file, headers: { 'Content-Type': file.type }, signal,
+    })
+  }
+
+  referenceFromResult(jobId: string, imageIndex: number, signal?: AbortSignal): Promise<ReferenceImage> {
+    return this.request('/api/reference-images/from-result', {
+      method: 'POST', body: JSON.stringify({ job_id: jobId, image_index: imageIndex }), signal,
+    })
+  }
+
+  deleteReferenceImage(id: string): Promise<void> {
+    return this.request(`/api/reference-images/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  }
+
+  async referenceImage(id: string, signal?: AbortSignal): Promise<Blob> {
+    if (!/^[0-9a-f-]{36}$/.test(id)) throw new ApiFailure(0, 'invalid_image_path', 'Invalid reference image.')
+    const version = this.sessionVersion
+    const response = await this.fetcher.call(globalThis, `${this.webBasePath}/api/reference-images/${id}/image`, { credentials: 'include', cache: 'no-store', signal })
+    if (response.status === 401) {
+      if (version === this.sessionVersion) this.onUnauthorized()
+      throw new ApiFailure(401, 'session_expired', 'Session expired.')
+    }
+    if (!response.ok) throw new ApiFailure(response.status, 'image_unavailable', 'Reference image is unavailable.')
+    return response.blob()
+  }
+
+  traitAdvice(referenceIds: string[], traits: string, signal?: AbortSignal): Promise<{ suggestion: string }> {
+    return this.request('/api/reference-images/trait-advice', {
+      method: 'POST', body: JSON.stringify({ reference_ids: referenceIds, traits }), signal,
     })
   }
 

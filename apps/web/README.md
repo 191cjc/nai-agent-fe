@@ -40,3 +40,11 @@ may be active. Saved dataset runs and selected history images can be exported
 as a zip of clean PNGs plus content-only captions (optional trigger word),
 read from retained images only within the seven-day retention window. See
 `../../.trellis/spec/backend/dataset-run-contract.md`.
+
+Character training sets (角色训练集) use the same durable dataset runs with
+owner-private reference images (upload or 「设为参考图」 from the history viewer),
+fixed character trait tags, vibe transfer (V4/V4.5 only) or image-to-image,
+and an optional rotated style pool. Captions contain only content tags: no
+style and no trait tags. 「根据参考图建议角色特征」 sends the selected reference
+images to the configured AI advice provider on explicit request (paid). See
+`../../.trellis/spec/backend/character-dataset-contract.md`.
