@@ -6,7 +6,7 @@ import { DATASET_CATEGORIES, type DatasetCategory } from './dataset-prompts'
 import { CHARACTER_CATEGORIES } from './character-prompts'
 import { CUSTOM_CATEGORY, MAX_DATASET_ITEMS, MAX_DATASET_PROMPT_LENGTH, datasetItems, nextCustomId, type DatasetEntry } from './dataset-run'
 import { defaultCharacterEntries, defaultDatasetEntries } from './dataset-defaults'
-import { buildDatasetZip, downloadZip, experimentJobs, selectedJobs, type DatasetExportProgress } from './dataset-export'
+import { ANIMAGINE_QUALITY_PREFIX, buildDatasetZip, downloadZip, experimentJobs, selectedJobs, type DatasetExportProgress } from './dataset-export'
 import { CharacterRunSettings, characterSnapshotSummary, useCharacterSettings } from './CharacterDataset'
 import type { GenerationStore } from './store'
 
@@ -174,6 +174,7 @@ async function sourceJobs(api: WorkspaceApi, source: DatasetExportSource, signal
 
 export function DatasetExportPanel({ api, source, onClose }: { api: WorkspaceApi; source: DatasetExportSource; onClose: () => void }) {
   const [trigger, setTrigger] = useState('')
+  const [prefix, setPrefix] = useState('')
   // Experiment exports load their groups first so the user can drop off-model items.
   const [jobs, setJobs] = useState<GenerationView[] | null>(null)
   const [excluded, setExcluded] = useState<ReadonlySet<string>>(new Set())
@@ -216,7 +217,7 @@ export function DatasetExportPanel({ api, source, onClose }: { api: WorkspaceApi
       // Always re-read: groups may have finished or been reviewed since the checklist loaded.
       const all = await sourceJobs(api, source, current.signal)
       const chosen = all.filter(job => !excluded.has(job.id))
-      const result = await buildDatasetZip(api, chosen, trigger, current.signal, setProgress)
+      const result = await buildDatasetZip(api, chosen, trigger, prefix, current.signal, setProgress)
       if (current.signal.aborted) return
       const discardedText = result.discarded ? `，已弃置 ${result.discarded} 张未导出` : ''
       if (!result.blob) setError(`没有可导出的图片（跳过 ${result.skipped} 张：失败、已过期或不可用${discardedText}）。`)
@@ -239,6 +240,14 @@ export function DatasetExportPanel({ api, source, onClose }: { api: WorkspaceApi
     <label className="field"><span>触发词（可选，加在每个 caption 开头）</span>
       <input type="text" value={trigger} maxLength={100} spellCheck={false} disabled={running} placeholder="例如 mystyle"
         onChange={event => setTrigger(event.target.value)} /></label>
+    <label className="field"><span>质量词前缀（可选，加在触发词之后、内容标签之前；生成时也写同样的词）</span>
+      <input type="text" value={prefix} maxLength={300} spellCheck={false} disabled={running} placeholder="例如 masterpiece, high score, great score, absurdres"
+        onChange={event => setPrefix(event.target.value)} /></label>
+    <div className="experiment-config-actions">
+      <button className="text-action" type="button" disabled={running} onClick={() => setPrefix(ANIMAGINE_QUALITY_PREFIX)}>Animagine XL 4.0 预设</button>
+      {prefix && <button className="text-action" type="button" disabled={running} onClick={() => setPrefix('')}>清空前缀</button>}
+    </div>
+    <p className="prompt-hint">caption 示例：{[trigger.trim(), prefix.trim(), '1girl, solo, portrait, smile…'].filter(Boolean).join(', ')}。只放质量词：皮肤光泽、眼睛细节等希望成为画风的一部分的质感，不要写进 caption。</p>
     <p className="prompt-hint">zip 内为 0001.png + 0001.txt 成对文件。图片去除元数据与隐写信息；caption 只含内容提示词，不含画风和角色特征。已弃置的图片不会导出。导出只读取已保存图片，不会生成。</p>
     {source.kind === 'experiment' && (jobs === null
       ? <button className="text-action" type="button" disabled={running} onClick={() => void loadGroups()}>筛选条目（可选：取消不像角色或不满意的条目）</button>

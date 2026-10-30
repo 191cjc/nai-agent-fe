@@ -91,7 +91,14 @@ function captionTags(text: string): string[] {
 }
 
 /** Content-only caption: the exact dataset item, or effective shared + character prompts. Never style. */
-export function datasetCaption(parameters: GenerationRequest, trigger: string): string {
+/** Animagine XL 4.0 quality tags; captioned so the base model's quality prompt recalls the style. */
+export const ANIMAGINE_QUALITY_PREFIX = 'masterpiece, high score, great score, absurdres'
+
+/**
+ * Caption order: trigger, optional shared prefix (quality tags), then content tags.
+ * The prefix is user text for every image; style and trait tags are never added.
+ */
+export function datasetCaption(parameters: GenerationRequest, trigger: string, prefix = ''): string {
   const item = parameters.experiment?.kind === 'dataset' ? parameters.experiment.item : undefined
   const compile = parameters.prompt_comments === true && !parameters.prompt_sections
   const sources = item ? [item.prompt] : [
@@ -104,8 +111,8 @@ export function datasetCaption(parameters: GenerationRequest, trigger: string): 
     ? new Set(captionTags(parameters.positive_prompt.trim().slice(0, -item.prompt.trim().length || undefined)))
     : new Set<string>()
   const tags = sources.flatMap(captionTags).filter(tag => !traits.has(tag))
-  const triggerTag = trigger.trim()
-  const unique = [...new Set(triggerTag ? [triggerTag, ...tags.filter(tag => tag !== triggerTag)] : tags)]
+  const lead = [trigger.trim(), ...captionTags(prefix)].filter(Boolean)
+  const unique = [...new Set([...lead, ...tags])]
   return unique.join(', ')
 }
 
@@ -130,7 +137,7 @@ function aborted(error: unknown): boolean {
 
 /** Read each retained image once, sequentially, through the clean export path. Never generates. */
 export async function buildDatasetZip(
-  api: WorkspaceApi, jobs: readonly GenerationView[], trigger: string, signal: AbortSignal,
+  api: WorkspaceApi, jobs: readonly GenerationView[], trigger: string, prefix: string, signal: AbortSignal,
   onProgress: (progress: DatasetExportProgress) => void,
 ): Promise<DatasetExportResult> {
   const zip = new ZipWriter()
@@ -142,7 +149,7 @@ export async function buildDatasetZip(
     if (signal.aborted) throw new DOMException('Export cancelled.', 'AbortError')
     if (job.status !== 'succeeded' || !job.image_urls.length) skipped += Math.max(1, job.parameters.sample_count)
     else {
-      const caption = encoder.encode(datasetCaption(job.parameters, trigger) + '\n')
+      const caption = encoder.encode(datasetCaption(job.parameters, trigger, prefix) + '\n')
       const marks = new Set(job.discarded_images ?? [])
       for (const [imageIndex, path] of job.image_urls.entries()) {
         // Review marks: discarded images never enter the dataset.

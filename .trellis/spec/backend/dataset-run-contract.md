@@ -96,4 +96,10 @@ review only (operator restriction); no paid probes.
 - Every export (one set, several sets merged, selected history) re-reads
   groups at export time and skips discarded images, counting them separately
   from failed/expired ones; numbering stays contiguous across merged sets.
+- Export captions may carry an optional user prefix (UI preset for Animagine
+  XL 4.0: `masterpiece, high score, great score, absurdres`): order is trigger,
+  prefix tags, then content tags, de-duplicated. Empty prefix keeps the
+  previous captions exactly. Only quality tags belong there; texture/style
+  features the LoRA should learn (skin gloss, eye detail) stay out of
+  captions so they bind to the LoRA itself.
 
