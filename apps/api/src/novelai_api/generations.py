@@ -314,6 +314,8 @@ class GenerationView(HistoryItem):
     image_urls: list[str]
     result_expires_at: int | None
     provider_request: dict[str, Any] | None = None
+    # Owner review marks: exports skip these image indexes; files are kept.
+    discarded_images: list[int] = Field(default_factory=list)
 
 
 class HistoryPage(BaseModel):
@@ -454,6 +456,35 @@ class JobStore:
                 (json.dumps(arguments, ensure_ascii=False, allow_nan=False), job_id, user_id),
             )
         return bool(updated.rowcount)
+
+    def set_discarded(self, user_id: str, job_id: str, index: int, discarded: bool) -> None:
+        with self.database.connect(write=True) as connection:
+            if discarded:
+                connection.execute(
+                    "INSERT OR IGNORE INTO discarded_images (user_id, job_id, image_index, "
+                    "created_at) VALUES (?, ?, ?, ?)", (user_id, job_id, index, int(time.time())),
+                )
+            else:
+                connection.execute(
+                    "DELETE FROM discarded_images WHERE user_id = ? AND job_id = ? "
+                    "AND image_index = ?", (user_id, job_id, index),
+                )
+
+    def discarded(self, user_id: str, job_ids: Sequence[str]) -> dict[str, list[int]]:
+        marks: dict[str, list[int]] = {job_id: [] for job_id in job_ids}
+        if not job_ids:
+            return marks
+        with self.database.connect() as connection:
+            for start in range(0, len(job_ids), 500):
+                chunk = list(job_ids[start:start + 500])
+                rows = connection.execute(
+                    "SELECT job_id, image_index FROM discarded_images WHERE user_id = ? "
+                    f"AND job_id IN ({','.join('?' * len(chunk))}) ORDER BY image_index",
+                    (user_id, *chunk),
+                ).fetchall()
+                for row in rows:
+                    marks[row["job_id"]].append(row["image_index"])
+        return marks
 
     def provider_request(self, user_id: str, job_id: str) -> dict[str, Any] | None:
         with self.database.connect() as connection:
@@ -765,7 +796,14 @@ class GenerationManager:
             self._executor = None
         self.cache.stop()
 
-    def view(self, job: HistoryItem, user_id: str) -> GenerationView:
+    def views(self, jobs: Sequence[HistoryItem], user_id: str) -> list[GenerationView]:
+        """Batch the discard lookup for pages instead of one query per job."""
+        marks = self.store.discarded(user_id, [job.id for job in jobs])
+        return [self.view(job, user_id, discarded=marks[job.id]) for job in jobs]
+
+    def view(
+        self, job: HistoryItem, user_id: str, *, discarded: list[int] | None = None,
+    ) -> GenerationView:
         result = self.cache.describe(job.id, user_id) if job.status == "succeeded" else None
         raw_request = job._provider_request_json
         if raw_request is _NOT_LOADED:
@@ -778,6 +816,10 @@ class GenerationManager:
                         for index in range(result.image_count)] if result else [],
             result_expires_at=result.expires_at if result else None,
             provider_request=provider_request,
+            discarded_images=(
+                discarded if discarded is not None
+                else self.store.discarded(user_id, [job.id])[job.id]
+            ),
         )
 
     def is_inflight(self, job_id: str) -> bool:

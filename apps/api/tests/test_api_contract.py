@@ -10,6 +10,7 @@ from novelai_api.auth import create_token
 from novelai_api.config import Settings
 from novelai_api.db import Database
 
+DISCARD = "/api/generations/{job_id}/images/{image_index}/discard"
 SNAPSHOT = Path(__file__).resolve().parents[1] / "contracts" / "openapi.json"
 
 
@@ -49,6 +50,8 @@ def test_openapi_contract_matches_snapshot_without_database_or_provider_calls(
         ("/api/generations", "get"): {401, 422, 503},
         ("/api/generations/{job_id}", "get"): {401, 404, 422, 503},
         ("/api/generations/{job_id}", "delete"): {401, 403, 404, 409, 422, 503},
+        (DISCARD, "put"): {401, 403, 404, 422, 503},
+        (DISCARD, "delete"): {401, 403, 404, 422, 503},
         ("/api/prompt-snapshots", "get"): {401, 422, 503},
         ("/api/prompt-snapshots", "post"): {401, 403, 409, 422, 503},
         ("/api/prompt-snapshots/{snapshot_id}", "get"): {401, 404, 422, 503},
@@ -79,7 +82,7 @@ def test_openapi_contract_matches_snapshot_without_database_or_provider_calls(
         }
         for path, methods in schema["paths"].items()
         for method, operation in methods.items()
-        if method in {"get", "post", "delete"}
+        if method in {"get", "post", "put", "delete"}
     }
     assert set(documented_errors) == set(expected_errors) | {("/api/health/live", "get")}
     for route, codes in expected_errors.items():

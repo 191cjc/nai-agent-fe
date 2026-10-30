@@ -606,7 +606,7 @@ def create_app(
             )
         summary, items, next_offset = saved
         return ExperimentDetail(
-            summary=summary, items=[manager.view(job, user.id) for job in items],
+            summary=summary, items=manager.views(items, user.id),
             next_offset=next_offset,
         )
 
@@ -644,6 +644,42 @@ def create_app(
                 "Cache-Control": "no-store",
             },
         )
+
+    def discard_target(user: UserInfo, job_id: str, image_index: int) -> None:
+        job = own_job(user, job_id)
+        if job.status != "succeeded" or not 0 <= image_index < job.image_count:
+            raise HTTPException(
+                status_code=404,
+                detail=ApiError(code="not_found", message="Image not found").model_dump(),
+            )
+
+    @app.put(
+        "/api/generations/{job_id}/images/{image_index}/discard",
+        status_code=204,
+        responses={
+            401: {"model": ApiError}, 403: {"model": ApiError}, 404: {"model": ApiError},
+            422: {"model": ApiError}, 503: {"model": ApiError},
+        },
+    )
+    def discard_image(
+        job_id: str, image_index: int, user: Annotated[UserInfo, Depends(require_user)],
+    ) -> None:
+        discard_target(user, job_id, image_index)
+        manager.store.set_discarded(user.id, job_id, image_index, True)
+
+    @app.delete(
+        "/api/generations/{job_id}/images/{image_index}/discard",
+        status_code=204,
+        responses={
+            401: {"model": ApiError}, 403: {"model": ApiError}, 404: {"model": ApiError},
+            422: {"model": ApiError}, 503: {"model": ApiError},
+        },
+    )
+    def restore_image(
+        job_id: str, image_index: int, user: Annotated[UserInfo, Depends(require_user)],
+    ) -> None:
+        discard_target(user, job_id, image_index)
+        manager.store.set_discarded(user.id, job_id, image_index, False)
 
     @app.delete(
         "/api/generations/{job_id}",
