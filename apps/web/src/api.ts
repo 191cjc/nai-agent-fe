@@ -132,6 +132,8 @@ export interface GenerationView extends HistoryItem {
   image_urls: string[]
   result_expires_at: number | null
   provider_request: Record<string, unknown> | null
+  /** Owner review marks: exports skip these image indexes. */
+  discarded_images?: number[]
 }
 
 export interface HistoryPage {
@@ -503,6 +505,10 @@ export class WorkspaceApi {
     const run = checkedRun(await this.request<ExperimentRunState>(`/api/style-experiment-runs/${encodeURIComponent(id)}/stop`, { method: 'POST', signal }))
     if (run.id !== id) throw new ApiFailure(0, 'invalid_response', '实验编号不匹配，请重新连接核对。')
     return run
+  }
+
+  setImageDiscarded(jobId: string, index: number, discarded: boolean): Promise<void> {
+    return this.request(`/api/generations/${encodeURIComponent(jobId)}/images/${index}/discard`, { method: discarded ? 'PUT' : 'DELETE' })
   }
 
   deleteGeneration(id: string): Promise<void> {

@@ -114,12 +114,14 @@ export interface DatasetExportProgress {
   totalJobs: number
   written: number
   skipped: number
+  discarded: number
 }
 
 export interface DatasetExportResult {
   blob: Blob | null
   written: number
   skipped: number
+  discarded: number
 }
 
 function aborted(error: unknown): boolean {
@@ -135,12 +137,16 @@ export async function buildDatasetZip(
   const encoder = new TextEncoder()
   let written = 0
   let skipped = 0
+  let discarded = 0
   for (const [jobIndex, job] of jobs.entries()) {
     if (signal.aborted) throw new DOMException('Export cancelled.', 'AbortError')
     if (job.status !== 'succeeded' || !job.image_urls.length) skipped += Math.max(1, job.parameters.sample_count)
     else {
       const caption = encoder.encode(datasetCaption(job.parameters, trigger) + '\n')
-      for (const path of job.image_urls) {
+      const marks = new Set(job.discarded_images ?? [])
+      for (const [imageIndex, path] of job.image_urls.entries()) {
+        // Review marks: discarded images never enter the dataset.
+        if (marks.has(imageIndex)) { discarded += 1; continue }
         let png: Uint8Array
         try {
           const source = await api.image(path, signal)
@@ -161,9 +167,9 @@ export async function buildDatasetZip(
         written += 1
       }
     }
-    onProgress({ processedJobs: jobIndex + 1, totalJobs: jobs.length, written, skipped })
+    onProgress({ processedJobs: jobIndex + 1, totalJobs: jobs.length, written, skipped, discarded })
   }
-  return { blob: written ? zip.finish() : null, written, skipped }
+  return { blob: written ? zip.finish() : null, written, skipped, discarded }
 }
 
 /** Page through one saved experiment's groups (metadata only; images are read later). */

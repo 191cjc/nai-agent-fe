@@ -371,6 +371,9 @@ h1, h2, h3 { letter-spacing: 0; }
 .reference-tile img { width: 100%; height: 110px; object-fit: contain; }
 .reference-placeholder { display: grid; place-items: center; height: 110px; }
 .dataset-style-presets { display: grid; gap: 6px; margin-top: 4px; padding-top: 8px; border-top: 1px dashed #44414c; color: #d4c7df; font-size: 11px; }
+.experiment-image-frame img.discarded { opacity: 0.35; filter: grayscale(0.8); }
+.discarded-badge { position: absolute; top: 10px; left: 10px; padding: 4px 9px; border-radius: 4px; background: #6b2b2b; color: #ffe1e1; font-size: 12px; font-weight: 650; }
+.saved-review-toggle { margin: 0 6px 0 0; }
 .reference-thumbnails { display: flex; flex-wrap: wrap; gap: 6px; }
 .reference-thumbnails img { width: 64px; height: 64px; object-fit: contain; border: 1px solid #44414c; border-radius: 4px; background: #25252e; }
 .reference-meta { display: flex; align-items: center; gap: 5px; }

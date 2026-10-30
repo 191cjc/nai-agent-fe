@@ -158,7 +158,19 @@ export const DatasetRunConfig = observer(({ generation, api, hidden }: { generat
   </section>
 })
 
-export type DatasetExportSource = { kind: 'experiment'; id: string } | { kind: 'selection'; ids: readonly string[] }
+export type DatasetExportSource =
+  | { kind: 'experiment'; id: string }
+  | { kind: 'experiments'; ids: readonly string[] }
+  | { kind: 'selection'; ids: readonly string[] }
+
+/** Reads every group of each chosen training set in order (metadata only). */
+async function sourceJobs(api: WorkspaceApi, source: DatasetExportSource, signal: AbortSignal): Promise<GenerationView[]> {
+  if (source.kind === 'selection') return selectedJobs(api, source.ids, signal)
+  const ids = source.kind === 'experiment' ? [source.id] : source.ids
+  const jobs: GenerationView[] = []
+  for (const id of ids) jobs.push(...await experimentJobs(api, id, signal))
+  return jobs
+}
 
 export function DatasetExportPanel({ api, source, onClose }: { api: WorkspaceApi; source: DatasetExportSource; onClose: () => void }) {
   const [trigger, setTrigger] = useState('')
@@ -201,17 +213,16 @@ export function DatasetExportPanel({ api, source, onClose }: { api: WorkspaceApi
     setMessage('')
     setProgress(null)
     try {
-      // Always re-read: groups may have finished since the checklist was loaded.
-      const all = source.kind === 'experiment'
-        ? await experimentJobs(api, source.id, current.signal)
-        : await selectedJobs(api, source.ids, current.signal)
+      // Always re-read: groups may have finished or been reviewed since the checklist loaded.
+      const all = await sourceJobs(api, source, current.signal)
       const chosen = all.filter(job => !excluded.has(job.id))
       const result = await buildDatasetZip(api, chosen, trigger, current.signal, setProgress)
       if (current.signal.aborted) return
-      if (!result.blob) setError(`没有可导出的图片（跳过 ${result.skipped} 张：失败、已过期或不可用）。`)
+      const discardedText = result.discarded ? `，已弃置 ${result.discarded} 张未导出` : ''
+      if (!result.blob) setError(`没有可导出的图片（跳过 ${result.skipped} 张：失败、已过期或不可用${discardedText}）。`)
       else {
         downloadZip(result.blob, `lora-dataset-${new Date().toISOString().slice(0, 10)}.zip`)
-        setMessage(`已导出 ${result.written} 张图片和对应 caption${result.skipped ? `，跳过 ${result.skipped} 张（失败、已过期或不可用）` : ''}。`)
+        setMessage(`已导出 ${result.written} 张图片和对应 caption${result.skipped ? `，跳过 ${result.skipped} 张（失败、已过期或不可用）` : ''}${discardedText}。`)
       }
     } catch (exception) {
       if (!current.signal.aborted) setError(exception instanceof ApiFailure ? errorText(exception) : exception instanceof Error ? exception.message : '导出失败，请重试。')
@@ -228,7 +239,7 @@ export function DatasetExportPanel({ api, source, onClose }: { api: WorkspaceApi
     <label className="field"><span>触发词（可选，加在每个 caption 开头）</span>
       <input type="text" value={trigger} maxLength={100} spellCheck={false} disabled={running} placeholder="例如 mystyle"
         onChange={event => setTrigger(event.target.value)} /></label>
-    <p className="prompt-hint">zip 内为 0001.png + 0001.txt 成对文件。图片去除元数据与隐写信息；caption 只含内容提示词，不含画风和角色特征。导出只读取已保存图片，不会生成。</p>
+    <p className="prompt-hint">zip 内为 0001.png + 0001.txt 成对文件。图片去除元数据与隐写信息；caption 只含内容提示词，不含画风和角色特征。已弃置的图片不会导出。导出只读取已保存图片，不会生成。</p>
     {source.kind === 'experiment' && (jobs === null
       ? <button className="text-action" type="button" disabled={running} onClick={() => void loadGroups()}>筛选条目（可选：取消不像角色或不满意的条目）</button>
       : <details className="dataset-category" open><summary><strong>导出条目</strong><span>{jobs.length - excluded.size} / {jobs.length}</span>
@@ -247,7 +258,8 @@ export function DatasetExportPanel({ api, source, onClose }: { api: WorkspaceApi
             <span />
           </li>
         })}</ul></details>)}
-    {progress && <p role="status" aria-live="polite">已处理 {progress.processedJobs} / {progress.totalJobs} 条记录 · 已写入 {progress.written} 张 · 跳过 {progress.skipped} 张</p>}
+    {source.kind === 'experiments' && <p className="prompt-hint">将把所选 {source.ids.length} 个训练集合并导出到一个 zip，编号连续。</p>}
+    {progress && <p role="status" aria-live="polite">已处理 {progress.processedJobs} / {progress.totalJobs} 条记录 · 已写入 {progress.written} 张 · 跳过 {progress.skipped} 张 · 已弃置 {progress.discarded} 张</p>}
     {message && <p className="experiment-note" role="status">{message}</p>}
     {error && <p className="alert" role="alert">{error}</p>}
     <div className="experiment-config-actions">

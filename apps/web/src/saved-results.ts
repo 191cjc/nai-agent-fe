@@ -43,6 +43,10 @@ export class SavedResultsStore {
   groupOffset = 0
   nextGroupOffset: number | null = null
   imageIndex = 0
+  /** Review mode: left/right navigation skips images marked as discarded. */
+  hideDiscarded = false
+  discardBusy = false
+  discardError = ''
   image: SavedImage | null = null
   loading = false
   imageLoading = false
@@ -243,7 +247,49 @@ export class SavedResultsStore {
     return epoch === this.preloadEpoch && !signal.aborted && this.selection?.kind === 'experiment' && this.selection.id === id
   }
 
+  get currentDiscarded(): boolean {
+    return this.job?.discarded_images?.includes(this.imageIndex) === true
+  }
+
+  setHideDiscarded(value: boolean): void {
+    this.hideDiscarded = value
+  }
+
+  /** Marks or restores the shown image on the server; the file itself is kept. */
+  async toggleDiscard(): Promise<void> {
+    const job = this.job
+    const index = this.imageIndex
+    if (!job || job.status !== 'succeeded' || index >= job.image_urls.length || this.discardBusy) return
+    const discarded = !this.currentDiscarded
+    const epoch = this.viewerEpoch
+    this.discardBusy = true
+    this.discardError = ''
+    try {
+      await this.api.setImageDiscarded(job.id, index, discarded)
+      runInAction(() => {
+        if (epoch !== this.viewerEpoch || this.job?.id !== job.id) return
+        const marks = new Set(this.job.discarded_images ?? [])
+        if (discarded) marks.add(index)
+        else marks.delete(index)
+        this.job = { ...this.job, discarded_images: [...marks].sort((left, right) => left - right) }
+      })
+    } catch (error) {
+      runInAction(() => { this.discardError = errorText(error) })
+    } finally {
+      runInAction(() => { this.discardBusy = false })
+    }
+  }
+
   async move(direction: -1 | 1): Promise<void> {
+    await this.step(direction)
+    // In review mode keep going the same way past discarded images (bounded).
+    for (let hops = 0; this.hideDiscarded && this.currentDiscarded && hops < 2000; hops += 1) {
+      if (direction === -1 ? !this.canPrevious : !this.canNext) break
+      await this.step(direction)
+    }
+  }
+
+  private async step(direction: -1 | 1): Promise<void> {
     if (direction === -1 ? !this.canPrevious : !this.canNext) return
     const index = this.imageIndex + direction
     if (index >= 0 && index < this.imageSlots) {
@@ -268,6 +314,7 @@ export class SavedResultsStore {
     const controller = new AbortController()
     this.viewerController = controller
     this.releaseImage()
+    this.discardError = ''
     this.groupOffset = offset
     this.requestedImage = requestedImage
     this.job = null

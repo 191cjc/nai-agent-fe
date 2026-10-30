@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useRef, useState } from 'react'
 import { observer } from 'mobx-react-lite'
-import { ArrowLeft, ArrowRight, Download, FlaskConical, Images, Layers, RefreshCw, UserRound, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Ban, Download, FlaskConical, Images, Layers, RefreshCw, RotateCcw, UserRound, X } from 'lucide-react'
 import { ApiFailure, errorText, type WorkspaceApi } from './api'
 import { DatasetExportPanel } from './dataset-lazy'
 import { GenerationParameters } from './GenerationParameters'
@@ -9,6 +9,9 @@ import { ImageSaveButton, ImageSeedButton } from './ImageActions'
 
 export const SavedExperimentList = observer(({ saved, api, onView }: { saved: SavedResultsStore; api: WorkspaceApi; onView: () => void }) => {
   const [exportingId, setExportingId] = useState<string | null>(null)
+  // Multi-select export of several training sets into one zip.
+  const [chosen, setChosen] = useState<readonly string[]>([])
+  const [exportingChosen, setExportingChosen] = useState(false)
   return <div className="saved-experiment-list">
     <div className="history-toolbar"><span>已保存的画风实验与训练集</span>
       <button type="button" className="icon-button" title="刷新已保存实验" aria-label="刷新已保存实验" disabled={saved.listLoading}
@@ -19,7 +22,16 @@ export const SavedExperimentList = observer(({ saved, api, onView }: { saved: Sa
     {saved.listLoading && <p className="subtle" role="status">正在加载实验...</p>}
     {saved.listError && <p className="alert" role="alert">{saved.listError}</p>}
     {saved.listLoaded && !saved.listLoading && !saved.listError && !saved.experiments.length && <p className="subtle">暂无已保存的画风实验</p>}
+    {chosen.length > 0 && <div className="history-selection">
+      <span>已选 {chosen.length} 个训练集（可跨页）</span>
+      <button className="text-action" type="button" disabled={exportingChosen} onClick={() => setExportingChosen(true)}><Download size={15} aria-hidden="true" /> 合并导出所选</button>
+      <button className="text-action" type="button" disabled={exportingChosen} onClick={() => setChosen([])}>清除选择</button>
+    </div>}
+    {exportingChosen && chosen.length > 0 && <Suspense fallback={null}><DatasetExportPanel key={chosen.join(',')} api={api}
+      source={{ kind: 'experiments', ids: chosen }} onClose={() => setExportingChosen(false)} /></Suspense>}
     <div className="history-list">{saved.experiments.map(experiment => <article className="history-item saved-experiment-item" key={experiment.id}>
+      {experiment.kind === 'dataset' && <label className="history-select"><input type="checkbox" checked={chosen.includes(experiment.id)} disabled={exportingChosen}
+        onChange={event => setChosen(current => event.target.checked ? [...current.filter(id => id !== experiment.id), experiment.id] : current.filter(id => id !== experiment.id))} /> 选入合并导出</label>}
       <time dateTime={new Date(experiment.created_at * 1000).toISOString()}>{new Date(experiment.created_at * 1000).toLocaleString()}</time>
       {experiment.kind === 'dataset' ? <>
         <p><Layers size={14} aria-hidden="true" /> 训练集批跑 · 已提交 <strong>{experiment.group_count}</strong> / {experiment.total} 条</p>
@@ -143,6 +155,8 @@ export const SavedResultViewer = observer(({ saved, api, onClose, onUseSeed, can
           {saved.preloading ? <X size={15} aria-hidden="true" /> : <Images size={15} aria-hidden="true" />}
           {saved.preloading ? '取消加载' : '加载全部图片'}
         </button>}
+        <label className="history-select saved-review-toggle"><input type="checkbox" checked={saved.hideDiscarded}
+          onChange={event => saved.setHideDiscarded(event.target.checked)} /> 只看未弃置</label>
         <button className="icon-button" type="button" title="关闭历史图片" aria-label="关闭历史图片" onClick={onClose}><X size={18} /></button>
       </div>
     </div>
@@ -158,7 +172,8 @@ export const SavedResultViewer = observer(({ saved, api, onClose, onUseSeed, can
           <button className="icon-button experiment-image-arrow" type="button" title="上一个保存结果" aria-label="上一个保存结果"
             disabled={!saved.canPrevious} onClick={() => move(-1)}><ArrowLeft size={22} aria-hidden="true" /></button>
           <div className="experiment-image-frame" aria-busy={saved.loading || saved.imageLoading}>
-            {image && job ? <><img key={image.url} src={image.url} alt={`${groupLabel}，图像 ${image.index + 1}`} />
+            {image && job ? <><img key={image.url} src={image.url} alt={`${groupLabel}，图像 ${image.index + 1}`} className={saved.currentDiscarded ? 'discarded' : ''} />
+              {saved.currentDiscarded && <span className="discarded-badge" role="status">已弃置 · 导出时不包含</span>}
               <ImageSeedButton seed={job.effective_seed} onUseSeed={onUseSeed} /></>
               : <div className="canvas-placeholder" role="status"><FlaskConical size={32} aria-hidden="true" /><p>{placeholder}</p></div>}
           </div>
@@ -169,6 +184,10 @@ export const SavedResultViewer = observer(({ saved, api, onClose, onUseSeed, can
           <span aria-live="polite" aria-atomic="true">{groupLabel}{job && (job.image_urls.length ? ` · 图像 ${saved.imageIndex + 1} / ${saved.imageSlots}` : ' · 无可用图片')}</span>
           {image && job && <ImageSaveButton key={image.url} url={image.url} filename={isExperiment ? `style-experiment-${image.filename}` : image.filename}
             isCurrent={() => canSave() && saved.selection === selection && saved.job?.id === job.id && saved.image?.url === image.url} />}
+          {image && job && <button className="text-action" type="button" disabled={saved.discardBusy}
+            aria-pressed={saved.currentDiscarded} onClick={() => void saved.toggleDiscard()}>
+            {saved.currentDiscarded ? <RotateCcw size={15} aria-hidden="true" /> : <Ban size={15} aria-hidden="true" />}
+            {saved.discardBusy ? '正在保存...' : saved.currentDiscarded ? '恢复' : '弃置'}</button>}
           {image && job && <UseAsReferenceButton key={`${job.id}:${image.index}`} api={api} jobId={job.id} index={image.index} />}
         </figcaption>
       </figure>
@@ -185,6 +204,8 @@ export const SavedResultViewer = observer(({ saved, api, onClose, onUseSeed, can
       </div>}
       <p className="prompt-hint" id="saved-navigation-help">左右箭头依次切换本组图片和下一个已保存组，聚焦图像区域后可按 ← / →。点击图片右下角种子可填入生成设置；浏览不会启动生成或改变服务器实验。</p>
       {(saved.error || saved.imageError) && <p className="alert" role="alert">{saved.error || saved.imageError}</p>}
+      {saved.discardError && <p className="alert" role="alert">弃置标记未保存：{saved.discardError}</p>}
+      {job && (job.discarded_images?.length ?? 0) > 0 && <p className="subtle">本组已弃置 {job.discarded_images?.length} / {job.image_urls.length} 张（导出时跳过；可点「恢复」撤销）。</p>}
       <div className="saved-result-actions"><span className="prompt-hint">私有保存 7 天</span><button type="button" className="text-action" disabled={saved.loading || saved.imageLoading} onClick={() => void saved.retry()}>
         <RefreshCw size={15} aria-hidden="true" /> 刷新保存记录
       </button></div>
