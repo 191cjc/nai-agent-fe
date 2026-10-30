@@ -44,6 +44,7 @@ from .generations import (
     ResultStorageUnavailable,
     ResultStore,
 )
+from .gpt_images import GptImageProvider
 from .mcp_account import NovelAiMcpBalanceProvider
 from .mcp_images import NovelAiMcpProvider
 from .prompt_snapshots import (
@@ -138,13 +139,20 @@ def create_app(
     tag_search: TagSearch | None = None,
     advice_runner: AdviceRunner | None = None,
     balance_provider: BalanceProvider | None = None,
+    gpt_image_provider: ImageProvider | None = None,
 ) -> FastAPI:
     settings = settings or Settings.from_env()
     database = database or Database(settings.sqlite_path)
     limiter = LoginLimiter()
     if image_provider is None and settings.novelai_mcp_token is not None:
         image_provider = NovelAiMcpProvider(settings.novelai_mcp_url, settings.novelai_mcp_token)
-    manager = GenerationManager(database, image_provider, cache=result_cache)
+    if gpt_image_provider is None and settings.gpt_image_api_key and settings.gpt_image_endpoint:
+        gpt_image_provider = GptImageProvider(
+            settings.gpt_image_endpoint, settings.gpt_image_api_key, settings.gpt_image_model,
+        )
+    manager = GenerationManager(
+        database, image_provider, cache=result_cache, gpt_provider=gpt_image_provider,
+    )
     experiments = StyleExperimentService(database, manager)
     snapshots = PromptSnapshotStore(database)
     references = ReferenceImageStore(database)
@@ -521,6 +529,10 @@ def create_app(
     ) -> RunState | JSONResponse:
         # Dataset runs share the durable run lifecycle; read/Stop use the style run routes.
         resolved = None
+        if payload.character is not None and payload.character.mode == "gpt" and (
+            manager.gpt_provider is None
+        ):
+            return error(503, "gpt_image_unavailable", "GPT image generation is not configured")
         if payload.character is not None:
             # Pin each owner reference to its current digest; later edits cannot change a run.
             resolved = []
@@ -706,6 +718,22 @@ def create_app(
             if exception.status == 429 and exception.retry_after is not None:
                 response.headers["Retry-After"] = exception.retry_after
             return response
+
+    class Capabilities(BaseModel):
+        gpt_image: bool
+        gpt_image_model: str | None
+
+    @app.get(
+        "/api/capabilities",
+        response_model=Capabilities,
+        responses={401: {"model": ApiError}, 422: {"model": ApiError}, 503: {"model": ApiError}},
+    )
+    def capabilities(_user: Annotated[UserInfo, Depends(require_user)]) -> Capabilities:
+        available = manager.gpt_provider is not None
+        return Capabilities(
+            gpt_image=available,
+            gpt_image_model=settings.gpt_image_model if available else None,
+        )
 
     def reference_error(exception: ReferenceFailure) -> JSONResponse:
         return error(exception.status, exception.code, exception.message)

@@ -1,0 +1,9 @@
+{"file": ".trellis/spec/backend/character-dataset-contract.md", "reason": "spec for GPT character mode"}
+{"file": ".trellis/spec/backend/dataset-run-contract.md", "reason": "spec for GPT character mode"}
+{"file": ".trellis/spec/backend/durable-experiment-contract.md", "reason": "spec for GPT character mode"}
+{"file": ".trellis/spec/backend/api-contract.md", "reason": "spec for GPT character mode"}
+{"file": ".trellis/spec/backend/deployment-contract.md", "reason": "spec for GPT character mode"}
+{"file": ".trellis/spec/backend/http-response-contract.md", "reason": "spec for GPT character mode"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "spec for GPT character mode"}
+{"file": ".trellis/spec/frontend/style-experiment-contract.md", "reason": "spec for GPT character mode"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "spec for GPT character mode"}

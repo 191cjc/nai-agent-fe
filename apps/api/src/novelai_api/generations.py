@@ -51,6 +51,9 @@ class CharacterPrompt(BaseModel):
 
 
 VIBE_MODELS = NATIVE_CHARACTER_MODELS - {"nai-diffusion-5-full", "nai-diffusion-5-curated"}
+# GPT image groups are independent of NovelAI: these neutral values fill the NAI-only fields.
+GPT_IMAGE_SIZES = frozenset({(1024, 1024), (1024, 1536), (1536, 1024)})
+GPT_SAMPLER = "gpt-image"
 
 
 class ReferenceImageUse(BaseModel):
@@ -61,7 +64,7 @@ class ReferenceImageUse(BaseModel):
 class ReferenceUse(BaseModel):
     """Frozen reference images for one dataset group; bytes stay in the private store."""
 
-    mode: Literal["vibe", "img2img"]
+    mode: Literal["vibe", "img2img", "gpt"]
     images: list[ReferenceImageUse] = Field(min_length=1, max_length=4)
     strength: float | None = Field(default=None, ge=0.01, le=0.99, allow_inf_nan=False)
     noise: float | None = Field(default=None, ge=0, le=0.99, allow_inf_nan=False)
@@ -75,9 +78,19 @@ class ReferenceUse(BaseModel):
         default=None, ge=0.01, le=1.0, allow_inf_nan=False,
         exclude_if=lambda value: value is None,
     )
+    # GPT only: relay image quality; absent means the model's automatic choice.
+    gpt_quality: Literal["low", "medium", "high"] | None = Field(
+        default=None, exclude_if=lambda value: value is None,
+    )
 
     @model_validator(mode="after")
     def valid_mode(self) -> Self:
+        nai_tuning = (self.strength, self.noise, self.information_extracted,
+                      self.reference_strength)
+        if self.mode == "gpt" and any(value is not None for value in nai_tuning):
+            raise ValueError("GPT image mode has no NovelAI reference settings")
+        if self.mode != "gpt" and self.gpt_quality is not None:
+            raise ValueError("Only GPT image mode has gpt_quality")
         if self.mode == "img2img" and (len(self.images) != 1 or self.strength is None
                                        or self.noise is None
                                        or self.information_extracted is not None
@@ -238,6 +251,12 @@ class GenerationRequest(BaseModel):
         if self.reference is not None:
             if self.effective_character_prompts:
                 raise ValueError("Reference generation does not use native character prompts")
+            if self.reference.mode == "gpt" and (
+                (self.width, self.height) not in GPT_IMAGE_SIZES or self.sampler != GPT_SAMPLER
+                or self.steps != 1 or self.cfg_scale != 0 or self.quality
+                or self.negative_prompt
+            ):
+                raise ValueError("GPT image groups use only GPT sizes and no NovelAI settings")
             if self.reference.mode == "vibe" and self.model not in VIBE_MODELS:
                 raise ValueError("Vibe transfer requires a V4 or V4.5 model")
         return self
@@ -708,12 +727,15 @@ class GenerationManager:
         cache: ResultStore | None = None,
         references: Callable[[str, str, str], bytes | None] | None = None,
         vibe_tokens: Callable[[str], VibeTokens] | None = None,
+        gpt_provider: ImageProvider | None = None,
     ):
         from .image_results import DiskResultStore
         from .reference_images import ReferenceImageStore
 
         self.store = JobStore(database)
         self.provider = provider
+        # GPT image groups never touch the NovelAI provider.
+        self.gpt_provider = gpt_provider
         store = ReferenceImageStore(database)
         # Encoded vibes are paid once per image/model/information and reused across groups.
         self.vibe_tokens = vibe_tokens or store.vibe_tokens
@@ -834,10 +856,16 @@ class GenerationManager:
                     if any(data is None for data in references):
                         self.store.finish(job_id, error_code="reference_unavailable")
                         return
-                    if not isinstance(self.provider, RequestRecordingImageProvider):
+                    provider = (
+                        self.gpt_provider if parameters.reference.mode == "gpt" else self.provider
+                    )
+                    if provider is None and parameters.reference.mode == "gpt":
+                        self.store.finish(job_id, error_code="gpt_image_unavailable")
+                        return
+                    if not isinstance(provider, RequestRecordingImageProvider):
                         self.store.finish(job_id, error_code="unsupported_reference_mode")
                         return
-                    images = self.provider.generate_with_request(
+                    images = provider.generate_with_request(
                         parameters, record_request, references=references,
                         vibe_tokens=self.vibe_tokens(user_id),
                     )

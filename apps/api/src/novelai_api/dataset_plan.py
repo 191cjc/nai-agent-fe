@@ -31,7 +31,7 @@ def _has_comment_line(text: str) -> bool:
 
 class CharacterRequest(BaseModel):
     traits: str = Field(min_length=1, max_length=1000)
-    mode: Literal["vibe", "img2img"]
+    mode: Literal["vibe", "img2img", "gpt"]
     reference_ids: list[UUID] = Field(min_length=1, max_length=4)
     strength: float | None = Field(default=None, ge=0.01, le=0.99, allow_inf_nan=False)
     noise: float | None = Field(default=None, ge=0, le=0.99, allow_inf_nan=False)
@@ -43,6 +43,7 @@ class CharacterRequest(BaseModel):
     reference_strength: float | None = Field(
         default=None, ge=0.01, le=1.0, allow_inf_nan=False,
     )
+    gpt_quality: Literal["low", "medium", "high"] | None = None
 
     @field_validator("traits")
     @classmethod
@@ -57,8 +58,14 @@ class CharacterRequest(BaseModel):
             raise ValueError("Duplicate reference image")
         if self.mode == "img2img" and (self.strength is None or self.noise is None):
             raise ValueError("Image-to-image requires strength and noise")
-        if self.mode == "vibe" and (self.strength is not None or self.noise is not None):
-            raise ValueError("Vibe transfer has no strength or noise")
+        if self.mode in ("vibe", "gpt") and (self.strength is not None or self.noise is not None):
+            raise ValueError("Only image-to-image has strength and noise")
+        if self.mode == "gpt" and (
+            self.information_extracted is not None or self.reference_strength is not None
+        ):
+            raise ValueError("GPT image mode has no vibe settings")
+        if self.mode != "gpt" and self.gpt_quality is not None:
+            raise ValueError("Only GPT image mode has gpt_quality")
         if self.mode == "img2img" and (
             self.information_extracted is not None or self.reference_strength is not None
         ):
@@ -70,14 +77,18 @@ class CharacterPlan(BaseModel):
     """Frozen character block: reference ids are pinned to their digests at creation."""
 
     traits: str
-    mode: Literal["vibe", "img2img"]
+    mode: Literal["vibe", "img2img", "gpt"]
     references: list[ReferenceImageUse] = Field(min_length=1, max_length=4)
     strength: float | None = None
     noise: float | None = None
     information_extracted: float | None = None
     reference_strength: float | None = None
+    gpt_quality: Literal["low", "medium", "high"] | None = None
 
     def use(self, ordinal: int) -> ReferenceUse:
+        if self.mode == "gpt":
+            # Every GPT item sees all references, like vibe transfer.
+            return ReferenceUse(mode="gpt", images=self.references, gpt_quality=self.gpt_quality)
         if self.mode == "vibe":
             return ReferenceUse(
                 mode="vibe", images=self.references,
@@ -142,6 +153,7 @@ class DatasetRunCreate(BaseModel):
                 strength=self.character.strength, noise=self.character.noise,
                 information_extracted=self.character.information_extracted,
                 reference_strength=self.character.reference_strength,
+                gpt_quality=self.character.gpt_quality,
             )
         # The longest effective style bounds every rotated style/item combination.
         longest = max(
@@ -179,5 +191,6 @@ class DatasetRunCreate(BaseModel):
                 strength=self.character.strength, noise=self.character.noise,
                 information_extracted=self.character.information_extracted,
                 reference_strength=self.character.reference_strength,
+                gpt_quality=self.character.gpt_quality,
             ).model_dump(mode="json", exclude_none=True)
         return json.dumps(definition, sort_keys=True, separators=(",", ":")), str(len(self.items))

@@ -112,9 +112,50 @@
         "title": "ApiError",
         "type": "object"
       },
+      "Capabilities": {
+        "properties": {
+          "gpt_image": {
+            "title": "Gpt Image",
+            "type": "boolean"
+          },
+          "gpt_image_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpt Image Model"
+          }
+        },
+        "required": [
+          "gpt_image",
+          "gpt_image_model"
+        ],
+        "title": "Capabilities",
+        "type": "object"
+      },
       "CharacterPlan": {
         "description": "Frozen character block: reference ids are pinned to their digests at creation.",
         "properties": {
+          "gpt_quality": {
+            "anyOf": [
+              {
+                "enum": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpt Quality"
+          },
           "information_extracted": {
             "anyOf": [
               {
@@ -129,7 +170,8 @@
           "mode": {
             "enum": [
               "vibe",
-              "img2img"
+              "img2img",
+              "gpt"
             ],
             "title": "Mode",
             "type": "string"
@@ -220,6 +262,22 @@
       },
       "CharacterRequest": {
         "properties": {
+          "gpt_quality": {
+            "anyOf": [
+              {
+                "enum": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpt Quality"
+          },
           "information_extracted": {
             "anyOf": [
               {
@@ -236,7 +294,8 @@
           "mode": {
             "enum": [
               "vibe",
-              "img2img"
+              "img2img",
+              "gpt"
             ],
             "title": "Mode",
             "type": "string"
@@ -1374,6 +1433,22 @@
       "ReferenceUse": {
         "description": "Frozen reference images for one dataset group; bytes stay in the private store.",
         "properties": {
+          "gpt_quality": {
+            "anyOf": [
+              {
+                "enum": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpt Quality"
+          },
           "images": {
             "items": {
               "$ref": "#/components/schemas/ReferenceImageUse"
@@ -1399,7 +1474,8 @@
           "mode": {
             "enum": [
               "vibe",
-              "img2img"
+              "img2img",
+              "gpt"
             ],
             "title": "Mode",
             "type": "string"
@@ -2322,6 +2398,72 @@
           }
         },
         "summary": "Login"
+      }
+    },
+    "/api/capabilities": {
+      "get": {
+        "operationId": "capabilities_api_capabilities_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "__Host-nai_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "  Host-Nai Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Capabilities"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Capabilities"
       }
     },
     "/api/dataset-runs": {

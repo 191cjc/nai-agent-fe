@@ -71,10 +71,20 @@ class Settings:
     codex_api_key: str | None = field(default=None, repr=False)
     codex_base_url: str | None = field(default=None, repr=False)
     codex_model: str | None = field(default=None, repr=False)
+    gpt_image_api_key: str | None = field(default=None, repr=False)
+    gpt_image_base_url: str | None = field(default=None, repr=False)
+    gpt_image_model: str = field(default="gpt-image-2.5-flare", repr=False)
 
     def __post_init__(self) -> None:
         validate_codex_base_url(self.codex_base_url)
         validate_codex_model(self.codex_model)
+        validate_codex_base_url(self.gpt_image_base_url)
+        validate_codex_model(self.gpt_image_model)
+
+    @property
+    def gpt_image_endpoint(self) -> str | None:
+        """GPT image calls use their own base, else the advice relay base."""
+        return self.gpt_image_base_url or self.codex_base_url
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -132,4 +142,7 @@ class Settings:
             codex_api_key=os.environ.get("NAI_CODEX_API_KEY") or None,
             codex_base_url=os.environ.get("NAI_CODEX_BASE_URL") or None,
             codex_model=os.environ.get("NAI_CODEX_MODEL") or None,
+            gpt_image_api_key=os.environ.get("NAI_GPT_IMAGE_API_KEY") or None,
+            gpt_image_base_url=os.environ.get("NAI_GPT_IMAGE_BASE_URL") or None,
+            gpt_image_model=os.environ.get("NAI_GPT_IMAGE_MODEL") or "gpt-image-2.5-flare",
         )
