@@ -13,7 +13,9 @@ export const STYLE_PRESETS: readonly StylePreset[] = [
   { label: '平涂', tags: 'flat color, simple shading, thick outlines' },
   { label: '厚涂', tags: 'impasto, painterly, thick brushstrokes' },
   { label: '水彩', tags: 'watercolor (medium), traditional media, soft colors' },
-  { label: '铅笔素描', tags: 'sketch, pencil (medium), monochrome, greyscale' },
+  // Colour kept on purpose: greyscale samples drop hair/eye/outfit colours, which character
+  // captions do not mention, so a LoRA would learn faded colours (2026-10-30).
+  { label: '彩铅素描', tags: 'sketch, colored pencil (medium), traditional media' },
   { label: '半写实', tags: 'semi-realistic, detailed shading, soft lighting' },
   { label: '复古 90 年代', tags: '1990s (style), retro artstyle' },
   { label: '像素风', tags: 'pixel art' },

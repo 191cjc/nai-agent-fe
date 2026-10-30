@@ -88,7 +88,8 @@ runs are dataset runs (`kind: "dataset"`) and inherit every rule in
   one paid call; the UI states images go to the configured advice provider.
 - Legacy dataset/style definitions (no `styles`/`character`) are unchanged.
 - The web style pool offers built-in presets (`apps/web/src/style-presets.ts`):
-  eight medium/technique tag sets, never artist tags, optionally prefixed with
+  eight medium/technique tag sets (all in colour: no monochrome/greyscale preset,
+  since captions omit style and grey samples teach faded character colours), never artist tags, optionally prefixed with
   a user-entered prefix that is empty by default (quality tags only). Never
   prefix the draft style: it is itself a style and mixes into every preset.
   Entries are ordinary editable pool items (overwrite asks to confirm; append
