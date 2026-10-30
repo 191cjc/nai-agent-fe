@@ -431,3 +431,12 @@ private online backup and confirm no active jobs/runs before the restart;
 deploy the API before the web release. Rolling the API back below schema 6
 requires restoring the pre-upgrade backup. Trait advice sends the selected
 reference images to the configured advice provider only on an explicit click.
+
+## GPT image character mode
+
+Optional. Add `NAI_GPT_IMAGE_API_KEY` (and, only if different from the
+advice relay, `NAI_GPT_IMAGE_BASE_URL` / `NAI_GPT_IMAGE_MODEL`) privately with
+`sudoedit /etc/novelai/api.env`, then restart when idle. Without the key the
+web hides the mode and dataset-run creation returns 503. Reference images and
+prompts are sent to that relay only for runs the owner starts; each item is a
+paid call of roughly 1–2 minutes.

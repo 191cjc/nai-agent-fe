@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Palette, Plus, Sparkles, Trash2, Upload, X } from 'lucide-react'
-import { ApiFailure, errorText, type ReferenceImage, type WorkspaceApi } from './api'
-import { MAX_REFERENCES, MAX_STYLE_POOL, MAX_TRAITS_LENGTH, characterRequest, type CharacterSettings } from './dataset-run'
+import { ApiFailure, errorText, type Capabilities, type ReferenceImage, type WorkspaceApi } from './api'
+import { GPT_SIZES, MAX_REFERENCES, MAX_STYLE_POOL, MAX_TRAITS_LENGTH, characterRequest, type CharacterSettings, type GptSize } from './dataset-run'
 import { VIBE_MODELS } from './store'
 import { STYLE_PRESETS, presetStyles } from './style-presets'
 
@@ -10,6 +10,9 @@ const MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 export { characterSnapshotSummary } from './character-summary'
 
 export interface CharacterState {
+  /** null until checked: whether the server has a GPT image key configured. */
+  gpt: Capabilities | null
+  setGpt: (gpt: Capabilities) => void
   settings: CharacterSettings
   setSettings: (update: (current: CharacterSettings) => CharacterSettings) => void
   styles: string[]
@@ -19,15 +22,18 @@ export interface CharacterState {
 
 /** Character run settings live in the dataset panel so collapsing it keeps them. */
 export function useCharacterSettings(draftStyle: string): CharacterState {
-  const [settings, setSettingsState] = useState<CharacterSettings>({ traits: '', mode: 'vibe', referenceIds: [], strength: '0.55', noise: '0', information: '1', vibeStrength: '1' })
+  const [settings, setSettingsState] = useState<CharacterSettings>({ traits: '', mode: 'vibe', referenceIds: [], strength: '0.55', noise: '0', information: '1', vibeStrength: '1',
+    gptSize: 'portrait', gptQuality: 'auto', gptSamples: '1' })
   // Until the user edits the pool it follows the live draft style, like style mode.
   const [edited, setEdited] = useState<string[] | null>(null)
   const styles = edited ?? [draftStyle]
+  const [gpt, setGpt] = useState<Capabilities | null>(null)
   return {
-    settings, styles,
+    gpt, setGpt, settings, styles,
     setSettings: update => setSettingsState(update),
     setStyles: update => setEdited(current => update(current ?? [draftStyle])),
     error: model => {
+      if (settings.mode === 'gpt' && !gpt?.gpt_image) return 'GPT 生图未配置，请在服务器上设置 NAI_GPT_IMAGE_API_KEY。'
       try {
         characterRequest(settings, model, VIBE_MODELS)
         return ''
@@ -36,6 +42,18 @@ export function useCharacterSettings(draftStyle: string): CharacterState {
       }
     },
   }
+}
+
+/** Mirrors the server template so the user sees exactly what GPT receives. */
+function gptPromptPreview(traits: string, style: string): string {
+  return [
+    'Use the attached reference image(s); they all show the same character.',
+    'Draw exactly this character: keep the face, hair, eyes, outfit, accessories and weapon identical to the references.',
+    `Character: ${traits.trim()}`,
+    'Scene and pose: <第 1 条内容提示词>',
+    ...(style.trim() ? [`Art style: ${style.trim()}`] : []),
+    'One character only. No text, no watermark, no signature.',
+  ].join('\n')
 }
 
 function failureText(error: unknown): string {
@@ -241,7 +259,17 @@ function TraitAdvice({ api, referenceIds, traits, onApply }: {
 export function CharacterRunSettings({ api, state, model, draftStyle }: {
   api: WorkspaceApi; state: CharacterState; model: string; draftStyle: string
 }) {
-  const { settings, setSettings, styles, setStyles } = state
+  const { settings, setSettings, styles, setStyles, gpt, setGpt } = state
+
+  useEffect(() => {
+    const controller = new AbortController()
+    api.capabilities(controller.signal).then(setGpt).catch(() => {
+      if (!controller.signal.aborted) setGpt({ gpt_image: false, gpt_image_model: null })
+    })
+    return () => controller.abort()
+    // setGpt is a stable state setter wrapper recreated per render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [api])
   // Optional shared prefix (e.g. quality tags), empty by default. Never the draft style:
   // that is itself a style and would mix into every preset.
   const [prefix, setPrefix] = useState('')
@@ -262,6 +290,25 @@ export function CharacterRunSettings({ api, state, model, draftStyle }: {
         onChange={() => setSettings(current => ({ ...current, mode: 'vibe' }))} /> Vibe Transfer（所有参考图一起使用；仅 V4 / V4.5 模型）</label>
       <label className="history-select"><input type="radio" name="character-mode" checked={settings.mode === 'img2img'}
         onChange={() => setSettings(current => ({ ...current, mode: 'img2img' }))} /> 图生图（参考图按条目轮流使用；所有模型）</label>
+      <label className="history-select"><input type="radio" name="character-mode" checked={settings.mode === 'gpt'} disabled={!gpt?.gpt_image}
+        onChange={() => setSettings(current => ({ ...current, mode: 'gpt' }))} /> GPT 参考图生成（{gpt?.gpt_image_model ?? 'GPT 生图'}；与 NovelAI 无关{gpt && !gpt.gpt_image ? '；未配置' : ''}）</label>
+      {settings.mode === 'gpt' && <>
+        <p className="prompt-hint">GPT 模式不使用 NovelAI 的模型、采样器、步数、CFG 和负面提示词。所有参考图会和下方提示词一起发送给中转站的 GPT 生图模型；每条一次付费调用，约 1–2 分钟；暴露或有版权的内容可能被审核拒绝（记为失败，继续下一条）。</p>
+        <div className="experiment-range-fields">
+          <label className="field"><span>输出尺寸</span>
+            <select value={settings.gptSize} onChange={event => setSettings(current => ({ ...current, gptSize: event.target.value as GptSize }))}>
+              {(Object.keys(GPT_SIZES) as GptSize[]).map(size => <option key={size} value={size}>{GPT_SIZES[size].label}</option>)}
+            </select></label>
+          <label className="field"><span>质量</span>
+            <select value={settings.gptQuality} onChange={event => setSettings(current => ({ ...current, gptQuality: event.target.value as CharacterSettings['gptQuality'] }))}>
+              <option value="auto">自动</option><option value="low">低</option><option value="medium">中</option><option value="high">高</option>
+            </select></label>
+          <label className="field"><span>每条张数（1–4）</span>
+            <input type="text" inputMode="numeric" value={settings.gptSamples} onChange={event => setSettings(current => ({ ...current, gptSamples: event.target.value }))} /></label>
+        </div>
+        <details className="dataset-category"><summary><strong>第 1 条的提示词预览</strong></summary>
+          <pre className="request-snapshot-json">{gptPromptPreview(settings.traits, styles[0] ?? '')}</pre></details>
+      </>}
       {settings.mode === 'vibe' && <div className="experiment-range-fields">
         <label className="field"><span>信息提取度（0.01–1，越高越贴近参考图中的角色，越低越只取风格）</span>
           <input type="text" inputMode="decimal" value={settings.information} onChange={event => setSettings(current => ({ ...current, information: event.target.value }))} /></label>

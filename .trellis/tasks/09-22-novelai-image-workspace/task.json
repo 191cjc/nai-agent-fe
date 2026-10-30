@@ -24,7 +24,8 @@
     "09-23-novelai-compose",
     "10-14-native-character-prompts",
     "10-28-lora-dataset-runs",
-    "10-29-character-lora-dataset"
+    "10-29-character-lora-dataset",
+    "10-30-gpt-image-character-mode"
   ],
   "parent": null,
   "relatedFiles": [],

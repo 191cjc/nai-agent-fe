@@ -53,9 +53,16 @@ export function datasetItems(entries: readonly DatasetEntry[], styles: readonly 
   })
 }
 
+export type GptSize = 'portrait' | 'square' | 'landscape'
+export const GPT_SIZES: Record<GptSize, { label: string; width: number; height: number }> = {
+  portrait: { label: '竖版 1024×1536', width: 1024, height: 1536 },
+  square: { label: '方形 1024×1024', width: 1024, height: 1024 },
+  landscape: { label: '横版 1536×1024', width: 1536, height: 1024 },
+}
+
 export interface CharacterSettings {
   traits: string
-  mode: 'vibe' | 'img2img'
+  mode: 'vibe' | 'img2img' | 'gpt'
   referenceIds: string[]
   strength: string
   noise: string
@@ -63,6 +70,10 @@ export interface CharacterSettings {
   information: string
   /** Vibe only: generation-time influence of the vibes, 0.01–1. */
   vibeStrength: string
+  /** GPT only: output size, quality (auto = model default) and images per item. */
+  gptSize: GptSize
+  gptQuality: 'auto' | 'low' | 'medium' | 'high'
+  gptSamples: string
 }
 
 function ratio(value: string, label: string, min: number, max: number): number {
@@ -77,6 +88,12 @@ export function characterRequest(settings: CharacterSettings, model: string, vib
   if (hasCommentLine(settings.traits)) throw new Error('角色特征不能包含以 // 开头的注释行。')
   if (!settings.referenceIds.length) throw new Error('请至少选择一张参考图。')
   if (settings.referenceIds.length > MAX_REFERENCES) throw new Error(`最多选择 ${MAX_REFERENCES} 张参考图。`)
+  if (settings.mode === 'gpt') {
+    return {
+      traits: settings.traits, mode: 'gpt', reference_ids: [...settings.referenceIds],
+      ...(settings.gptQuality === 'auto' ? {} : { gpt_quality: settings.gptQuality }),
+    }
+  }
   if (settings.mode === 'vibe') {
     if (!vibeModels.includes(model.trim())) throw new Error('Vibe Transfer 只支持 V4 / V4.5 模型，请在生成设置中切换模型或改用图生图。')
     return {

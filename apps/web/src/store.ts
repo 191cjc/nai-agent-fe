@@ -15,7 +15,7 @@ import {
   type StyleExperimentRange,
 } from './style-experiment'
 import { SavedResultsStore } from './saved-results'
-import { characterRequest, datasetItems, type CharacterSettings, type DatasetEntry } from './dataset-run'
+import { GPT_SIZES, characterRequest, datasetItems, type CharacterSettings, type DatasetEntry } from './dataset-run'
 import { StyleRunStore } from './style-run-store'
 import { PromptSnapshotStore } from './prompt-snapshots'
 import { BalanceStore } from './balance-store'
@@ -494,7 +494,7 @@ export class GenerationStore {
    * Freeze the draft's settings; each dataset item supplies all content. An optional
    * style pool (first entry becomes the frozen style) and character block are frozen too.
    */
-  async startDatasetRun(entries: readonly DatasetEntry[], options: { styles?: string[]; character?: CharacterSettings } = {}): Promise<void> {
+  async startDatasetRun(entries: readonly DatasetEntry[], options: { styles?: string[]; character?: CharacterSettings; gptModel?: string } = {}): Promise<void> {
     if (this.operationLocked || this.busy || this.activeId || this.submitUncertain) return
     this.error = ''
     let parameters: GenerationRequest
@@ -503,9 +503,22 @@ export class GenerationStore {
     try {
       const styles = options.styles ?? [this.draft.style_prompt]
       items = datasetItems(entries, styles, options.character?.traits)
-      const base = requestFromDraft({ ...this.draft, style_prompt: styles[0], shared_sections: emptySharedSections(), character_prompts: [] })
-      parameters = { ...base, positive_prompt: '', character_prompts: [], auto_character_position: false }
-      delete parameters.prompt_sections
+      if (options.character?.mode === 'gpt') {
+        // GPT image runs are independent of NovelAI: no NAI draft settings are used.
+        const size = GPT_SIZES[options.character.gptSize]
+        const samples = Number(options.character.gptSamples)
+        if (!Number.isInteger(samples) || samples < 1 || samples > 4) throw new Error('GPT 每条张数须为 1–4。')
+        parameters = {
+          prompt_comments: true, positive_prompt: '', style_prompt: styles[0], character_prompts: [],
+          auto_character_position: false, negative_prompt: '', model: options.gptModel ?? 'gpt-image-2.5-flare',
+          width: size.width, height: size.height, steps: 1, cfg_scale: 0, sampler: 'gpt-image',
+          seed: null, sample_count: samples, quality: false,
+        }
+      } else {
+        const base = requestFromDraft({ ...this.draft, style_prompt: styles[0], shared_sections: emptySharedSections(), character_prompts: [] })
+        parameters = { ...base, positive_prompt: '', character_prompts: [], auto_character_position: false }
+        delete parameters.prompt_sections
+      }
       if (options.character) character = characterRequest(options.character, parameters.model, VIBE_MODELS)
     } catch (error) {
       this.error = error instanceof Error ? error.message : '训练集批跑参数无效。'

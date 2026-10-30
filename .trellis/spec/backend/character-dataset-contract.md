@@ -60,6 +60,19 @@ runs are dataset runs (`kind: "dataset"`) and inherit every rule in
   (one value per reference); if the service lacks that field the group fails
   `unsupported_reference_mode` before any paid encode or generation. Image-to-image works (~132 s for one image) and
   uses a 600 s deadline.
+- GPT image mode (`mode: "gpt"`, optional `gpt_quality` low|medium|high) is
+  independent of NovelAI: enabled only with `NAI_GPT_IMAGE_API_KEY`
+  (`GET /api/capabilities`; create → 503 `gpt_image_unavailable` otherwise),
+  base URL `NAI_GPT_IMAGE_BASE_URL` or the advice relay, model
+  `NAI_GPT_IMAGE_MODEL` (default `gpt-image-2.5-flare`). Each group is one
+  multipart `POST {base}/images/edits` with every pinned reference as
+  `image[]`, the deterministic prompt from `gpt_images.gpt_prompt` (traits,
+  item, style), `size` ∈ 1024×1024 / 1024×1536 / 1536×1024, `n` 1–4. GPT groups
+  pin neutral NAI fields (`sampler="gpt-image"`, steps 1, CFG 0, no quality,
+  no negative) and are never sent to the NovelAI provider. 400 with
+  moderation/safety wording → `content_policy`; transport failures after send
+  → `outcome_unknown` (never retried). Verified with paid probes 2026-10-30
+  (~90–116 s per image, ~3 MB PNG).
 - Upstream tool errors are logged as one bounded, printable line
   (`NovelAI tool <name> failed: …`); they never contain images or tokens.
 - At call time the manager loads bytes and verifies the pinned sha256;

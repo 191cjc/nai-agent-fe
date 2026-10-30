@@ -37,12 +37,18 @@ export interface ReferenceImageUse {
 
 /** Frozen reference images for one character dataset group; bytes stay on the server. */
 export interface ReferenceUse {
-  mode: 'vibe' | 'img2img'
+  mode: 'vibe' | 'img2img' | 'gpt'
   images: ReferenceImageUse[]
   strength?: number | null
   noise?: number | null
   information_extracted?: number | null
   reference_strength?: number | null
+  gpt_quality?: 'low' | 'medium' | 'high' | null
+}
+
+export interface Capabilities {
+  gpt_image: boolean
+  gpt_image_model: string | null
 }
 
 export interface ReferenceImage {
@@ -58,22 +64,24 @@ export interface ReferenceImage {
 
 export interface CharacterRunRequest {
   traits: string
-  mode: 'vibe' | 'img2img'
+  mode: 'vibe' | 'img2img' | 'gpt'
   reference_ids: string[]
   strength?: number
   noise?: number
   information_extracted?: number
   reference_strength?: number
+  gpt_quality?: 'low' | 'medium' | 'high'
 }
 
 export interface CharacterRunPlan {
   traits: string
-  mode: 'vibe' | 'img2img'
+  mode: 'vibe' | 'img2img' | 'gpt'
   references: ReferenceImageUse[]
   strength?: number | null
   noise?: number | null
   information_extracted?: number | null
   reference_strength?: number | null
+  gpt_quality?: 'low' | 'medium' | 'high' | null
 }
 
 export interface ExperimentContext {
@@ -339,6 +347,8 @@ export function errorText(error: unknown): string {
       reference_not_found: '参考图不存在或已删除，请重新选择。',
       reference_unavailable: '参考图已被删除或内容变化，本条已跳过。',
       unsupported_reference_mode: 'NovelAI 服务不支持该参考图模式。',
+      gpt_image_unavailable: 'GPT 生图未配置（服务器缺少 NAI_GPT_IMAGE_API_KEY）。',
+      content_policy: '被 GPT 内容审核拒绝，本条已跳过。',
       not_ready: '服务暂不可用，请稍后重试。',
     }
     const detail = messages[error.code] ?? error.message
@@ -505,6 +515,10 @@ export class WorkspaceApi {
       body: JSON.stringify({ query, limit: 10 }),
       signal,
     })
+  }
+
+  capabilities(signal?: AbortSignal): Promise<Capabilities> {
+    return this.request('/api/capabilities', { signal })
   }
 
   referenceImages(signal?: AbortSignal): Promise<{ items: ReferenceImage[] }> {

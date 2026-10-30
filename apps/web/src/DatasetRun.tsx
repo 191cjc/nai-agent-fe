@@ -95,7 +95,9 @@ export const DatasetRunConfig = observer(({ generation, api, hidden }: { generat
   const style = generation.draft.style_prompt
   const active = mode === 'style' ? entries : characterEntries
   const selected = active.filter(entry => entry.selected)
-  const samples = /^\d+$/.test(generation.draft.sample_count) ? Number(generation.draft.sample_count) : null
+  const gptMode = mode === 'character' && character.settings.mode === 'gpt'
+  const sampleText = gptMode ? character.settings.gptSamples : generation.draft.sample_count
+  const samples = /^\d+$/.test(sampleText) ? Number(sampleText) : null
   const error = !selected.length ? '' : mode === 'style'
     ? validationError(entries, [style])
     : validationError(characterEntries, character.styles, character.settings.traits) || character.error(generation.draft.model)
@@ -104,7 +106,9 @@ export const DatasetRunConfig = observer(({ generation, api, hidden }: { generat
   function start() {
     if (locked || error || !selected.length) return
     if (mode === 'style') void generation.startDatasetRun(entries)
-    else void generation.startDatasetRun(characterEntries, { styles: character.styles, character: character.settings })
+    else void generation.startDatasetRun(characterEntries, {
+      styles: character.styles, character: character.settings, gptModel: character.gpt?.gpt_image_model ?? undefined,
+    })
   }
 
   const frozenCharacter = snapshot?.character && 'references' in snapshot.character ? snapshot.character : null
