@@ -418,6 +418,16 @@ export class GenerationStore {
     }
     this.draftVersion += 1
     this.invalidateAssistant()
+    if (item.parameters.reference?.mode === 'gpt') {
+      // GPT is only for training-set runs: reuse its prompts, keep the NovelAI settings.
+      this.draft = {
+        ...this.draft, shared_sections: metadata.shared, style_prompt: item.parameters.style_prompt ?? '',
+        character_prompts: [newCharacter()], seed: '',
+      }
+      this.positiveTagTarget = this.fallbackTagTarget()
+      this.error = ''
+      return
+    }
     this.draft = {
       negative_prompt: item.parameters.negative_prompt, model: item.parameters.model,
       sampler: item.parameters.sampler, quality: item.parameters.quality,
@@ -960,7 +970,20 @@ export class AppStore {
       || draftRevision !== this.generation.entryRestoreRevision || !this.history.isCurrentLoad(page)
       || this.generation.ordinaryOperationLocked || this.generation.busy || this.generation.activeId
       || this.generation.checking || this.generation.submitUncertain) return
-    if (page.items[0]) this.generation.reuse(page.items[0])
+    // Restore only the latest manually submitted job, never style-experiment or
+    // training-set groups (those would pull run-only settings such as GPT into the draft).
+    let latest: HistoryItem | undefined
+    try {
+      latest = (await this.api.history(0, 1, true)).items[0]
+    } catch {
+      return
+    }
+    if (!latest || entryVersion !== this.workspaceEntryVersion
+      || this.auth.status !== 'ready' || this.auth.loggingOut || this.auth.user !== user
+      || draftRevision !== this.generation.entryRestoreRevision
+      || this.generation.ordinaryOperationLocked || this.generation.busy || this.generation.activeId
+      || this.generation.checking || this.generation.submitUncertain) return
+    this.generation.reuse(latest)
   }
 
   resetProtected(): void {

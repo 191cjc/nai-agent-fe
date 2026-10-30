@@ -368,3 +368,16 @@ explicit atomic append/replace import with visible character target mapping.
   `provider_unavailable` into an unsubmitted job.
 - Correct: recognize only the exact typed generation-POST refusal and retain
   uncertainty for other 5xx; accepted-job errors keep their existing meaning.
+
+## Entry restore and run-only settings (2026-10-30)
+
+- Workspace entry restores the draft only from the latest **manual** job:
+  `GET /api/generations?limit=1&manual_only=true` (server filters
+  `settings_json.experiment IS NULL`). Style-experiment and training-set
+  groups are never auto-restored. The history list itself still shows all
+  jobs.
+- GPT image groups are training-set only. Reusing one from history restores
+  its prompts (style + shared text) but keeps the current NovelAI model,
+  sampler, size, steps, CFG, quality and negative prompt, so run-only GPT
+  values never enter ordinary generation settings.
+

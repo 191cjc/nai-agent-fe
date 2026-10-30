@@ -435,8 +435,8 @@ export class WorkspaceApi {
     return checkedHistoryItem(await this.request<GenerationView>(`/api/generations/${encodeURIComponent(id)}`, { signal }))
   }
 
-  async history(offset: number, limit = 20): Promise<HistoryPage> {
-    const page = await this.request<HistoryPage>(`/api/generations?offset=${offset}&limit=${limit}`)
+  async history(offset: number, limit = 20, manualOnly = false): Promise<HistoryPage> {
+    const page = await this.request<HistoryPage>(`/api/generations?offset=${offset}&limit=${limit}${manualOnly ? '&manual_only=true' : ''}`)
     page.items.forEach(checkedHistoryItem)
     return page
   }

@@ -126,3 +126,33 @@ def test_migration_to_schema7_preserves_rows(tmp_path) -> None:
         assert connection.execute("SELECT COUNT(*) FROM generation_jobs").fetchone()[0] == 1
         assert connection.execute("SELECT COUNT(*) FROM discarded_images").fetchone()[0] == 0
     assert upgraded.check_ready()
+
+
+def test_manual_only_history_skips_experiment_and_dataset_groups(
+    database: Database,  # noqa: F811
+) -> None:
+    from test_dataset_runs import dataset
+
+    app = create_app(
+        Settings(database.path, "https://testserver"), database,
+        image_provider=ReferenceProvider(), result_cache=ResultCache(),
+    )
+    app.state.experiments._interval = 0.01
+    with TestClient(app, base_url="https://testserver") as client:
+        login(client, database, "alice")
+        manual = finished_job(client, samples=1)
+        run = client.post("/api/dataset-runs", json=dataset().model_dump(mode="json"),
+                          headers=ORIGIN).json()
+        deadline = time.monotonic() + 3
+        while client.get(f"/api/style-experiment-runs/{run['id']}").json()["status"] != (
+            "completed"
+        ):
+            assert time.monotonic() < deadline
+            time.sleep(0.01)
+        everything = client.get("/api/generations", params={"limit": 10}).json()["items"]
+        assert len(everything) == 4 and everything[0]["parameters"].get("experiment")
+        latest_manual = client.get(
+            "/api/generations", params={"limit": 1, "manual_only": "true"},
+        ).json()
+        assert [item["id"] for item in latest_manual["items"]] == [manual]
+        assert latest_manual["next_offset"] is None

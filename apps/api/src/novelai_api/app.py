@@ -456,8 +456,9 @@ def create_app(
         user: Annotated[UserInfo, Depends(require_user)],
         limit: int = Query(default=20, ge=1, le=100),
         offset: int = Query(default=0, ge=0, le=9_007_199_254_740_991),
+        manual_only: bool = Query(default=False),
     ) -> HistoryPage:
-        return manager.store.list(user.id, limit=limit, offset=offset)
+        return manager.store.list(user.id, limit=limit, offset=offset, manual_only=manual_only)
 
     @app.get(
         "/api/generations/{job_id}",

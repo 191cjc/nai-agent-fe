@@ -2688,6 +2688,16 @@
             }
           },
           {
+            "in": "query",
+            "name": "manual_only",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Manual Only",
+              "type": "boolean"
+            }
+          },
+          {
             "in": "cookie",
             "name": "__Host-nai_session",
             "required": false,

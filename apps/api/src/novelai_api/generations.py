@@ -514,10 +514,16 @@ class JobStore:
             ).fetchone()
         return self._item(row) if row else None
 
-    def list(self, user_id: str, *, limit: int, offset: int) -> HistoryPage:
+    def list(
+        self, user_id: str, *, limit: int, offset: int, manual_only: bool = False,
+    ) -> HistoryPage:
+        # Manual jobs are ordinary submissions: no style-experiment or dataset metadata.
+        manual = (
+            " AND json_extract(settings_json, '$.experiment') IS NULL" if manual_only else ""
+        )
         with self.database.connect() as connection:
             rows = connection.execute(
-                "SELECT * FROM generation_jobs WHERE user_id = ? "
+                f"SELECT * FROM generation_jobs WHERE user_id = ?{manual} "
                 "ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?",
                 (user_id, limit + 1, offset),
             ).fetchall()
