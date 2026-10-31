@@ -80,8 +80,15 @@ runs are dataset runs (`kind: "dataset"`) and inherit every rule in
 - The provider checks `tools/list` for `references` / `image_to_image`
   fields before the paid call (`unsupported_reference_mode`), and records the
   request snapshot with `{sha256, byte_size}` in place of every base64 image.
-- Captions: dataset item text only; trait tags (prefix of `positive_prompt`
-  before the item) are removed even if repeated in the item; never style.
+- Captions (corrected 2026-10-31): trigger, optional prefix, then — by default
+  for character groups — the group's own drawing style (`styleCaptionTags`:
+  negative-weighted groups, `artist:` tags and weight syntax removed), then
+  item content. Trait tags (prefix of `positive_prompt` before the item) are
+  removed everywhere, including from style tags. Rationale: a style pool varies
+  how the character is drawn; uncaptioned, those looks (impasto, watercolor,
+  pixel art, semi-realistic) were learned as part of the character and made
+  the LoRA greasy/blurry. Style-LoRA groups (no `reference`) never caption
+  their style. The export checkbox may turn character style captions off.
 - Trait advice attaches the owner's chosen images as SDK `local_image`
   inputs (CLI `--image`) inside the isolated turn directory; tools stay
   disabled; 90 s timeout; dedicated identity-tag instructions. Each click is

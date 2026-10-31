@@ -133,7 +133,7 @@ export const DatasetRunConfig = observer(({ generation, api, hidden }: { generat
     </div>}
     {mode === 'style'
       ? <p className="prompt-hint">用当前「画风」固定风格，逐条运行下面的内容提示词，生成用于训练画风 LoRA 的图片。提示词只描述内容，不含画风与质量词；导出时作为 caption。默认全选：女性 70 条、成年男性 10 条、年幼男孩 14 条、无人物 15 条；人物条目都写明发色和带颜色的服装，让成图与 caption 对应。「男孩（年幼）」条目不能与身体描写类画风同时使用。</p>
-      : <p className="prompt-hint">用参考图和固定的角色特征，逐条运行景别、表情、姿势、场景等内容提示词，生成用于训练角色 LoRA 的图片。导出的 caption 只含内容提示词，不含画风和角色特征。</p>}
+      : <p className="prompt-hint">用参考图和固定的角色特征，逐条运行景别、表情、姿势、场景等内容提示词，生成用于训练角色 LoRA 的图片。导出的 caption 包含每张图使用的画风和内容提示词，不含角色特征（让画法不会被学成角色的一部分）。</p>}
     <p className="prompt-hint">公共分区和人物卡片不参与批跑；负面提示词、模型、尺寸、步数、CFG、采样器和每条张数取自当前生成设置。</p>
     {snapshot ? <div className="experiment-note" role="status">
       <p>这里展示本次训练集批跑固定的配置与 {snapshot.items?.length ?? 0} 条提示词。编辑草稿不会改变服务器批跑。</p>
@@ -186,6 +186,8 @@ async function sourceJobs(api: WorkspaceApi, source: DatasetExportSource, signal
 export function DatasetExportPanel({ api, source, onClose }: { api: WorkspaceApi; source: DatasetExportSource; onClose: () => void }) {
   const [trigger, setTrigger] = useState('')
   const [prefix, setPrefix] = useState('')
+  // On by default: character LoRA captions must name each image's drawing style.
+  const [characterStyle, setCharacterStyle] = useState(true)
   // Experiment exports load their groups first so the user can drop off-model items.
   const [jobs, setJobs] = useState<GenerationView[] | null>(null)
   const [excluded, setExcluded] = useState<ReadonlySet<string>>(new Set())
@@ -228,7 +230,7 @@ export function DatasetExportPanel({ api, source, onClose }: { api: WorkspaceApi
       // Always re-read: groups may have finished or been reviewed since the checklist loaded.
       const all = await sourceJobs(api, source, current.signal)
       const chosen = all.filter(job => !excluded.has(job.id))
-      const result = await buildDatasetZip(api, chosen, trigger, prefix, current.signal, setProgress)
+      const result = await buildDatasetZip(api, chosen, trigger, prefix, current.signal, setProgress, characterStyle)
       if (current.signal.aborted) return
       const discardedText = result.discarded ? `，已弃置 ${result.discarded} 张未导出` : ''
       if (!result.blob) setError(`没有可导出的图片（跳过 ${result.skipped} 张：失败、已过期或不可用${discardedText}）。`)
@@ -254,12 +256,14 @@ export function DatasetExportPanel({ api, source, onClose }: { api: WorkspaceApi
     <label className="field"><span>质量词前缀（可选，加在触发词之后、内容标签之前；生成时也写同样的词）</span>
       <input type="text" value={prefix} maxLength={300} spellCheck={false} disabled={running} placeholder="例如 masterpiece, high score, great score, absurdres"
         onChange={event => setPrefix(event.target.value)} /></label>
+    <label className="history-select"><input type="checkbox" checked={characterStyle} disabled={running}
+      onChange={event => setCharacterStyle(event.target.checked)} /> 角色训练集：caption 写入每张图使用的画风（推荐，默认开启；画风训练集不受影响）</label>
     <div className="experiment-config-actions">
       <button className="text-action" type="button" disabled={running} onClick={() => setPrefix(ANIMAGINE_QUALITY_PREFIX)}>Animagine XL 4.0 预设</button>
       {prefix && <button className="text-action" type="button" disabled={running} onClick={() => setPrefix('')}>清空前缀</button>}
     </div>
     <p className="prompt-hint">caption 示例：{[trigger.trim(), prefix.trim(), '1girl, solo, portrait, smile…'].filter(Boolean).join(', ')}。只放质量词：皮肤光泽、眼睛细节等希望成为画风的一部分的质感，不要写进 caption。</p>
-    <p className="prompt-hint">zip 内为 0001.png + 0001.txt 成对文件。图片去除元数据与隐写信息；caption 只含内容提示词，不含画风和角色特征。已弃置的图片不会导出。导出只读取已保存图片，不会生成。</p>
+    <p className="prompt-hint">zip 内为 0001.png + 0001.txt 成对文件。图片去除元数据与隐写信息；画风训练集的 caption 不含画风；角色训练集默认写入每张图的画风（去掉画师和负权重标签），始终不含角色特征。已弃置的图片不会导出。导出只读取已保存图片，不会生成。</p>
     {source.kind === 'experiment' && (jobs === null
       ? <button className="text-action" type="button" disabled={running} onClick={() => void loadGroups()}>筛选条目（可选：取消不像角色或不满意的条目）</button>
       : <details className="dataset-category" open><summary><strong>导出条目</strong><span>{jobs.length - excluded.size} / {jobs.length}</span>
