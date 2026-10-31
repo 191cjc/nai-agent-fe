@@ -12,6 +12,17 @@ import type { GenerationStore } from './store'
 
 const CUSTOM: DatasetCategory = { id: CUSTOM_CATEGORY, label: '自定义', description: '手动添加的提示词' }
 
+// Body-shape and suggestive tags must never be applied to child subjects.
+const CHILD_UNSAFE_STYLE = /\b(soft body|supple skin|soft curves|curvy|curvaceous|cleavage|breasts?|skin folds|skin compression|thick thighs|wide hips|sexy|seductive|sensual|erotic|nsfw|lewd|plump|voluptuous|navel|midriff|bare shoulders|thighs)\b/i
+
+function childSafetyError(entries: readonly DatasetEntry[], style: string): string {
+  if (!entries.some(entry => entry.selected && entry.category === 'boy')) return ''
+  const match = style.match(CHILD_UNSAFE_STYLE)
+  return match
+    ? `已选「男孩（年幼）」条目，但画风中含有身体描写类标签「${match[0]}」。这类标签绝不能用于年幼角色：请取消男孩条目，或改用去掉身体描写的画风单独批跑。`
+    : ''
+}
+
 function validationError(entries: readonly DatasetEntry[], styles: readonly string[], traits?: string): string {
   try {
     datasetItems(entries, styles, traits)
@@ -99,7 +110,7 @@ export const DatasetRunConfig = observer(({ generation, api, hidden }: { generat
   const sampleText = gptMode ? character.settings.gptSamples : generation.draft.sample_count
   const samples = /^\d+$/.test(sampleText) ? Number(sampleText) : null
   const error = !selected.length ? '' : mode === 'style'
-    ? validationError(entries, [style])
+    ? childSafetyError(entries, style) || validationError(entries, [style])
     : validationError(characterEntries, character.styles, character.settings.traits) || character.error(generation.draft.model)
   const locked = generation.operationLocked || generation.activeId !== null || generation.busy || generation.submitUncertain
 
@@ -121,7 +132,7 @@ export const DatasetRunConfig = observer(({ generation, api, hidden }: { generat
       <button type="button" className={mode === 'character' ? 'active' : ''} aria-pressed={mode === 'character'} onClick={() => setMode('character')}><UserRound size={14} aria-hidden="true" /> 角色训练集</button>
     </div>}
     {mode === 'style'
-      ? <p className="prompt-hint">用当前「画风」固定风格，逐条运行下面的内容提示词，生成用于训练画风 LoRA 的图片。提示词只描述内容，不含画风与质量词；导出时作为 caption。默认以女性为主：全部女性与无人物条目，男性约占 10%，男女混合条目不勾选；可按需手动调整。</p>
+      ? <p className="prompt-hint">用当前「画风」固定风格，逐条运行下面的内容提示词，生成用于训练画风 LoRA 的图片。提示词只描述内容，不含画风与质量词；导出时作为 caption。默认全选：女性 70 条、成年男性 10 条、年幼男孩 14 条、无人物 15 条；人物条目都写明发色和带颜色的服装，让成图与 caption 对应。「男孩（年幼）」条目不能与身体描写类画风同时使用。</p>
       : <p className="prompt-hint">用参考图和固定的角色特征，逐条运行景别、表情、姿势、场景等内容提示词，生成用于训练角色 LoRA 的图片。导出的 caption 只含内容提示词，不含画风和角色特征。</p>}
     <p className="prompt-hint">公共分区和人物卡片不参与批跑；负面提示词、模型、尺寸、步数、CFG、采样器和每条张数取自当前生成设置。</p>
     {snapshot ? <div className="experiment-note" role="status">

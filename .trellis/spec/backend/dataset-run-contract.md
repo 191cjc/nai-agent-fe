@@ -102,4 +102,12 @@ review only (operator restriction); no paid probes.
   previous captions exactly. Only quality tags belong there; texture/style
   features the LoRA should learn (skin gloss, eye detail) stay out of
   captions so they bind to the LoRA itself.
+- Style library (2026-10-31): 109 items, all default-selected — 70 female,
+  10 adult male, 14 `male child` (category `boy`), 15 no-human; mixed-gender
+  and former non-default male items were removed. Every person item names hair
+  colour, eye colour where visible, and coloured clothing so captions match
+  the image. Child items are wholesome and fully clothed (no swimwear, bath,
+  bed or suggestive tags), and the web blocks Start when any child item is
+  selected together with body-shape/suggestive style tags (`CHILD_UNSAFE_STYLE`
+  in `DatasetRun.tsx`). Never relax that guard.
 
