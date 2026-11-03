@@ -359,6 +359,8 @@ h1, h2, h3 { letter-spacing: 0; }
 .dataset-items input[type="text"], .dataset-custom input { min-width: 0; padding: 5px 7px; font-size: 12px; }
 .dataset-custom { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
 .dataset-custom input { flex: 1 1 220px; }
+.dataset-import { display: grid; gap: 7px; padding: 9px; border: 1px solid #44414c; border-radius: 4px; background: #25252e; }
+.dataset-import textarea { min-height: 150px; font-size: 12px; }
 .dataset-run-items { max-height: 220px; margin: 4px 0 0; padding-left: 22px; overflow-y: auto; }
 .dataset-item-prompt { margin: 0; color: #e8e4ee; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 .dataset-export { display: grid; gap: 8px; min-width: 0; margin-top: 8px; padding: 10px; border: 1px solid #5a5144; border-radius: 4px; background: #292831; font-size: 12px; }

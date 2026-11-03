@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { observer } from 'mobx-react-lite'
-import { Download, Layers, Plus, RotateCcw, Trash2, UserRound, X } from 'lucide-react'
+import { Download, FileUp, Layers, Plus, RotateCcw, Trash2, Upload, UserRound, X } from 'lucide-react'
 import { ApiFailure, errorText, type GenerationView, type WorkspaceApi } from './api'
 import { DATASET_CATEGORIES, type DatasetCategory } from './dataset-prompts'
 import { CHARACTER_CATEGORIES } from './character-prompts'
@@ -9,6 +9,7 @@ import { supportsNativeCharacters } from './store'
 import { defaultCharacterEntries, defaultDatasetEntries } from './dataset-defaults'
 import { ANIMAGINE_QUALITY_PREFIX, buildDatasetZip, downloadZip, experimentJobs, selectedJobs, type DatasetExportProgress } from './dataset-export'
 import { CharacterRunSettings, characterSnapshotSummary, useCharacterSettings } from './CharacterDataset'
+import { downloadText, formatPrompts, parsePrompts } from './prompt-io'
 import type { GenerationStore } from './store'
 
 const CUSTOM: DatasetCategory = { id: CUSTOM_CATEGORY, label: '自定义', description: '手动添加的提示词' }
@@ -34,14 +35,24 @@ function validationError(entries: readonly DatasetEntry[], styles: readonly stri
 }
 
 /** Category/item picker shared by the style and character libraries. */
-export function PromptLibrary({ entries, setEntries, categories, defaults, placeholder }: {
+export function PromptLibrary({ entries, setEntries, categories, defaults, placeholder, name, allowCharacters }: {
   entries: DatasetEntry[]
   setEntries: Dispatch<SetStateAction<DatasetEntry[]>>
   categories: readonly DatasetCategory[]
   defaults: () => DatasetEntry[]
   placeholder: string
+  /** Library name for the export title and file name, e.g. 画风训练集. */
+  name: string
+  /** Style libraries accept multi-person 「人物：」 lines; character libraries do not. */
+  allowCharacters: boolean
 }) {
   const [custom, setCustom] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [importText, setImportText] = useState('')
+  const [importMessage, setImportMessage] = useState('')
+  const [importError, setImportError] = useState('')
+  const fileInput = useRef<HTMLInputElement>(null)
+  const selectedEntries = entries.filter(entry => entry.selected)
 
   function update(id: string, change: Partial<DatasetEntry>) {
     setEntries(current => current.map(entry => entry.id === id ? { ...entry, ...change } : entry))
@@ -56,6 +67,36 @@ export function PromptLibrary({ entries, setEntries, categories, defaults, place
     if (!prompt) return
     setEntries(current => [...current, { id: nextCustomId(current), category: CUSTOM_CATEGORY, prompt, selected: true }])
     setCustom('')
+  }
+
+  function importPrompts(replace: boolean) {
+    setImportMessage('')
+    try {
+      const { entries: parsed, multi } = parsePrompts(importText, replace ? [] : entries, categories.map(category => category.id), allowCharacters)
+      if (replace && !window.confirm(`用导入的 ${parsed.length} 条替换整个列表？当前列表（含内置条目和编辑内容）将被清空，可用「恢复默认」找回内置库。`)) return
+      setEntries(current => replace ? parsed : [...current, ...parsePrompts(importText, current, categories.map(category => category.id), allowCharacters).entries])
+      setImportError('')
+      setImportText('')
+      setImporting(false)
+      setImportMessage(`已${replace ? '替换为' : '追加'} ${parsed.length} 条提示词${multi ? `（其中多人条目 ${multi} 条）` : ''}，均已勾选。`)
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : '导入失败。')
+    }
+  }
+
+  async function readFile(files: FileList | null) {
+    const file = files?.[0]
+    if (fileInput.current) fileInput.current.value = ''
+    if (!file) return
+    if (file.size > 2 * 1024 * 1024) { setImportError('文件超过 2 MB，请拆分后再导入。'); return }
+    setImportText(await file.text())
+    setImportError('')
+  }
+
+  function exportPrompts() {
+    const date = new Date().toISOString().slice(0, 10).replaceAll('-', '')
+    downloadText(formatPrompts(selectedEntries, `${name}提示词（${selectedEntries.length} 条已选）`), `${name}提示词-${date}.txt`)
+    setImportMessage(`已导出 ${selectedEntries.length} 条已选提示词。`)
   }
 
   return <>
@@ -97,7 +138,28 @@ export function PromptLibrary({ entries, setEntries, categories, defaults, place
       <button className="secondary" type="button" disabled={!custom.trim()} onClick={addCustom}><Plus size={14} aria-hidden="true" /> 添加</button>
       <button className="text-action" type="button" onClick={() => { if (window.confirm('恢复为内置提示词库？自定义和编辑内容将丢失。')) setEntries(defaults()) }}>
         <RotateCcw size={14} aria-hidden="true" /> 恢复默认</button>
+      <button className="text-action" type="button" aria-expanded={importing} onClick={() => { setImporting(value => !value); setImportError('') }}>
+        <Upload size={14} aria-hidden="true" /> 批量导入</button>
+      <button className="text-action" type="button" disabled={!selectedEntries.length} onClick={exportPrompts}
+        title="把已勾选的提示词导出为文本文件，可编辑后再导入"><Download size={14} aria-hidden="true" /> 导出已选</button>
     </div>
+    {importing && <div className="dataset-import">
+      <label className="field"><span>每行一条提示词{allowCharacters ? '；多人条目在场景行下面逐行写「人物：…」' : ''}；# 开头的行忽略，「# 分类：id」可指定分类</span>
+        <textarea value={importText} rows={8} spellCheck={false} aria-label="批量导入的提示词"
+          placeholder={allowCharacters
+            ? '1girl, solo, portrait, smile, long hair, black hair, brown eyes, white shirt\n2girls, upper body, friends, classroom\n人物：girl, long hair, black hair, brown eyes, navy blue blazer\n人物：girl, short hair, blonde hair, blue eyes, white cardigan'
+            : 'portrait, smile, looking at viewer\nfull body, running, park'}
+          onChange={event => { setImportText(event.target.value); setImportError('') }} /></label>
+      <div className="dataset-custom">
+        <input ref={fileInput} type="file" accept=".txt,text/plain" hidden onChange={event => void readFile(event.target.files)} />
+        <button className="secondary" type="button" onClick={() => fileInput.current?.click()}><FileUp size={14} aria-hidden="true" /> 从文件读取</button>
+        <button className="secondary" type="button" disabled={!importText.trim()} onClick={() => importPrompts(false)}><Plus size={14} aria-hidden="true" /> 追加到列表</button>
+        <button className="text-action" type="button" disabled={!importText.trim()} onClick={() => importPrompts(true)}>替换整个列表</button>
+        <button className="text-action" type="button" onClick={() => { setImporting(false); setImportError('') }}><X size={14} aria-hidden="true" /> 取消</button>
+      </div>
+      {importError && <p className="alert" role="alert">{importError}</p>}
+    </div>}
+    {importMessage && <p className="subtle" role="status">{importMessage}</p>}
   </>
 }
 
@@ -150,11 +212,11 @@ export const DatasetRunConfig = observer(({ generation, api, hidden }: { generat
       <div className="dataset-style-preview"><span>将应用的画风</span>
         <p>{style.trim() ? style : '（未填写画风）'}</p></div>
       <PromptLibrary entries={entries} setEntries={setEntries} categories={DATASET_CATEGORIES} defaults={defaultDatasetEntries}
-        placeholder="添加自定义内容提示词，例如 1girl, solo, sitting, library" />
+        placeholder="添加自定义内容提示词，例如 1girl, solo, sitting, library" name="画风训练集" allowCharacters />
     </> : <>
       <CharacterRunSettings api={api} state={character} model={generation.draft.model} draftStyle={style} />
       <PromptLibrary entries={characterEntries} setEntries={setCharacterEntries} categories={CHARACTER_CATEGORIES} defaults={defaultCharacterEntries}
-        placeholder="添加自定义内容提示词（不写性别、人数和外貌），例如 sitting, library, reading" />
+        placeholder="添加自定义内容提示词（不写性别、人数和外貌），例如 sitting, library, reading" name="角色训练集" allowCharacters={false} />
     </>}
     {!snapshot && error && <p className="alert" role="alert">{error}</p>}
     {!snapshot && <div className="experiment-preview" aria-live="polite" aria-atomic="true">

@@ -151,3 +151,17 @@ review only (operator restriction); no paid probes.
   each person's tags, minus bare `girl`/`boy`/`other`, de-duplicated.
 - Tests: `test_dataset_runs.py` multi-person send/legacy/rejection cases and
   character-run rejection.
+
+## Prompt library import/export (2026-11-03, web only)
+
+- `apps/web/src/prompt-io.ts`; UI in `PromptLibrary` (「批量导入」「导出已选」).
+  No API change: imported entries are ordinary draft entries.
+- Text format: one prompt per line; `人物：…` (or `人物:`) lines append a person
+  to the previous prompt (style library only, ≤6); `# 分类：<id>` sets the
+  category for following lines (unknown ids → `custom`); other `#` lines and
+  blank lines are ignored; a `//` line is an error. Export writes the selected
+  entries in this format with category markers, so a re-import restores
+  categories — keeping `boy` items under the child-safety style guard.
+- Import appends (fresh `custom-N` ids, all selected) or, after confirm,
+  replaces the list; any invalid line rejects the whole import with its line
+  number. Files ≤2 MiB, read locally; nothing is uploaded.
