@@ -1,4 +1,4 @@
-import type { CharacterPrompt, CharacterRunRequest, DatasetItem } from './api'
+import type { CharacterPrompt, CharacterRunRequest, DatasetItem, PreciseType } from './api'
 import { compilePromptComments } from './prompt-weights'
 
 export const MAX_DATASET_ITEMS = 300
@@ -30,7 +30,6 @@ function characterPositions(prompts: readonly string[]): CharacterPrompt[] {
 export function datasetItemText(item: DatasetItem): string {
   return [item.prompt, ...(item.characters ?? []).map((character, index) => `人物 ${index + 1}：${character.prompt}`)].join(' ｜ ')
 }
-
 
 export function nextCustomId(entries: readonly DatasetEntry[]): string {
   let index = 1
@@ -90,7 +89,7 @@ export const GPT_SIZES: Record<GptSize, { label: string; width: number; height: 
 
 export interface CharacterSettings {
   traits: string
-  mode: 'vibe' | 'img2img' | 'gpt'
+  mode: 'vibe' | 'img2img' | 'gpt' | 'precise'
   referenceIds: string[]
   strength: string
   noise: string
@@ -102,6 +101,10 @@ export interface CharacterSettings {
   gptSize: GptSize
   gptQuality: 'auto' | 'low' | 'medium' | 'high'
   gptSamples: string
+  /** Precise Reference only: what to copy, strength 0.01–1 and fidelity 0–1. */
+  preciseType: PreciseType
+  preciseStrength: string
+  preciseFidelity: string
 }
 
 function ratio(value: string, label: string, min: number, max: number): number {
@@ -110,7 +113,7 @@ function ratio(value: string, label: string, min: number, max: number): number {
   return number
 }
 
-export function characterRequest(settings: CharacterSettings, model: string, vibeModels: readonly string[]): CharacterRunRequest {
+export function characterRequest(settings: CharacterSettings, model: string, vibeModels: readonly string[], preciseModels: readonly string[] = []): CharacterRunRequest {
   if (!settings.traits.trim()) throw new Error('请填写角色特征标签。')
   if (settings.traits.length > MAX_TRAITS_LENGTH) throw new Error(`角色特征不能超过 ${MAX_TRAITS_LENGTH} 字符。`)
   if (hasCommentLine(settings.traits)) throw new Error('角色特征不能包含以 // 开头的注释行。')
@@ -120,6 +123,15 @@ export function characterRequest(settings: CharacterSettings, model: string, vib
     return {
       traits: settings.traits, mode: 'gpt', reference_ids: [...settings.referenceIds],
       ...(settings.gptQuality === 'auto' ? {} : { gpt_quality: settings.gptQuality }),
+    }
+  }
+  if (settings.mode === 'precise') {
+    if (!preciseModels.includes(model.trim())) throw new Error('精准参考（Precise Reference）只支持 V4.5 模型，请在生成设置中切换模型。')
+    return {
+      traits: settings.traits, mode: 'precise', reference_ids: [...settings.referenceIds],
+      precise_type: settings.preciseType,
+      precise_strength: ratio(settings.preciseStrength, '精准参考强度', 0.01, 1),
+      precise_fidelity: ratio(settings.preciseFidelity, '精准参考保真度', 0, 1),
     }
   }
   if (settings.mode === 'vibe') {

@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Palette, Plus, Sparkles, Trash2, Upload, X } from 'lucide-react'
 import { ApiFailure, errorText, type Capabilities, type ReferenceImage, type WorkspaceApi } from './api'
 import { GPT_SIZES, MAX_REFERENCES, MAX_STYLE_POOL, MAX_TRAITS_LENGTH, characterRequest, type CharacterSettings, type GptSize } from './dataset-run'
-import { VIBE_MODELS } from './store'
+import { PRECISE_MODELS, VIBE_MODELS } from './store'
+import type { PreciseType } from './api'
 import { STYLE_PRESETS, presetStyles } from './style-presets'
 
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024
@@ -23,7 +24,7 @@ export interface CharacterState {
 /** Character run settings live in the dataset panel so collapsing it keeps them. */
 export function useCharacterSettings(draftStyle: string): CharacterState {
   const [settings, setSettingsState] = useState<CharacterSettings>({ traits: '', mode: 'vibe', referenceIds: [], strength: '0.55', noise: '0', information: '1', vibeStrength: '1',
-    gptSize: 'portrait', gptQuality: 'auto', gptSamples: '1' })
+    gptSize: 'portrait', gptQuality: 'auto', gptSamples: '1', preciseType: 'character', preciseStrength: '1', preciseFidelity: '1' })
   // Until the user edits the pool it follows the live draft style, like style mode.
   const [edited, setEdited] = useState<string[] | null>(null)
   const styles = edited ?? [draftStyle]
@@ -35,7 +36,7 @@ export function useCharacterSettings(draftStyle: string): CharacterState {
     error: model => {
       if (settings.mode === 'gpt' && !gpt?.gpt_image) return 'GPT 生图未配置，请在服务器上设置 NAI_GPT_IMAGE_API_KEY。'
       try {
-        characterRequest(settings, model, VIBE_MODELS)
+        characterRequest(settings, model, VIBE_MODELS, PRECISE_MODELS)
         return ''
       } catch (error) {
         return error instanceof Error ? error.message : '角色设置无效。'
@@ -274,6 +275,7 @@ export function CharacterRunSettings({ api, state, model, draftStyle }: {
   // that is itself a style and would mix into every preset.
   const [prefix, setPrefix] = useState('')
   const vibeSupported = VIBE_MODELS.includes(model.trim())
+  const preciseSupported = PRECISE_MODELS.includes(model.trim())
 
   return <>
     <ReferencePicker api={api} selected={settings.referenceIds}
@@ -290,6 +292,8 @@ export function CharacterRunSettings({ api, state, model, draftStyle }: {
         onChange={() => setSettings(current => ({ ...current, mode: 'vibe' }))} /> Vibe Transfer（所有参考图一起使用；仅 V4 / V4.5 模型）</label>
       <label className="history-select"><input type="radio" name="character-mode" checked={settings.mode === 'img2img'}
         onChange={() => setSettings(current => ({ ...current, mode: 'img2img' }))} /> 图生图（参考图按条目轮流使用；所有模型）</label>
+      <label className="history-select"><input type="radio" name="character-mode" checked={settings.mode === 'precise'}
+        onChange={() => setSettings(current => ({ ...current, mode: 'precise' }))} /> 精准参考 Precise Reference（参考图按条目轮流使用；仅 V4.5 模型）</label>
       <label className="history-select"><input type="radio" name="character-mode" checked={settings.mode === 'gpt'} disabled={!gpt?.gpt_image}
         onChange={() => setSettings(current => ({ ...current, mode: 'gpt' }))} /> GPT 参考图生成（{gpt?.gpt_image_model ?? 'GPT 生图'}；与 NovelAI 无关{gpt && !gpt.gpt_image ? '；未配置' : ''}）</label>
       {settings.mode === 'gpt' && <>
@@ -323,6 +327,20 @@ export function CharacterRunSettings({ api, state, model, draftStyle }: {
         <label className="field"><span>noise（0–0.99）</span>
           <input type="text" inputMode="decimal" value={settings.noise} onChange={event => setSettings(current => ({ ...current, noise: event.target.value }))} /></label>
       </div>}
+      {settings.mode === 'precise' && <div className="experiment-range-fields">
+        <label className="field"><span>参考内容</span>
+          <select value={settings.preciseType} onChange={event => setSettings(current => ({ ...current, preciseType: event.target.value as PreciseType }))}>
+            <option value="character">角色（只取角色外观，画风由画风池决定）</option>
+            <option value="character&style">角色 + 画风</option>
+            <option value="style">只取画风</option>
+          </select></label>
+        <label className="field"><span>强度（0.01–1，参考图的影响力）</span>
+          <input type="text" inputMode="decimal" value={settings.preciseStrength} onChange={event => setSettings(current => ({ ...current, preciseStrength: event.target.value }))} /></label>
+        <label className="field"><span>保真度（0–1，越高越贴近参考图细节）</span>
+          <input type="text" inputMode="decimal" value={settings.preciseFidelity} onChange={event => setSettings(current => ({ ...current, preciseFidelity: event.target.value }))} /></label>
+      </div>}
+      {settings.mode === 'precise' && <p className="prompt-hint">精准参考不改变构图，姿势和场景来自提示词，适合角色训练集；每条只用一张参考图（多张时按条目轮流）。NovelAI 对精准参考会额外扣 Anlas。训练角色 LoRA 建议选「角色」，让画风池负责画风。</p>}
+      {settings.mode === 'precise' && !preciseSupported && <p className="experiment-note">当前模型不支持精准参考，请在生成设置中选择 V4.5 模型。</p>}
       {settings.mode === 'img2img' && <p className="prompt-hint">图生图的构图会受原图影响：strength 低更像角色但姿势单一，高则多样但容易走样。建议 0.5–0.7 并人工筛图。</p>}
     </fieldset>
     <fieldset className="dataset-categories">

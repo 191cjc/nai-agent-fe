@@ -171,7 +171,8 @@
             "enum": [
               "vibe",
               "img2img",
-              "gpt"
+              "gpt",
+              "precise"
             ],
             "title": "Mode",
             "type": "string"
@@ -186,6 +187,44 @@
               }
             ],
             "title": "Noise"
+          },
+          "precise_fidelity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precise Fidelity"
+          },
+          "precise_strength": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precise Strength"
+          },
+          "precise_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "character",
+                  "style",
+                  "character&style"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precise Type"
           },
           "reference_strength": {
             "anyOf": [
@@ -295,7 +334,8 @@
             "enum": [
               "vibe",
               "img2img",
-              "gpt"
+              "gpt",
+              "precise"
             ],
             "title": "Mode",
             "type": "string"
@@ -312,6 +352,48 @@
               }
             ],
             "title": "Noise"
+          },
+          "precise_fidelity": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precise Fidelity"
+          },
+          "precise_strength": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.01,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precise Strength"
+          },
+          "precise_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "character",
+                  "style",
+                  "character&style"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precise Type"
           },
           "reference_ids": {
             "items": {
@@ -1490,7 +1572,8 @@
             "enum": [
               "vibe",
               "img2img",
-              "gpt"
+              "gpt",
+              "precise"
             ],
             "title": "Mode",
             "type": "string"
@@ -1507,6 +1590,48 @@
               }
             ],
             "title": "Noise"
+          },
+          "precise_fidelity": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precise Fidelity"
+          },
+          "precise_strength": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.01,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precise Strength"
+          },
+          "precise_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "character",
+                  "style",
+                  "character&style"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precise Type"
           },
           "reference_strength": {
             "anyOf": [

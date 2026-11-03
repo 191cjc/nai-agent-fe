@@ -31,7 +31,7 @@ def _has_comment_line(text: str) -> bool:
 
 class CharacterRequest(BaseModel):
     traits: str = Field(min_length=1, max_length=1000)
-    mode: Literal["vibe", "img2img", "gpt"]
+    mode: Literal["vibe", "img2img", "gpt", "precise"]
     reference_ids: list[UUID] = Field(min_length=1, max_length=4)
     strength: float | None = Field(default=None, ge=0.01, le=0.99, allow_inf_nan=False)
     noise: float | None = Field(default=None, ge=0, le=0.99, allow_inf_nan=False)
@@ -44,6 +44,10 @@ class CharacterRequest(BaseModel):
         default=None, ge=0.01, le=1.0, allow_inf_nan=False,
     )
     gpt_quality: Literal["low", "medium", "high"] | None = None
+    # Precise Reference only; absent values take NovelAI's defaults (character, 1, 1).
+    precise_type: Literal["character", "style", "character&style"] | None = None
+    precise_strength: float | None = Field(default=None, ge=0.01, le=1.0, allow_inf_nan=False)
+    precise_fidelity: float | None = Field(default=None, ge=0, le=1.0, allow_inf_nan=False)
 
     @field_validator("traits")
     @classmethod
@@ -66,10 +70,16 @@ class CharacterRequest(BaseModel):
             raise ValueError("GPT image mode has no vibe settings")
         if self.mode != "gpt" and self.gpt_quality is not None:
             raise ValueError("Only GPT image mode has gpt_quality")
-        if self.mode == "img2img" and (
+        if self.mode in ("img2img", "precise") and (
             self.information_extracted is not None or self.reference_strength is not None
         ):
-            raise ValueError("Image-to-image has no information_extracted or reference_strength")
+            raise ValueError("Only vibe transfer has information_extracted or reference_strength")
+        if self.mode == "precise" and (self.strength is not None or self.noise is not None):
+            raise ValueError("Only image-to-image has strength and noise")
+        if self.mode != "precise" and any(value is not None for value in (
+            self.precise_type, self.precise_strength, self.precise_fidelity,
+        )):
+            raise ValueError("Only Precise Reference has precise settings")
         return self
 
 
@@ -77,13 +87,16 @@ class CharacterPlan(BaseModel):
     """Frozen character block: reference ids are pinned to their digests at creation."""
 
     traits: str
-    mode: Literal["vibe", "img2img", "gpt"]
+    mode: Literal["vibe", "img2img", "gpt", "precise"]
     references: list[ReferenceImageUse] = Field(min_length=1, max_length=4)
     strength: float | None = None
     noise: float | None = None
     information_extracted: float | None = None
     reference_strength: float | None = None
     gpt_quality: Literal["low", "medium", "high"] | None = None
+    precise_type: Literal["character", "style", "character&style"] | None = None
+    precise_strength: float | None = None
+    precise_fidelity: float | None = None
 
     def use(self, ordinal: int) -> ReferenceUse:
         if self.mode == "gpt":
@@ -96,6 +109,14 @@ class CharacterPlan(BaseModel):
                 reference_strength=self.reference_strength,
             )
         image = self.references[(ordinal - 1) % len(self.references)]
+        if self.mode == "precise":
+            # One image per call, rotated across items like image-to-image.
+            return ReferenceUse(
+                mode="precise", images=[image],
+                precise_type=self.precise_type or "character",
+                precise_strength=1.0 if self.precise_strength is None else self.precise_strength,
+                precise_fidelity=1.0 if self.precise_fidelity is None else self.precise_fidelity,
+            )
         return ReferenceUse(
             mode="img2img", images=[image], strength=self.strength, noise=self.noise,
         )
@@ -159,6 +180,9 @@ class DatasetRunCreate(BaseModel):
                 information_extracted=self.character.information_extracted,
                 reference_strength=self.character.reference_strength,
                 gpt_quality=self.character.gpt_quality,
+                precise_type=self.character.precise_type,
+                precise_strength=self.character.precise_strength,
+                precise_fidelity=self.character.precise_fidelity,
             )
         # The longest effective style bounds every rotated style/item combination.
         longest = max(
@@ -200,5 +224,8 @@ class DatasetRunCreate(BaseModel):
                 information_extracted=self.character.information_extracted,
                 reference_strength=self.character.reference_strength,
                 gpt_quality=self.character.gpt_quality,
+                precise_type=self.character.precise_type,
+                precise_strength=self.character.precise_strength,
+                precise_fidelity=self.character.precise_fidelity,
             ).model_dump(mode="json", exclude_none=True)
         return json.dumps(definition, sort_keys=True, separators=(",", ":")), str(len(self.items))

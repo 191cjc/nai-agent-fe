@@ -51,6 +51,8 @@ class CharacterPrompt(BaseModel):
 
 
 VIBE_MODELS = NATIVE_CHARACTER_MODELS - {"nai-diffusion-5-full", "nai-diffusion-5-curated"}
+# NovelAI documents Precise Reference (director reference) for V4.5 only.
+PRECISE_MODELS = frozenset({"nai-diffusion-4-5-full", "nai-diffusion-4-5-curated"})
 # GPT image groups are independent of NovelAI: these neutral values fill the NAI-only fields.
 GPT_IMAGE_SIZES = frozenset({(1024, 1024), (1024, 1536), (1536, 1024)})
 GPT_SAMPLER = "gpt-image"
@@ -64,7 +66,7 @@ class ReferenceImageUse(BaseModel):
 class ReferenceUse(BaseModel):
     """Frozen reference images for one dataset group; bytes stay in the private store."""
 
-    mode: Literal["vibe", "img2img", "gpt"]
+    mode: Literal["vibe", "img2img", "gpt", "precise"]
     images: list[ReferenceImageUse] = Field(min_length=1, max_length=4)
     strength: float | None = Field(default=None, ge=0.01, le=0.99, allow_inf_nan=False)
     noise: float | None = Field(default=None, ge=0, le=0.99, allow_inf_nan=False)
@@ -82,9 +84,33 @@ class ReferenceUse(BaseModel):
     gpt_quality: Literal["low", "medium", "high"] | None = Field(
         default=None, exclude_if=lambda value: value is None,
     )
+    # Precise Reference only (NovelAI director reference, V4.5): what to copy from the
+    # one image, how strongly, and fidelity (sent upstream as 1 - fidelity).
+    precise_type: Literal["character", "style", "character&style"] | None = Field(
+        default=None, exclude_if=lambda value: value is None,
+    )
+    precise_strength: float | None = Field(
+        default=None, ge=0.01, le=1.0, allow_inf_nan=False,
+        exclude_if=lambda value: value is None,
+    )
+    precise_fidelity: float | None = Field(
+        default=None, ge=0, le=1.0, allow_inf_nan=False,
+        exclude_if=lambda value: value is None,
+    )
 
     @model_validator(mode="after")
     def valid_mode(self) -> Self:
+        precise = (self.precise_type, self.precise_strength, self.precise_fidelity)
+        if self.mode != "precise" and any(value is not None for value in precise):
+            raise ValueError("Only Precise Reference has precise settings")
+        if self.mode == "precise" and (
+            len(self.images) != 1 or self.precise_type is None
+            or self.precise_strength is None or self.precise_fidelity is None
+            or self.strength is not None or self.noise is not None
+            or self.information_extracted is not None or self.reference_strength is not None
+            or self.gpt_quality is not None
+        ):
+            raise ValueError("Precise Reference uses one image with type, strength and fidelity")
         nai_tuning = (self.strength, self.noise, self.information_extracted,
                       self.reference_strength)
         if self.mode == "gpt" and any(value is not None for value in nai_tuning):
@@ -272,6 +298,8 @@ class GenerationRequest(BaseModel):
                 raise ValueError("GPT image groups use only GPT sizes and no NovelAI settings")
             if self.reference.mode == "vibe" and self.model not in VIBE_MODELS:
                 raise ValueError("Vibe transfer requires a V4 or V4.5 model")
+            if self.reference.mode == "precise" and self.model not in PRECISE_MODELS:
+                raise ValueError("Precise Reference requires a V4.5 model")
         return self
 
 

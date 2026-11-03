@@ -68,6 +68,8 @@ function validCharacterPosition(value: number): boolean {
 
 /** Vibe transfer is V4/V4.5 only; the image service rejects it for V5. */
 export const VIBE_MODELS: readonly string[] = NATIVE_CHARACTER_MODELS.filter(model => !model.startsWith('nai-diffusion-5'))
+/** NovelAI documents Precise Reference (director reference) for V4.5 only. */
+export const PRECISE_MODELS: readonly string[] = ['nai-diffusion-4-5-full', 'nai-diffusion-4-5-curated']
 
 export function supportsNativeCharacters(model: string): boolean {
   return NATIVE_CHARACTER_MODELS.some(candidate => candidate === model.trim())
@@ -529,7 +531,7 @@ export class GenerationStore {
         parameters = { ...base, positive_prompt: '', character_prompts: [], auto_character_position: false }
         delete parameters.prompt_sections
       }
-      if (options.character) character = characterRequest(options.character, parameters.model, VIBE_MODELS)
+      if (options.character) character = characterRequest(options.character, parameters.model, VIBE_MODELS, PRECISE_MODELS)
     } catch (error) {
       this.error = error instanceof Error ? error.message : '训练集批跑参数无效。'
       return

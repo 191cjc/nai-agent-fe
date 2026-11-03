@@ -39,14 +39,20 @@ export interface ReferenceImageUse {
 
 /** Frozen reference images for one character dataset group; bytes stay on the server. */
 export interface ReferenceUse {
-  mode: 'vibe' | 'img2img' | 'gpt'
+  mode: 'vibe' | 'img2img' | 'gpt' | 'precise'
   images: ReferenceImageUse[]
   strength?: number | null
   noise?: number | null
   information_extracted?: number | null
   reference_strength?: number | null
   gpt_quality?: 'low' | 'medium' | 'high' | null
+  /** Precise Reference only (NovelAI director reference, V4.5). */
+  precise_type?: PreciseType | null
+  precise_strength?: number | null
+  precise_fidelity?: number | null
 }
+
+export type PreciseType = 'character' | 'style' | 'character&style'
 
 export interface Capabilities {
   gpt_image: boolean
@@ -66,24 +72,30 @@ export interface ReferenceImage {
 
 export interface CharacterRunRequest {
   traits: string
-  mode: 'vibe' | 'img2img' | 'gpt'
+  mode: 'vibe' | 'img2img' | 'gpt' | 'precise'
   reference_ids: string[]
   strength?: number
   noise?: number
   information_extracted?: number
   reference_strength?: number
   gpt_quality?: 'low' | 'medium' | 'high'
+  precise_type?: PreciseType
+  precise_strength?: number
+  precise_fidelity?: number
 }
 
 export interface CharacterRunPlan {
   traits: string
-  mode: 'vibe' | 'img2img' | 'gpt'
+  mode: 'vibe' | 'img2img' | 'gpt' | 'precise'
   references: ReferenceImageUse[]
   strength?: number | null
   noise?: number | null
   information_extracted?: number | null
   reference_strength?: number | null
   gpt_quality?: 'low' | 'medium' | 'high' | null
+  precise_type?: PreciseType | null
+  precise_strength?: number | null
+  precise_fidelity?: number | null
 }
 
 export interface ExperimentContext {
@@ -351,7 +363,7 @@ export function errorText(error: unknown): string {
       reference_in_use: '这张参考图正被进行中的批跑使用，结束后才能删除。',
       reference_not_found: '参考图不存在或已删除，请重新选择。',
       reference_unavailable: '参考图已被删除或内容变化，本条已跳过。',
-      unsupported_reference_mode: 'NovelAI 服务不支持该参考图模式。',
+      unsupported_reference_mode: 'NovelAI 服务不支持该参考图模式（精准参考需要 MCP 服务提供 director_reference_* 参数）。',
       gpt_image_unavailable: 'GPT 生图未配置（服务器缺少 NAI_GPT_IMAGE_API_KEY）。',
       content_policy: '被 GPT 内容审核拒绝，本条已跳过。',
       not_ready: '服务暂不可用，请稍后重试。',

@@ -111,3 +111,25 @@ style/reference rotation, changed bytes failing one group, API upload/pick/
 list/bytes/delete/trait advice, ordinary-generation rejection, legacy
 definitions, migration v5→v6. Image-input support of the real advice model
 needs one operator-approved probe.
+
+## Precise Reference mode (2026-11-02)
+
+- `character.mode: "precise"` (NovelAI director reference). Request fields
+  `precise_type` (`character` | `style` | `character&style`, default
+  `character`), `precise_strength` (0.01–1, default 1), `precise_fidelity`
+  (0–1, default 1); defaults are frozen into each group's `ReferenceUse`.
+  Other modes reject these fields; precise rejects strength/noise/vibe fields.
+- Models: V4.5 only (`PRECISE_MODELS`, 422 otherwise; web blocks Start).
+- One image per group, rotated `[(N−1) mod R]` like img2img. Sent through
+  `generate_image` as `director_reference_images: [b64]`,
+  `director_reference_descriptions: [{caption: {base_caption: type,
+  char_captions: []}, legacy_uc: false}]`,
+  `director_reference_information_extracted: [1.0]`,
+  `director_reference_strength_values: [strength]`,
+  `director_reference_secondary_strength_values: [1 − fidelity]`.
+- `tools/list` must advertise all five `director_reference_*` fields on
+  `generate_image`, else `unsupported_reference_mode` before any paid call.
+  Snapshot replaces the images with `{sha256, byte_size}`.
+- Unverified (2026-11-02): whether the deployed MCP `novelai-image` exposes
+  these fields and whether it letterboxes references to NovelAI's sizes.
+  Verify with a non-billable `tools/list` probe before relying on the mode.

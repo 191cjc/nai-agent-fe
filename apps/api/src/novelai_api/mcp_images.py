@@ -47,6 +47,16 @@ REQUIRED_FIELDS = frozenset(
     }
 )
 IMAGE_TO_IMAGE_FIELDS = REQUIRED_FIELDS | {"image", "strength", "noise"}
+# NovelAI Precise Reference (director reference) request fields, one entry per image.
+PRECISE_FIELDS = frozenset(
+    {
+        "director_reference_images",
+        "director_reference_descriptions",
+        "director_reference_information_extracted",
+        "director_reference_strength_values",
+        "director_reference_secondary_strength_values",
+    }
+)
 SCHEMA_ANNOTATIONS = frozenset(
     {
         "title", "description", "default", "$comment", "examples", "deprecated",
@@ -266,6 +276,8 @@ class NovelAiMcpProvider:
                 not isinstance(schema, dict) or not isinstance(schema.get("properties"), dict)
                 or (reference.mode == "img2img"
                     and not IMAGE_TO_IMAGE_FIELDS.issubset(schema["properties"]))
+                or (reference.mode == "precise"
+                    and not PRECISE_FIELDS.issubset(schema["properties"]))
                 or (reference.mode == "vibe" and (
                     "references" not in schema["properties"]
                     # V4/V4.5 vibes must be pre-encoded; raw images make NovelAI fail (500).
@@ -335,6 +347,20 @@ class NovelAiMcpProvider:
                 )
                 if "extra_noise_seed" in properties:
                     arguments["extra_noise_seed"] = parameters.seed
+            if reference is not None and reference.mode == "precise":
+                arguments.update(
+                    director_reference_images=[encoded[0]],
+                    director_reference_descriptions=[{
+                        "caption": {"base_caption": reference.precise_type, "char_captions": []},
+                        "legacy_uc": False,
+                    }],
+                    director_reference_information_extracted=[1.0],
+                    director_reference_strength_values=[reference.precise_strength],
+                    # NovelAI sends fidelity as its complement (fidelity 1.0 -> 0.0).
+                    director_reference_secondary_strength_values=[
+                        round(1.0 - reference.precise_fidelity, 6)
+                    ],
+                )
             if reference is not None and reference.mode == "vibe" and (
                 reference.reference_strength is not None
             ):
@@ -357,6 +383,8 @@ class NovelAiMcpProvider:
                 ]
                 if reference.mode == "img2img":
                     snapshot["image"] = digests[0]
+                elif reference.mode == "precise":
+                    snapshot["director_reference_images"] = digests
                 else:
                     snapshot["references"] = [
                         {**digest, "information_extracted": reference.vibe_information}
