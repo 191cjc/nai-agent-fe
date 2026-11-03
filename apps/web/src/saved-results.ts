@@ -47,6 +47,9 @@ export class SavedResultsStore {
   hideDiscarded = false
   discardBusy = false
   discardError = ''
+  rerunBusy = false
+  rerunError = ''
+  rerunMessage = ''
   image: SavedImage | null = null
   loading = false
   imageLoading = false
@@ -280,6 +283,41 @@ export class SavedResultsStore {
     }
   }
 
+  /** Training-set groups only; failed groups and expired images can be re-run too. */
+  get canRerun(): boolean {
+    const job = this.job
+    return this.selection?.kind === 'experiment' && job?.parameters.experiment?.kind === 'dataset'
+      && (job.status === 'succeeded' || job.status === 'failed')
+  }
+
+  /**
+   * One paid generation: same frozen prompt/settings/references, one sample, new random
+   * seed. The shown image is marked discarded so the export keeps only the replacement.
+   */
+  async rerunCurrent(): Promise<void> {
+    const job = this.job
+    if (!job || !this.canRerun || this.rerunBusy) return
+    const index = job.status === 'succeeded' && this.imageIndex < job.image_urls.length
+      && !this.currentDiscarded ? this.imageIndex : null
+    const epoch = this.viewerEpoch
+    this.rerunBusy = true
+    this.rerunError = ''
+    this.rerunMessage = ''
+    try {
+      await this.api.rerunGeneration(job.id, index)
+      if (epoch !== this.viewerEpoch || this.job?.id !== job.id) return
+      // Reload this group so the discard mark and the new following entry are visible.
+      await this.loadGroup(this.groupOffset, this.imageIndex)
+      runInAction(() => {
+        this.rerunMessage = `已提交重跑（同提示词、新随机种子）${index !== null ? '，原图已标记弃置（可恢复）' : ''}。新图会排在本条之后，按 → 查看。`
+      })
+    } catch (error) {
+      runInAction(() => { this.rerunError = errorText(error) })
+    } finally {
+      runInAction(() => { this.rerunBusy = false })
+    }
+  }
+
   async move(direction: -1 | 1): Promise<void> {
     await this.step(direction)
     // In review mode keep going the same way past discarded images (bounded).
@@ -315,6 +353,8 @@ export class SavedResultsStore {
     this.viewerController = controller
     this.releaseImage()
     this.discardError = ''
+    this.rerunError = ''
+    this.rerunMessage = ''
     this.groupOffset = offset
     this.requestedImage = requestedImage
     this.job = null
@@ -349,6 +389,10 @@ export class SavedResultsStore {
         this.loading = false
       })
       await this.loadSelectedImage(epoch, controller.signal)
+      if (job.status === 'queued' || job.status === 'running') {
+        // Re-runs finish in the background; refresh this entry until it settles.
+        setTimeout(() => { if (epoch === this.viewerEpoch) void this.retry() }, 5000)
+      }
     } catch (error) {
       if (epoch === this.viewerEpoch) runInAction(() => { this.error = errorText(error) })
     } finally {

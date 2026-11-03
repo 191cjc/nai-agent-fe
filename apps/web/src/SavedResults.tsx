@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useRef, useState } from 'react'
 import { observer } from 'mobx-react-lite'
-import { ArrowLeft, ArrowRight, Ban, Download, FlaskConical, Images, Layers, RefreshCw, RotateCcw, UserRound, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Ban, Dices, Download, FlaskConical, Images, Layers, RefreshCw, RotateCcw, UserRound, X } from 'lucide-react'
 import { ApiFailure, errorText, type WorkspaceApi } from './api'
 import { datasetItemText } from './dataset-run'
 import { DatasetExportPanel } from './dataset-lazy'
@@ -132,7 +132,7 @@ export const SavedResultViewer = observer(({ saved, api, onClose, onUseSeed, can
     idle: '', reading: '正在读取实验记录', loading: '正在加载图片', completed: '本次加载检查已结束',
     cancelled: '已取消加载，已缓存图片仍可使用', capacity: '已达到缓存容量限制，后续图片尚未加载', error: '加载检查中断，可重新开始',
   }[saved.preloadStatus]
-  const groupLabel = isExperiment ? context ? `第 ${context.ordinal} / ${context.total} ${isDataset ? '条' : '组'}` : '实验记录' : '历史图片'
+  const groupLabel = isExperiment ? context ? `第 ${context.ordinal} / ${context.total} ${isDataset ? '条' : '组'}${context.rerun_of ? '（重跑）' : ''}` : '实验记录' : '历史图片'
   const placeholder = saved.loading ? '正在加载保存记录...'
     : saved.imageLoading ? '正在加载图片...'
       : saved.error ? '记录暂不可用，请查看下方信息。'
@@ -191,6 +191,12 @@ export const SavedResultViewer = observer(({ saved, api, onClose, onUseSeed, can
             {saved.currentDiscarded ? <RotateCcw size={15} aria-hidden="true" /> : <Ban size={15} aria-hidden="true" />}
             {saved.discardBusy ? '正在保存...' : saved.currentDiscarded ? '恢复' : '弃置'}</button>}
           {image && job && <UseAsReferenceButton key={`${job.id}:${image.index}`} api={api} jobId={job.id} index={image.index} />}
+          {saved.canRerun && <button className="text-action" type="button" disabled={saved.rerunBusy}
+            title="同提示词、同参考图与设置，随机新种子再生成 1 张（一次付费生成）"
+            onClick={() => {
+              const replaces = image !== null && !saved.currentDiscarded
+              if (window.confirm(`用相同提示词和新的随机种子重新生成 1 张？这是一次付费生成${replaces ? '，当前图片会被标记弃置（可随时恢复）' : ''}。`)) void saved.rerunCurrent()
+            }}><Dices size={15} aria-hidden="true" /> {saved.rerunBusy ? '正在提交...' : '重跑（新种子）'}</button>}
         </figcaption>
       </figure>
     <div className="canvas-metadata">
@@ -204,9 +210,11 @@ export const SavedResultViewer = observer(({ saved, api, onClose, onUseSeed, can
         {saved.preloadError && <p className="alert" role="alert">{saved.preloadError}</p>}
         {saved.preloadImageError && <p className="saved-preload-image-error">最近一次图片加载失败：{saved.preloadImageError}（单张失败不会中断其余图片的加载）</p>}
       </div>}
-      <p className="prompt-hint" id="saved-navigation-help">左右箭头依次切换本组图片和下一个已保存组，聚焦图像区域后可按 ← / →。点击图片右下角种子可填入生成设置；浏览不会启动生成或改变服务器实验。</p>
+      <p className="prompt-hint" id="saved-navigation-help">左右箭头依次切换本组图片和下一个已保存组，聚焦图像区域后可按 ← / →。点击图片右下角种子可填入生成设置；浏览不会启动生成，只有训练集里点「重跑（新种子）」才会提交一次付费生成。</p>
       {(saved.error || saved.imageError) && <p className="alert" role="alert">{saved.error || saved.imageError}</p>}
       {saved.discardError && <p className="alert" role="alert">弃置标记未保存：{saved.discardError}</p>}
+      {saved.rerunMessage && <p className="subtle" role="status">{saved.rerunMessage}</p>}
+      {saved.rerunError && <p className="alert" role="alert">重跑未提交：{saved.rerunError}</p>}
       {job && (job.discarded_images?.length ?? 0) > 0 && <p className="subtle">本组已弃置 {job.discarded_images?.length} / {job.image_urls.length} 张（导出时跳过；可点「恢复」撤销）。</p>}
       <div className="saved-result-actions"><span className="prompt-hint">私有保存 7 天</span><button type="button" className="text-action" disabled={saved.loading || saved.imageLoading} onClick={() => void saved.retry()}>
         <RefreshCw size={15} aria-hidden="true" /> 刷新保存记录

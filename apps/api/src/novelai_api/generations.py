@@ -182,11 +182,19 @@ class ExperimentContext(BaseModel):
     kind: Literal["dataset"] | None = Field(default=None, exclude_if=lambda value: value is None)
     item: DatasetItem | None = Field(default=None, exclude_if=lambda value: value is None)
     weights: list[ExperimentWeight] = Field(default_factory=list, max_length=1500)
+    # Dataset only: an owner-requested re-generation of this ordinal with a new random
+    # seed. Names the job it replaces; the run's own group for the ordinal stays intact.
+    rerun_of: str | None = Field(
+        default=None, pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        exclude_if=lambda value: value is None,
+    )
 
     @model_validator(mode="after")
     def valid_context(self) -> Self:
         if (len(self.ordinal), self.ordinal) > (len(self.total), self.total):
             raise ValueError("Experiment ordinal exceeds total")
+        if self.rerun_of is not None and self.kind != "dataset":
+            raise ValueError("Only dataset groups can be re-run")
         if self.kind is None and (self.item is not None or not self.weights):
             raise ValueError("Style experiment groups require weights only")
         if self.kind == "dataset" and (self.item is None or self.weights):
@@ -394,9 +402,10 @@ class ExperimentConflict(Exception):
 # Decimal strings stay strings: SQLite INTEGER/REAL cannot order arbitrary ordinals.
 EXPERIMENT_ROWS = """
 WITH experiment_rows AS (
-    SELECT *, json_extract(settings_json, '$.experiment.id') AS experiment_id,
+    SELECT *, rowid AS row_order, json_extract(settings_json, '$.experiment.id') AS experiment_id,
         json_extract(settings_json, '$.experiment.ordinal') AS ordinal,
-        json_extract(settings_json, '$.experiment.total') AS total
+        json_extract(settings_json, '$.experiment.total') AS total,
+        json_extract(settings_json, '$.experiment.rerun_of') AS rerun_of
     FROM generation_jobs
     WHERE user_id = ? AND json_valid(settings_json)
         AND json_type(settings_json, '$.experiment') = 'object'
@@ -406,8 +415,9 @@ WITH experiment_rows AS (
 EXPERIMENT_SUMMARY = """
 SELECT experiment_id AS id,
     COALESCE(MAX(json_extract(settings_json, '$.experiment.kind')), 'style') AS kind,
-    total, COUNT(*) AS group_count,
-    SUM(CASE WHEN status IN ('succeeded', 'failed') THEN 1 ELSE 0 END) AS completed_count,
+    total, SUM(CASE WHEN rerun_of IS NULL THEN 1 ELSE 0 END) AS group_count,
+    SUM(CASE WHEN rerun_of IS NULL AND status IN ('succeeded', 'failed') THEN 1 ELSE 0 END)
+        AS completed_count,
     SUM(image_count) AS image_count, MIN(created_at) AS created_at,
     MAX(updated_at) AS updated_at
 FROM experiment_rows
@@ -435,14 +445,32 @@ class JobStore:
         with self.database.connect(write=True) as connection:
             return self.create_in_transaction(connection, user_id, parameters)
 
+    def create_rerun(self, user_id: str, parameters: GenerationRequest) -> str:
+        with self.database.connect(write=True) as connection:
+            return self.create_in_transaction(connection, user_id, parameters, rerun=True)
+
     @staticmethod
     def create_in_transaction(
         connection: sqlite3.Connection, user_id: str, parameters: GenerationRequest,
-        *, run_claim: bool = False,
+        *, run_claim: bool = False, rerun: bool = False,
     ) -> str:
         job_id = str(uuid4())
         now = int(time.time())
-        if parameters.experiment is not None:
+        if parameters.experiment is not None and parameters.experiment.rerun_of is not None:
+            _experiment_connection(connection)
+            context = parameters.experiment
+            # A re-run joins an existing ordinal of the owner's server-owned dataset run.
+            source = connection.execute(
+                EXPERIMENT_ROWS + "SELECT 1 FROM experiment_rows WHERE id = ? "
+                "AND experiment_id = ? AND ordinal = ? AND total = ? "
+                "AND status IN ('succeeded', 'failed') AND EXISTS (SELECT 1 FROM "
+                "style_experiment_runs WHERE user_id = experiment_rows.user_id AND id = ?)",
+                (user_id, context.rerun_of, str(context.id), context.ordinal, context.total,
+                 str(context.id)),
+            ).fetchone()
+            if not rerun or source is None:
+                raise ExperimentConflict("Re-run source group not found")
+        elif parameters.experiment is not None:
             _experiment_connection(connection)
             context = parameters.experiment
             server_run = connection.execute(
@@ -600,7 +628,8 @@ class JobStore:
                 return None
             rows = connection.execute(
                 EXPERIMENT_ROWS + "SELECT * FROM experiment_rows WHERE experiment_id = ? "
-                "ORDER BY length(ordinal), ordinal, id LIMIT ? OFFSET ?",
+                # Re-runs follow their ordinal's run group in creation order.
+                "ORDER BY length(ordinal), ordinal, row_order LIMIT ? OFFSET ?",
                 (user_id, experiment_id, limit + 1, offset),
             ).fetchall()
         return (

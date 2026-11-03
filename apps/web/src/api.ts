@@ -106,6 +106,8 @@ export interface ExperimentContext {
   kind?: 'dataset'
   item?: DatasetItem
   weights: ExperimentWeight[]
+  /** Dataset only: an owner re-run of this ordinal (new random seed); names the replaced job. */
+  rerun_of?: string
 }
 
 export interface GenerationRequest {
@@ -325,6 +327,7 @@ export function errorText(error: unknown): string {
       prompt_snapshot_conflict: '此快照编号已用于其他内容，请关闭后重新保存。',
       experiment_run_unknown: '实验提交结果未知，请重新连接核对，不要重复开始。',
       experiment_run_missing: '尚未找到这次实验，提交结果仍待确认；请检查历史后再次连接。',
+      rerun_unsupported: '只有训练集里的图片可以重跑。',
       experiment_active: '这条记录属于进行中的画风实验，请先停止实验或等待完成后删除。',
       provider_auth_error: '图像服务认证失败，请联系管理员。',
       provider_rate_limited: '图像服务限流，请稍后重试。',
@@ -524,6 +527,13 @@ export class WorkspaceApi {
 
   setImageDiscarded(jobId: string, index: number, discarded: boolean): Promise<void> {
     return this.request(`/api/generations/${encodeURIComponent(jobId)}/images/${index}/discard`, { method: discarded ? 'PUT' : 'DELETE' })
+  }
+
+  /** One paid generation: the same training-set group, one sample, a new random seed. */
+  rerunGeneration(jobId: string, discardIndex: number | null): Promise<GenerationAccepted> {
+    return this.request(`/api/generations/${encodeURIComponent(jobId)}/rerun`, {
+      method: 'POST', body: JSON.stringify(discardIndex === null ? {} : { discard_index: discardIndex }),
+    })
   }
 
   deleteGeneration(id: string): Promise<void> {

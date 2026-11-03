@@ -112,6 +112,23 @@ review only (operator restriction); no paid probes.
   in `DatasetRun.tsx`). Never relax that guard.
 
 
+## Image re-runs (2026-11-02)
+
+- `POST /api/generations/{job_id}/rerun {discard_index?}` → 202
+  `GenerationAccepted`. Only for the owner's terminal dataset groups
+  (`422 rerun_unsupported` otherwise, `409 job_active` while queued/running,
+  404 for foreign jobs or bad `discard_index`, 429 `queue_full`). One paid
+  generation: the source's frozen parameters/references, `sample_count = 1`,
+  new random seed, `experiment.rerun_of = <source job id>`.
+- `ExperimentContext.rerun_of` is dataset-only; `create_rerun` requires a
+  terminal source row of the same run/ordinal/total and an existing server
+  run. Ordinary `POST /api/generations` with `rerun_of` → 409.
+- Re-runs sit after their ordinal (`ORDER BY length(ordinal), ordinal,
+  rowid`). Summary `group_count`/`completed_count` count run groups only;
+  `image_count` includes re-runs. Run counters never change.
+- When `discard_index` is given, the source image is marked discarded after
+  acceptance. Export includes re-run images like any group.
+
 ## Complete captions and multi-person items (2026-11-03)
 
 - Captions are the frozen prompts, so the library must name everything visible

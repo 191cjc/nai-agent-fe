@@ -97,6 +97,11 @@ class GenerationAccepted(BaseModel):
     status: str
 
 
+class RerunRequest(BaseModel):
+    # Image of the source job to mark discarded once the re-run is accepted.
+    discard_index: int | None = Field(default=None, ge=0, le=7)
+
+
 def error(status: int, code: str, message: str, *, retryable: bool = False) -> JSONResponse:
     return JSONResponse(
         status_code=status,
@@ -681,6 +686,55 @@ def create_app(
     ) -> None:
         discard_target(user, job_id, image_index)
         manager.store.set_discarded(user.id, job_id, image_index, False)
+
+    @app.post(
+        "/api/generations/{job_id}/rerun",
+        status_code=202,
+        response_model=GenerationAccepted,
+        responses={
+            401: {"model": ApiError}, 403: {"model": ApiError}, 404: {"model": ApiError},
+            409: {"model": ApiError}, 422: {"model": ApiError}, 429: {"model": ApiError},
+            503: {"model": ApiError},
+        },
+    )
+    def rerun_generation(
+        job_id: str, payload: RerunRequest, user: Annotated[UserInfo, Depends(require_user)],
+    ) -> GenerationAccepted | JSONResponse:
+        # One explicit paid generation: the same frozen dataset group with a new random
+        # seed and one sample. The shown image may be marked discarded in the same click.
+        job = own_job(user, job_id)
+        context = job.parameters.experiment
+        if context is None or context.kind != "dataset":
+            return error(422, "rerun_unsupported", "Only training-set images can be re-run")
+        if job.status not in ("succeeded", "failed"):
+            return error(409, "job_active", "Generation is still running")
+        if payload.discard_index is not None and (
+            job.status != "succeeded" or not 0 <= payload.discard_index < job.image_count
+        ):
+            raise HTTPException(
+                status_code=404,
+                detail=ApiError(code="not_found", message="Image not found").model_dump(),
+            )
+        reference = job.parameters.reference
+        if reference is not None and reference.mode == "gpt" and manager.gpt_provider is None:
+            return error(503, "gpt_image_unavailable", "GPT image generation is not configured")
+        parameters = job.parameters.model_copy(update={
+            "seed": None, "sample_count": 1,
+            "experiment": context.model_copy(update={"rerun_of": job.id}),
+        })
+        try:
+            new_id = manager.submit(user.id, parameters, create=manager.store.create_rerun)
+        except GenerationNotConfigured:
+            return error(503, "provider_unavailable", "Image generation is not configured")
+        except ResultStorageUnavailable:
+            return error(503, "result_storage_unavailable", "Image storage is unavailable")
+        except ExperimentConflict:
+            return error(409, "experiment_conflict", "Training-set group is not available")
+        if new_id is None:
+            return error(429, "queue_full", "Generation queue is full", retryable=True)
+        if payload.discard_index is not None:
+            manager.store.set_discarded(user.id, job.id, payload.discard_index, True)
+        return GenerationAccepted(id=new_id, status="queued")
 
     @app.delete(
         "/api/generations/{job_id}",

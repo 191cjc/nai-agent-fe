@@ -52,6 +52,7 @@ def test_openapi_contract_matches_snapshot_without_database_or_provider_calls(
         ("/api/generations/{job_id}", "delete"): {401, 403, 404, 409, 422, 503},
         (DISCARD, "put"): {401, 403, 404, 422, 503},
         (DISCARD, "delete"): {401, 403, 404, 422, 503},
+        ("/api/generations/{job_id}/rerun", "post"): {401, 403, 404, 409, 422, 429, 503},
         ("/api/prompt-snapshots", "get"): {401, 422, 503},
         ("/api/prompt-snapshots", "post"): {401, 403, 409, 422, 503},
         ("/api/prompt-snapshots/{snapshot_id}", "get"): {401, 404, 422, 503},
