@@ -165,3 +165,24 @@ review only (operator restriction); no paid probes.
 - Import appends (fresh `custom-N` ids, all selected) or, after confirm,
   replaces the list; any invalid line rejects the whole import with its line
   number. Files ≤2 MiB, read locally; nothing is uploaded.
+
+## Library composition v3 (2026-11-03)
+
+- 156 items, all default-selected: 111 adult female (incl. `angle` 16 and
+  `fantasy` 25 people), 2 adult male (operator: keep adult men to one or two),
+  14 `male child` (`boy`), 6 `female child` (`girl`), 23 no-human (incl. 8
+  fantasy creatures/scenery). Multi-person items: 6 everyday + 3 fantasy, all
+  female, all native characters.
+- `girl` follows the `boy` rules exactly: wholesome, fully clothed everyday
+  scenes only, and `CHILD_UNSAFE_STYLE` blocks Start when either child
+  category is selected with body-shape/suggestive style tags. Fantasy,
+  demi-human and angle items are adults only; never add child fantasy items
+  with revealing outfits.
+- Angles: about a quarter of person items are non-eye-level (`from below`,
+  `from above`, `from side`, `from behind`, `profile`, `dutch angle`, `pov`,
+  `foreshortening`, one `fisheye`), captioned like any content tag.
+- Demi-human features are always tagged with colour (`black horns`, `demon
+  tail`, `blue scales`, `pointy ears`, `white wings`, `halo`) so the LoRA
+  learns how they are drawn instead of adding them to every character.
+- Fantasy share is about a fifth of the set so ordinary scenes are not
+  pulled towards fantasy; keep that balance when extending.

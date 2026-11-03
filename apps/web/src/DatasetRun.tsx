@@ -17,11 +17,15 @@ const CUSTOM: DatasetCategory = { id: CUSTOM_CATEGORY, label: '自定义', descr
 // Body-shape and suggestive tags must never be applied to child subjects.
 const CHILD_UNSAFE_STYLE = /\b(soft body|supple skin|soft curves|curvy|curvaceous|cleavage|breasts?|skin folds|skin compression|thick thighs|wide hips|sexy|seductive|sensual|erotic|nsfw|lewd|plump|voluptuous|navel|midriff|bare shoulders|thighs)\b/i
 
+const CHILD_CATEGORIES: Record<string, string> = { boy: '男孩（年幼）', girl: '女孩（年幼）' }
+
 function childSafetyError(entries: readonly DatasetEntry[], style: string): string {
-  if (!entries.some(entry => entry.selected && entry.category === 'boy')) return ''
+  const chosen = Object.keys(CHILD_CATEGORIES).filter(category => entries.some(entry => entry.selected && entry.category === category))
+  if (!chosen.length) return ''
   const match = style.match(CHILD_UNSAFE_STYLE)
+  const names = chosen.map(category => `「${CHILD_CATEGORIES[category]}」`).join('、')
   return match
-    ? `已选「男孩（年幼）」条目，但画风中含有身体描写类标签「${match[0]}」。这类标签绝不能用于年幼角色：请取消男孩条目，或改用去掉身体描写的画风单独批跑。`
+    ? `已选${names}条目，但画风中含有身体描写类标签「${match[0]}」。这类标签绝不能用于年幼角色：请取消这些条目，或改用去掉身体描写的画风单独批跑。`
     : ''
 }
 
@@ -201,7 +205,7 @@ export const DatasetRunConfig = observer(({ generation, api, hidden }: { generat
       <button type="button" className={mode === 'character' ? 'active' : ''} aria-pressed={mode === 'character'} onClick={() => setMode('character')}><UserRound size={14} aria-hidden="true" /> 角色训练集</button>
     </div>}
     {mode === 'style'
-      ? <p className="prompt-hint">用当前「画风」固定风格，逐条运行下面的内容提示词，生成用于训练画风 LoRA 的图片。提示词只描述内容，不含画风与质量词；导出时作为 caption。默认全选：女性 70 条、成年男性 10 条、年幼男孩 14 条、无人物 15 条；人物条目都写明发色、瞳色、带颜色的上下装，全身和远景还写明鞋袜，让成图与 caption 对应；「多人互动」条目把每个人写成独立的人物提示词，避免颜色串到别人身上，需要 V4 / V4.5 / V5 模型。「男孩（年幼）」条目不能与身体描写类画风同时使用。</p>
+      ? <p className="prompt-hint">用当前「画风」固定风格，逐条运行下面的内容提示词，生成用于训练画风 LoRA 的图片。提示词只描述内容，不含画风与质量词；导出时作为 caption。默认全选 156 条：成年女性 111 条（含「视角与透视」16 条、「异世界奇幻」亚人与冒险者 25 条）、成年男性 2 条、年幼男孩 14 条、年幼女孩 6 条、无人物 23 条（含龙、魔物与奇幻场景 8 条）；约四分之一人物条目为仰视、俯视、侧背面等非平视角度；角、尖耳、尾巴、翅膀都写明颜色并写进 caption；人物条目都写明发色、瞳色、带颜色的上下装，全身和远景还写明鞋袜，让成图与 caption 对应；「多人互动」条目把每个人写成独立的人物提示词，避免颜色串到别人身上，需要 V4 / V4.5 / V5 模型。「男孩（年幼）」「女孩（年幼）」条目只含健全内容，不能与身体描写类画风同时使用。</p>
       : <p className="prompt-hint">用参考图和固定的角色特征，逐条运行景别、表情、姿势、场景等内容提示词，生成用于训练角色 LoRA 的图片。导出的 caption 包含每张图使用的画风和内容提示词，不含角色特征（让画法不会被学成角色的一部分）。</p>}
     <p className="prompt-hint">公共分区和人物卡片不参与批跑；负面提示词、模型、尺寸、步数、CFG、采样器和每条张数取自当前生成设置。</p>
     {snapshot ? <div className="experiment-note" role="status">

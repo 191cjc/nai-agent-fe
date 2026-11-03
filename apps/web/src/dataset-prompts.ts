@@ -25,10 +25,13 @@ export const DATASET_CATEGORIES: readonly DatasetCategory[] = [
   { id: 'portrait', label: '特写与表情', description: '脸部和肩部以上，覆盖多种表情与角度' },
   { id: 'upper', label: '半身日常', description: '上半身构图，日常动作与服装' },
   { id: 'full', label: '全身与动作', description: '全身构图，站坐跑跳等姿势' },
+  { id: 'angle', label: '视角与透视', description: '仰视、俯视、侧面、背面、倾斜、第一人称与透视缩短' },
   { id: 'scene', label: '人物与场景', description: '人物较小、环境占比大的远景' },
   { id: 'light', label: '光照与时段', description: '逆光、夜景、室内暖光等光照条件' },
   { id: 'multi', label: '多人互动', description: '两人及以上的构图与互动' },
+  { id: 'fantasy', label: '异世界奇幻', description: '恶魔、精灵、龙娘、兽耳、天使等成年亚人，法师骑士冒险者，魔物与奇幻场景' },
   { id: 'boy', label: '男孩（年幼）', description: '年幼男孩的日常场景；仅限健全内容，不可搭配身体描写类画风' },
+  { id: 'girl', label: '女孩（年幼）', description: '少量年幼女孩的日常场景，避免画小年龄角色时出错；仅限健全内容，不可搭配身体描写类画风' },
   { id: 'nohuman', label: '无人物', description: '风景、建筑、静物与动物' },
 ]
 
@@ -50,8 +53,6 @@ const PROMPTS: Record<string, readonly LibraryItem[]> = {
     '1girl, solo, portrait, hand on own chin, thinking, round eyewear, braid, dark green hair, brown eyes, grey vest, white shirt',
     '1girl, solo, portrait, three-quarter view, looking back, very long hair, blue hair, yellow eyes, white kimono',
     '1girl, solo, close-up, covering mouth, giggling, cat ears, short hair, white hair, pink eyes, white blouse, red scarf',
-    '1boy, solo, portrait, looking at viewer, serious, short hair, brown hair, brown eyes, white collared shirt, white background',
-    '1boy, solo, portrait, smirk, glasses, short hair, black hair, grey eyes, black sweater, gradient background',
   ],
   upper: [
     '1girl, solo, upper body, school uniform, navy blue serafuku, white sailor collar, red neckerchief, holding book, long hair, black hair, brown eyes, classroom',
@@ -69,7 +70,6 @@ const PROMPTS: Record<string, readonly LibraryItem[]> = {
     '1girl, solo, upper body, flower crown, holding flower, white dress, long hair, pink hair, green eyes',
     '1girl, solo, upper body, black witch hat, black cloak, holding wooden staff, magic, long hair, purple hair, yellow eyes',
     '1boy, solo, upper body, black suit, white shirt, blue necktie, adjusting necktie, short hair, black hair, brown eyes, office',
-    '1boy, solo, upper body, silver armor, red cape, holding sword, serious, short hair, blonde hair, blue eyes',
   ],
   full: [
     '1girl, solo, full body, standing, school uniform, white shirt, red necktie, navy blue pleated skirt, white socks, brown loafers, long hair, black hair, brown eyes, simple background',
@@ -86,7 +86,25 @@ const PROMPTS: Record<string, readonly LibraryItem[]> = {
     '1girl, solo, full body, ballerina, ballet, tiptoes, pink tutu, white tights, pink ballet slippers, hair bun, brown hair, blue eyes, stage',
     '1girl, solo, full body, riding bicycle, red bicycle, white blouse, blue skirt, white sneakers, straw hat, black hair, brown eyes, countryside, summer',
     '1boy, solo, full body, standing, hands in pockets, white t-shirt, blue jeans, white sneakers, short hair, brown hair, brown eyes, simple background',
-    '1boy, solo, full body, jumping, midair, basketball, red jersey, black shorts, white sneakers, short hair, black hair, brown eyes, outdoors',
+  ],
+  // Non-eye-level views so the style learns its foreshortening; each view is captioned.
+  angle: [
+    '1girl, solo, from below, full body, standing, looking down, looking at viewer, long hair, black hair, red eyes, white shirt, black skirt, black boots, blue sky',
+    '1girl, solo, from above, full body, lying, on grass, looking at viewer, smile, long hair, brown hair, green eyes, yellow sundress, barefoot',
+    '1girl, solo, from above, upper body, looking up, open mouth, short hair, blonde hair, blue eyes, white hoodie, street',
+    '1girl, solo, from below, upper body, leaning over railing, looking down, ponytail, brown hair, brown eyes, navy blue blazer, white shirt, balcony, sky',
+    '1girl, solo, from side, full body, walking, long hair, silver hair, blue eyes, grey coat, black pants, white sneakers, crosswalk',
+    '1girl, solo, from behind, cowboy shot, looking back, smile, very long hair, pink hair, purple eyes, white dress, ocean, sunset',
+    '1girl, solo, dutch angle, upper body, peace sign, wink, twintails, blue hair, yellow eyes, black jacket, red t-shirt, city',
+    '1girl, solo, dutch angle, full body, jumping, midair, short hair, orange hair, green eyes, white t-shirt, blue overalls, red sneakers, street',
+    '1girl, solo, pov, upper body, holding hands, looking at viewer, blush, smile, long hair, black hair, brown eyes, beige coat, red scarf, snow',
+    '1girl, solo, pov, sitting, across table, cafe, holding cup, looking at viewer, short hair, brown hair, grey eyes, cream sweater',
+    '1girl, solo, from below, full body, foreshortening, reaching towards viewer, outstretched hand, long hair, blonde hair, blue eyes, white blouse, blue skirt, brown loafers, cherry blossoms',
+    '1girl, solo, from above, full body, foreshortening, looking up, sitting, stairs, long hair, black hair, brown eyes, white shirt, navy blue pleated skirt, white socks, brown loafers',
+    '1girl, solo, profile, close-up, closed eyes, wind, long hair, light brown hair, white blouse, light particles',
+    '1girl, solo, from below, cowboy shot, hand on own hip, smile, short hair, red hair, green eyes, green jacket, white t-shirt, blue jeans, rooftop, blue sky',
+    '1girl, solo, from side, upper body, sitting, train interior, looking out window, bob cut, black hair, brown eyes, grey sweater, sunset',
+    '1girl, solo, fisheye, close-up, looking at viewer, tongue out, side ponytail, purple hair, pink eyes, oversized yellow hoodie',
   ],
   scene: [
     '1girl, solo, wide shot, standing, field, flowers, blue sky, clouds, wind, white dress, white sandals, long hair, brown hair',
@@ -102,8 +120,6 @@ const PROMPTS: Record<string, readonly LibraryItem[]> = {
     '1girl, solo, wide shot, underwater, bubbles, fish, floating, white dress, barefoot, long hair, blue hair',
     '1girl, solo, wide shot, cafe interior, window seat, plants, sitting, mustard yellow sweater, black skirt, black pantyhose, brown loafers, short hair, black hair',
     '1girl, solo, wide shot, festival, food stall, lanterns, blue yukata, floral print, red obi, geta, hair bun, black hair',
-    '1boy, solo, wide shot, from behind, cliff, looking afar, mountains, dark green coat, black pants, brown boots, short hair, black hair',
-    '1boy, solo, wide shot, train station, platform, waiting, train, navy blue coat, grey scarf, grey pants, black shoes, short hair, brown hair',
   ],
   light: [
     '1girl, solo, upper body, backlighting, sunset, orange sky, silhouette, wind, white shirt, long hair, black hair',
@@ -116,7 +132,6 @@ const PROMPTS: Record<string, readonly LibraryItem[]> = {
     '1girl, solo, cowboy shot, overcast, rain, wet hair, grey sky, navy blue school uniform, navy blue pleated skirt, long hair, brown hair, grey eyes',
     '1girl, solo, full body, blue hour, twilight, street lamp, beige coat, red scarf, black pantyhose, brown boots, short hair, blonde hair, blue eyes',
     '1girl, solo, upper body, fireworks, night, purple yukata, floral print, looking up, hair bun, black hair, brown eyes',
-    '1boy, solo, upper body, campfire, night, warm light, sitting, brown jacket, blue jeans, short hair, black hair, brown eyes',
   ],
   // Multi-person items keep the scene shared and give each person a native character
   // prompt, so hair and clothing colours stay on the right person (requires V4+).
@@ -140,9 +155,50 @@ const PROMPTS: Record<string, readonly LibraryItem[]> = {
     { prompt: '2girls, full body, running, chasing, flowers, field', characters: [
       'girl, ponytail, brown hair, green eyes, light blue dress, white sneakers',
       'girl, long hair, black hair, brown eyes, yellow dress, brown sandals'] },
-    { prompt: '2boys, upper body, back-to-back, arms crossed, serious', characters: [
-      'boy, short hair, black hair, red eyes, black jacket, white t-shirt',
-      'boy, short hair, silver hair, blue eyes, white jacket, black shirt'] },
+  ],
+  // Adult fantasy demi-humans and adventurers. Horns, ears, tails, wings and scales are
+  // always tagged with colour so the LoRA learns how they are drawn, not to add them.
+  fantasy: [
+    '1girl, solo, demon girl, portrait, smirk, looking at viewer, black horns, curled horns, pointy ears, long hair, purple hair, red eyes, black choker, black dress, dark background',
+    '1girl, solo, demon girl, upper body, from below, arms crossed, black horns, demon wings, black wings, long hair, white hair, yellow eyes, black military coat, gold trim, red sky',
+    '1girl, solo, demon girl, full body, sitting, on throne, red horns, demon tail, black tail, long hair, black hair, red eyes, black gown, black high heels, throne room',
+    '1girl, solo, elf, portrait, three-quarter view, gentle smile, pointy ears, long hair, blonde hair, green eyes, green hooded cloak, forest',
+    '1girl, solo, elf, full body, aiming, holding bow, arrow, quiver, pointy ears, ponytail, silver hair, blue eyes, green tunic, brown leather armor, brown pants, brown boots, forest',
+    '1girl, solo, elf, upper body, from above, looking up, sitting, pointy ears, long hair, light green hair, amber eyes, white dress, flower crown, grass, flowers',
+    '1girl, solo, pov, elf, upper body, reaching towards viewer, smile, pointy ears, braid, blonde hair, green eyes, white blouse, green vest, forest, sunlight',
+    '1girl, solo, dark elf, full body, standing, pointy ears, dark skin, long hair, white hair, red eyes, black leather armor, purple cape, black boots, holding dagger, cave, crystals',
+    '1girl, solo, dragon girl, upper body, smile, dragon horns, red horns, dragon tail, red tail, red scales, short hair, red hair, yellow eyes, slit pupils, white shirt, brown vest, tavern',
+    '1girl, solo, dragon girl, full body, from below, standing, dragon wings, blue wings, dragon horns, white horns, dragon tail, blue scales, long hair, blue hair, yellow eyes, silver armor, blue cape, silver boots, cliff, sky',
+    '1girl, solo, fox girl, upper body, smile, fox ears, fox tail, orange tail, long hair, orange hair, yellow eyes, white kimono, red hakama, shrine',
+    '1girl, solo, wolf girl, full body, crouching, wolf ears, wolf tail, grey tail, short hair, grey hair, blue eyes, brown jacket, fur trim, black shorts, brown boots, holding dagger, forest, night',
+    '1girl, solo, cat girl, cowboy shot, cat ears, cat tail, black tail, short hair, black hair, green eyes, red scarf, brown leather jacket, black shorts, belt pouch, fantasy, market',
+    '1girl, solo, rabbit girl, full body, rabbit ears, white rabbit ears, short hair, white hair, red eyes, green dress, brown apron, brown shoes, holding basket, bread, village',
+    '1girl, solo, angel, full body, floating, halo, feathered wings, white wings, long hair, blonde hair, blue eyes, white robe, barefoot, clouds, light rays',
+    '1girl, solo, vampire, upper body, from side, fangs, long hair, black hair, red eyes, black cape, white frilled shirt, castle, night, moonlight',
+    '1girl, solo, mage, full body, from below, casting spell, magic circle, glowing, holding staff, wooden staff, blue witch hat, blue robe, brown boots, long hair, brown hair, purple eyes, ruins',
+    '1girl, solo, witch, full body, riding broom, flying, black witch hat, black dress, purple cape, black boots, long hair, red hair, green eyes, night sky, moon, town',
+    '1girl, solo, knight, cowboy shot, dutch angle, holding sword, silver armor, blue cape, blue skirt, ponytail, blonde hair, blue eyes, serious, battlefield, smoke',
+    '1girl, solo, priestess, upper body, praying, white robe, gold trim, holding staff, healing magic, glowing, long hair, silver hair, green eyes, church, stained glass',
+    '1girl, solo, adventurer, upper body, smile, waving, brown leather armor, white shirt, red cape, short hair, pink hair, blue eyes, guild hall, wooden table, bulletin board',
+    '1girl, solo, wide shot, from above, dungeon, stone floor, holding torch, red hood, brown cloak, brown boots, long hair, black hair, darkness',
+    { prompt: '3girls, full body, adventurer, party, standing, smile, grassland, blue sky', characters: [
+      'girl, knight, ponytail, blonde hair, blue eyes, silver armor, blue cape, silver boots, holding sword',
+      'girl, mage, long hair, purple hair, purple eyes, purple witch hat, purple robe, brown boots, holding staff',
+      'girl, elf, pointy ears, short hair, green hair, green eyes, green cloak, brown leather armor, brown boots, holding bow'] },
+    { prompt: '2girls, upper body, tavern, sitting, table, holding mug, laughing', characters: [
+      'girl, dragon girl, dragon horns, red horns, short hair, red hair, yellow eyes, white shirt, brown vest',
+      'girl, elf, pointy ears, long hair, blonde hair, green eyes, green dress'] },
+    { prompt: '2girls, full body, from below, back-to-back, fighting stance, magic, ruins', characters: [
+      'girl, demon girl, black horns, demon tail, black tail, long hair, black hair, red eyes, black armor, black boots, holding sword',
+      'girl, angel, halo, white wings, long hair, blonde hair, blue eyes, white robe, white boots, holding staff'] },
+    'no humans, dragon, red dragon, flying, spread wings, mountains, clouds, sunset',
+    'no humans, dragon, black dragon, from below, roaring, castle, ruins, storm, lightning',
+    'no humans, slime (creature), blue slime, grass, forest, sunlight',
+    'no humans, scenery, floating island, waterfall, castle, clouds, blue sky',
+    'no humans, scenery, fantasy, medieval, town, market, stone road, banner, morning',
+    'no humans, scenery, dungeon, stone wall, torch, treasure chest, darkness',
+    'no humans, magic circle, glowing, runes, stone floor, ruins, night',
+    'no humans, scenery, from above, village, treehouse, giant tree, forest, rope bridge',
   ],
   // Wholesome, fully clothed everyday scenes only; never combine with body-shape style tags.
   boy: [
@@ -160,6 +216,16 @@ const PROMPTS: Record<string, readonly LibraryItem[]> = {
     'male child, 1boy, solo, full body, sitting, bench, reading picture book, orange sweater, brown pants, white sneakers, short hair, black hair, brown eyes',
     'male child, 1boy, solo, cowboy shot, sunset, backlighting, holding bug net, straw hat, white t-shirt, green shorts, short hair, brown hair, brown eyes',
     'male child, 1boy, solo, upper body, laughing, closed eyes, messy hair, light brown hair, blue and white striped shirt',
+  ],
+  // A few wholesome, fully clothed everyday scenes so younger girls keep the style;
+  // same rules and style guard as `boy`.
+  girl: [
+    'female child, 1girl, solo, portrait, smile, looking at viewer, twintails, brown hair, brown eyes, yellow t-shirt, simple background',
+    'female child, 1girl, solo, full body, walking, red randoseru, white shirt, navy blue skirt, white socks, black shoes, short hair, black hair, brown eyes, street',
+    'female child, 1girl, solo, upper body, hugging stuffed toy, teddy bear, pink hoodie, long hair, blonde hair, blue eyes, indoors',
+    'female child, 1girl, solo, full body, running, park, light blue dress, white sneakers, ponytail, brown hair, green eyes, smile',
+    'female child, 1girl, solo, upper body, reading, holding book, green cardigan, white blouse, bob cut, black hair, grey eyes, library',
+    'female child, 1girl, solo, cowboy shot, festival, red yukata, floral print, yellow obi, holding cotton candy, hair bun, black hair, brown eyes, lanterns, night',
   ],
   nohuman: [
     'no humans, scenery, mountains, lake, reflection, clouds, sky',
