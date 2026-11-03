@@ -159,3 +159,22 @@ acceptance; do not issue paid requests for cache verification.
 - Wrong: switch away, revoke A, then refetch its bytes on every return.
 - Correct: cache A within the open viewer, revalidate metadata on return and
   release its URL when its bounded cache ownership ends.
+
+## Dataset grid review (2026-11-03)
+
+- 「网格检查」 in the saved viewer of a dataset experiment (`ReviewGrid.tsx`,
+  lazy chunk). Reads group metadata in 100-group pages (≤3000 groups), then
+  shows 60 tiles per page; only the shown page fetches WebP previews
+  (`WorkspaceApi.thumbnail`, 4 at a time, `thumbnail_busy` retried ≤3 times)
+  and every preview Blob URL is revoked on page change/close. Previews never
+  enter the full-PNG LRU; 「查看原图」 opens the normal viewer via
+  `SavedResultsStore.showGroup(offset, image)`.
+- Click toggles the discard mark (same PUT/DELETE as the viewer). Filters:
+  item category (from the frozen item id prefix) and 「隐藏已弃置」.
+- 「重跑全部待替换」: after one confirm showing the paid count, submits one
+  rerun per discarded image and per failed group not yet replaced
+  (`pendingReruns`: wanted − existing groups whose `rerun_of` names it),
+  sequentially. Only `429 queue_full` is waited out and resubmitted (5 s,
+  ≤120 waits); any other API error stops; a network error stops as
+  "outcome unknown" and asks for a refresh before continuing. Stop cancels
+  between submissions.

@@ -339,6 +339,12 @@ export class SavedResultsStore {
     }
   }
 
+  /** Opens one group/image of the current experiment, e.g. from the review grid. */
+  async showGroup(offset: number, image = 0): Promise<void> {
+    if (this.selection?.kind !== 'experiment' || !Number.isSafeInteger(offset) || offset < 0) return
+    await this.loadGroup(offset, image)
+  }
+
   async retry(): Promise<void> {
     if (this.loading || !this.selection) return
     await this.loadGroup(this.groupOffset, this.requestedImage)

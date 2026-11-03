@@ -594,6 +594,24 @@ export class WorkspaceApi {
     return this.request('/api/advice', { method: 'POST', body: JSON.stringify({ input }), signal })
   }
 
+  /** Small WebP preview of a retained result for grid review (same owner/expiry rules). */
+  async thumbnail(imagePath: string, signal?: AbortSignal): Promise<Blob> {
+    if (!/^\/api\/generation-results\/[0-9a-f-]+\/images\/\d+$/.test(imagePath)) {
+      throw new ApiFailure(0, 'invalid_image_path', 'Invalid result image path.')
+    }
+    const version = this.sessionVersion
+    const response = await this.fetcher.call(globalThis, `${this.webBasePath}${imagePath}/thumbnail`, { credentials: 'include', cache: 'no-store', signal })
+    if (response.status === 401) {
+      if (version === this.sessionVersion) this.onUnauthorized()
+      throw new ApiFailure(401, 'session_expired', 'Session expired.')
+    }
+    if (response.status === 503) throw new ApiFailure(503, 'thumbnail_busy', '预览生成繁忙。', true)
+    if (!response.ok) throw new ApiFailure(response.status, 'image_unavailable', 'This result image has expired or is unavailable.')
+    const blob = await response.blob()
+    if (blob.type !== 'image/webp') throw new ApiFailure(0, 'invalid_image', 'Unexpected image format.')
+    return blob
+  }
+
   async image(path: string, signal?: AbortSignal): Promise<Blob> {
     if (!/^\/api\/generation-results\/[0-9a-f-]+\/images\/\d+$/.test(path)) {
       throw new ApiFailure(0, 'invalid_image_path', 'Invalid result image path.')

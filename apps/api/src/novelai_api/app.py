@@ -71,6 +71,7 @@ from .style_experiments import (
     StyleExperimentService,
 )
 from .tags import SearchFailure, SearchRequest, SearchResults, TagSearch
+from .thumbnails import ThumbnailBusy, ThumbnailCache
 
 
 class ApiError(BaseModel):
@@ -159,6 +160,7 @@ def create_app(
         database, image_provider, cache=result_cache, gpt_provider=gpt_image_provider,
     )
     experiments = StyleExperimentService(database, manager)
+    thumbnails = ThumbnailCache()
     snapshots = PromptSnapshotStore(database)
     references = ReferenceImageStore(database)
     tag_search = tag_search or TagSearch(
@@ -651,6 +653,53 @@ def create_app(
             },
         )
 
+    @app.get(
+        "/api/generation-results/{job_id}/images/{image_id}/thumbnail",
+        response_class=Response,
+        responses={
+            200: {"content": {"image/webp": {}}},
+            401: {"model": ApiError},
+            404: {"model": ApiError},
+            422: {"model": ApiError},
+            503: {"model": ApiError},
+        },
+    )
+    def get_thumbnail(
+        job_id: str, image_id: int, user: Annotated[UserInfo, Depends(require_user)]
+    ) -> Response:
+        # Same ownership/expiry rules as the full PNG; a cached preview is only served
+        # while the retained original is still available.
+        job = own_job(user, job_id)
+        info = manager.cache.describe(job_id, user.id) if job.status == "succeeded" else None
+        data = None
+        if info is not None and 0 <= image_id < info.image_count:
+            data = thumbnails.get(job_id, user.id, image_id)
+            if data is None:
+                image = manager.cache.image(job_id, user.id, image_id)
+                if image is not None:
+                    try:
+                        data = thumbnails.render(job_id, user.id, image_id, image.data)
+                    except ThumbnailBusy:
+                        return error(503, "thumbnail_busy", "Previews are busy", retryable=True)
+                    except (OSError, ValueError):
+                        data = None
+        if data is None:
+            raise HTTPException(
+                status_code=404,
+                detail=ApiError(code="not_found", message="Image not found").model_dump(),
+            )
+        return Response(
+            content=data,
+            media_type="image/webp",
+            headers={
+                "Content-Disposition": (
+                    f'inline; filename="generation-{job_id}-{image_id + 1}-preview.webp"'
+                ),
+                "X-Content-Type-Options": "nosniff",
+                "Cache-Control": "no-store",
+            },
+        )
+
     def discard_target(user: UserInfo, job_id: str, image_index: int) -> None:
         job = own_job(user, job_id)
         if job.status != "succeeded" or not 0 <= image_index < job.image_count:
@@ -770,6 +819,7 @@ def create_app(
                 ).model_dump(),
             )
         manager.cache.discard(job_id)
+        thumbnails.discard(job_id)
 
     @app.post(
         "/api/tags/search",

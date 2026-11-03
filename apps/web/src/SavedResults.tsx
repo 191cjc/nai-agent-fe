@@ -1,9 +1,9 @@
 import { Suspense, useEffect, useRef, useState } from 'react'
 import { observer } from 'mobx-react-lite'
-import { ArrowLeft, ArrowRight, Ban, Dices, Download, FlaskConical, Images, Layers, RefreshCw, RotateCcw, UserRound, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Ban, Dices, Download, FlaskConical, Images, LayoutGrid, Layers, RefreshCw, RotateCcw, UserRound, X } from 'lucide-react'
 import { ApiFailure, errorText, type WorkspaceApi } from './api'
 import { datasetItemText } from './dataset-run'
-import { DatasetExportPanel } from './dataset-lazy'
+import { DatasetExportPanel, ReviewGrid } from './dataset-lazy'
 import { GenerationParameters } from './GenerationParameters'
 import type { SavedResultsStore } from './saved-results'
 import { ImageSaveButton, ImageSeedButton } from './ImageActions'
@@ -119,10 +119,13 @@ export const SavedResultViewer = observer(({ saved, api, onClose, onUseSeed, can
 }) => {
   const viewerRef = useRef<HTMLDivElement>(null)
   const selection = saved.selection
+  const [gridFor, setGridFor] = useState<string | null>(null)
   useEffect(() => {
     if (selection) viewerRef.current?.focus()
   }, [selection])
   if (!selection) return null
+  const datasetSelection = selection.kind === 'experiment' && saved.summary?.kind === 'dataset'
+  const grid = datasetSelection && gridFor === selection.id
   const job = saved.job
   const image = saved.image
   const context = job?.parameters.experiment
@@ -152,16 +155,23 @@ export const SavedResultViewer = observer(({ saved, api, onClose, onUseSeed, can
         {job && <span className={`status status-${job.status}`}>{jobStatus(job.status)}</span>}
       </div>
       <div className="saved-viewer-toolbar-actions">
-        {isExperiment && <button className="text-action saved-preload-button" type="button" aria-describedby="saved-preload-help"
+        {datasetSelection && <button className="text-action" type="button" aria-pressed={grid}
+          title="一屏查看多张小预览，点一下标记弃置；适合筛训练集" onClick={() => setGridFor(grid ? null : selection.id)}>
+          <LayoutGrid size={15} aria-hidden="true" /> {grid ? '单张查看' : '网格检查'}</button>}
+        {isExperiment && !grid && <button className="text-action saved-preload-button" type="button" aria-describedby="saved-preload-help"
           onClick={() => { if (saved.preloading) saved.cancelPreload(); else void saved.preloadImages() }}>
           {saved.preloading ? <X size={15} aria-hidden="true" /> : <Images size={15} aria-hidden="true" />}
           {saved.preloading ? '取消加载' : '加载全部图片'}
         </button>}
-        <label className="history-select saved-review-toggle"><input type="checkbox" checked={saved.hideDiscarded}
-          onChange={event => saved.setHideDiscarded(event.target.checked)} /> 只看未弃置</label>
+        {!grid && <label className="history-select saved-review-toggle"><input type="checkbox" checked={saved.hideDiscarded}
+          onChange={event => saved.setHideDiscarded(event.target.checked)} /> 只看未弃置</label>}
         <button className="icon-button" type="button" title="关闭历史图片" aria-label="关闭历史图片" onClick={onClose}><X size={18} /></button>
       </div>
     </div>
+    {grid ? <Suspense fallback={<p className="subtle" role="status">正在打开网格检查…</p>}>
+      <ReviewGrid api={api} experimentId={selection.id} onClose={() => setGridFor(null)}
+        onOpen={(offset, image) => { setGridFor(null); void saved.showGroup(offset, image) }} />
+    </Suspense> : <>
       <figure className="canvas-figure">
         <div className="experiment-image-viewer" role="group" aria-label="已保存图片切换" aria-describedby="saved-navigation-help"
           tabIndex={0} ref={viewerRef} onKeyDown={event => {
@@ -238,5 +248,6 @@ export const SavedResultViewer = observer(({ saved, api, onClose, onUseSeed, can
         {job.error_code && <p className="alert" role="alert">{errorText(new ApiFailure(0, job.error_code, '生成失败，请检查服务状态。'))}</p>}
       </>}
     </div>
+    </>}
   </section>
 })

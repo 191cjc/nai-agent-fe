@@ -100,3 +100,21 @@ or paid generation/advice. Real operator interaction stays a separate gate.
 - Correct: save expiry once and initialize/reap storage only in lifespan.
 - Wrong: reload a saved experiment by resubmitting its generation requests.
 - Correct: page saved jobs and fetch existing images through owner-auth routes.
+
+## Grid-review previews (2026-11-03)
+
+- `GET /api/generation-results/{job_id}/images/{image_id}/thumbnail` →
+  `image/webp`, long side ≤384 px (never upscaled), quality 80, `no-store`,
+  `nosniff`. Same rules as the full PNG: owner-only (404 otherwise), job
+  `succeeded`, retained original present and unexpired (`describe`), index in
+  range; 401 without a session.
+- `thumbnails.ThumbnailCache`: memory-only LRU keyed by `(job_id, index)` and
+  bound to the owner, 32 MiB total. Nothing is written to the result
+  directory, so retention sweeps, budgets and lock-free reads are unchanged.
+  Results never change in place; every hit is still gated by `describe`, and
+  a successful `DELETE /api/generations/{id}` evicts that job's previews.
+- Rendering: Pillow, PNG only, ≤2048×2048 source pixels checked before
+  decoding; a fresh image is saved so no PNG text/ICC/EXIF survives. At most
+  2 concurrent renders; a request that waits 20 s returns 503
+  `thumbnail_busy` (retryable, never a paid action).
+- Tests: `tests/test_thumbnails.py`.
