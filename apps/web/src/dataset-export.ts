@@ -113,7 +113,11 @@ export function datasetCaption(
 ): string {
   const item = parameters.experiment?.kind === 'dataset' ? parameters.experiment.item : undefined
   const compile = parameters.prompt_comments === true && !parameters.prompt_sections
-  const sources = item ? [item.prompt] : [
+  // Multi-person items caption the scene plus every person; the bare per-person gender
+  // word NovelAI expects at the start of a character prompt is not a Danbooru tag.
+  const people = (item?.characters ?? []).map(character => captionTags(character.prompt)
+    .filter(tag => !/^(girl|boy|other)$/i.test(tag)).join(', '))
+  const sources = item ? [item.prompt, ...people] : [
     compile ? compilePromptComments(parameters.positive_prompt) : parameters.positive_prompt,
     ...parameters.character_prompts.map(character => compile ? compilePromptComments(character.prompt) : character.prompt),
   ]

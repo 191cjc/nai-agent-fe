@@ -111,3 +111,26 @@ review only (operator restriction); no paid probes.
   selected together with body-shape/suggestive style tags (`CHILD_UNSAFE_STYLE`
   in `DatasetRun.tsx`). Never relax that guard.
 
+
+## Complete captions and multi-person items (2026-11-03)
+
+- Captions are the frozen prompts, so the library must name everything visible
+  that the LoRA should *not* absorb as style: hair and eye colour (eyes may be
+  omitted at wide shots), coloured upper and lower garments, and footwear or
+  `barefoot` on full-body/wide/cowboy framings. Keep each item within ~30
+  tags; tags the model cannot reliably render become caption noise.
+- `DatasetItem.characters: [{prompt, x, y}]` (0..6, each ≤1000, non-blank, no
+  `//` line under `prompt_comments`) is optional and excluded when empty, so
+  stored definitions and `settings_json.experiment.item` stay byte-identical.
+  `prompt` holds the shared scene (count, framing, action, background).
+  Ordinal N then sends `character_prompts = item.characters` with
+  `auto_character_position: false`; items without characters leave both
+  untouched. Non-native models and character (reference) runs reject such
+  items at create (422) through `GenerationRequest` validation.
+- Web: `DatasetEntry.characters` (strings) gets evenly spaced positions in
+  `datasetItems` (x = 0.1 + 0.8·(i+1)/(n+1), y = 0.5) and blocks Start on a
+  non-native model. All 7 `multi` library items use characters; each person
+  starts with `girl`/`boy` as NovelAI expects. Captions are scene tags then
+  each person's tags, minus bare `girl`/`boy`/`other`, de-duplicated.
+- Tests: `test_dataset_runs.py` multi-person send/legacy/rejection cases and
+  character-run rejection.

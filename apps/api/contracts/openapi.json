@@ -445,6 +445,14 @@
       },
       "DatasetItem": {
         "properties": {
+          "characters": {
+            "items": {
+              "$ref": "#/components/schemas/CharacterPrompt"
+            },
+            "maxItems": 6,
+            "title": "Characters",
+            "type": "array"
+          },
           "id": {
             "maxLength": 64,
             "minLength": 1,

@@ -15,7 +15,11 @@ export interface DatasetPrompt {
   id: string
   category: string
   prompt: string
+  /** Multi-person items only: one native character prompt per person, left to right. */
+  characters?: readonly string[]
 }
+
+type LibraryItem = string | { prompt: string; characters: readonly string[] }
 
 export const DATASET_CATEGORIES: readonly DatasetCategory[] = [
   { id: 'portrait', label: '特写与表情', description: '脸部和肩部以上，覆盖多种表情与角度' },
@@ -30,7 +34,7 @@ export const DATASET_CATEGORIES: readonly DatasetCategory[] = [
 
 // Every person prompt names hair, eyes and coloured clothing so the generated image
 // and its caption describe the same things (operator, 2026-10-31).
-const PROMPTS: Record<string, readonly string[]> = {
+const PROMPTS: Record<string, readonly LibraryItem[]> = {
   portrait: [
     '1girl, solo, portrait, looking at viewer, smile, long hair, black hair, brown eyes, white collared shirt, simple background',
     '1girl, solo, close-up, face, closed eyes, peaceful, short hair, blonde hair, light blue sweater',
@@ -68,76 +72,93 @@ const PROMPTS: Record<string, readonly string[]> = {
     '1boy, solo, upper body, silver armor, red cape, holding sword, serious, short hair, blonde hair, blue eyes',
   ],
   full: [
-    '1girl, solo, full body, standing, school uniform, white shirt, red necktie, navy blue pleated skirt, white socks, brown loafers, long hair, black hair, simple background',
-    '1girl, solo, full body, running, motion lines, blue track jacket, black shorts, white sneakers, ponytail, brown hair, track',
+    '1girl, solo, full body, standing, school uniform, white shirt, red necktie, navy blue pleated skirt, white socks, brown loafers, long hair, black hair, brown eyes, simple background',
+    '1girl, solo, full body, running, motion lines, blue track jacket, black shorts, white sneakers, ponytail, brown hair, blue eyes, track',
     '1girl, solo, full body, sitting, on chair, crossed legs, black dress, black heels, long hair, blonde hair, blue eyes, indoors',
     '1girl, solo, full body, dancing, spinning, light blue dress, white shoes, smile, short hair, orange hair, green eyes',
-    '1girl, solo, full body, kneeling, praying, nun, black habit, white veil, silver hair, blue eyes, church',
-    '1girl, solo, full body, lying, on back, grass, closed eyes, relaxing, white blouse, green skirt, long hair, brown hair',
-    '1girl, solo, full body, squatting, petting cat, black cat, grey hoodie, blue jeans, white sneakers, short hair, pink hair, street',
-    '1girl, solo, full body, standing on one leg, arms out, balancing, wall, yellow sundress, brown sandals, twintails, black hair',
-    '1girl, solo, full body, sitting, on floor, hugging own knees, oversized white sweater, black shorts, long hair, silver hair, bedroom',
-    '1girl, solo, full body, standing, beach, ocean, white one-piece swimsuit, long hair, blonde hair, blue eyes',
-    '1girl, solo, full body, battle stance, silver armor, red cape, holding shield, holding sword, ponytail, red hair, green eyes',
-    '1girl, solo, full body, ballerina, ballet, tiptoes, pink tutu, white tights, pink ballet slippers, hair bun, brown hair, stage',
-    '1girl, solo, full body, riding bicycle, red bicycle, white blouse, blue skirt, straw hat, black hair, countryside, summer',
-    '1boy, solo, full body, standing, hands in pockets, white t-shirt, blue jeans, white sneakers, short hair, brown hair, simple background',
-    '1boy, solo, full body, jumping, midair, basketball, red jersey, black shorts, short hair, black hair, outdoors',
+    '1girl, solo, full body, kneeling, praying, nun, black habit, white veil, black shoes, silver hair, blue eyes, church',
+    '1girl, solo, full body, lying, on back, grass, closed eyes, relaxing, white blouse, green skirt, barefoot, long hair, brown hair',
+    '1girl, solo, full body, squatting, petting cat, black cat, grey hoodie, blue jeans, white sneakers, short hair, pink hair, green eyes, street',
+    '1girl, solo, full body, standing on one leg, arms out, balancing, wall, yellow sundress, brown sandals, twintails, black hair, brown eyes',
+    '1girl, solo, full body, sitting, on floor, hugging own knees, oversized white sweater, black shorts, barefoot, long hair, silver hair, blue eyes, bedroom',
+    '1girl, solo, full body, standing, beach, ocean, white one-piece swimsuit, barefoot, long hair, blonde hair, blue eyes',
+    '1girl, solo, full body, battle stance, silver armor, red cape, black pants, brown boots, holding shield, holding sword, ponytail, red hair, green eyes',
+    '1girl, solo, full body, ballerina, ballet, tiptoes, pink tutu, white tights, pink ballet slippers, hair bun, brown hair, blue eyes, stage',
+    '1girl, solo, full body, riding bicycle, red bicycle, white blouse, blue skirt, white sneakers, straw hat, black hair, brown eyes, countryside, summer',
+    '1boy, solo, full body, standing, hands in pockets, white t-shirt, blue jeans, white sneakers, short hair, brown hair, brown eyes, simple background',
+    '1boy, solo, full body, jumping, midair, basketball, red jersey, black shorts, white sneakers, short hair, black hair, brown eyes, outdoors',
   ],
   scene: [
-    '1girl, solo, wide shot, standing, field, flowers, blue sky, clouds, wind, white dress, long hair, brown hair',
-    '1girl, solo, wide shot, sitting, bench, park, autumn, falling leaves, brown coat, red scarf, long hair, black hair',
-    '1girl, solo, wide shot, walking, city street, crowd, buildings, crosswalk, beige trench coat, short hair, blonde hair',
-    '1girl, solo, wide shot, library, tall bookshelves, ladder, reading, green cardigan, brown skirt, glasses, braid, dark brown hair',
-    '1girl, solo, wide shot, forest, path, trees, sunlight filtering through trees, white blouse, brown backpack, short hair, orange hair',
-    '1girl, solo, wide shot, snow, snowing, white winter coat, red mittens, footprints, long hair, black hair',
+    '1girl, solo, wide shot, standing, field, flowers, blue sky, clouds, wind, white dress, white sandals, long hair, brown hair',
+    '1girl, solo, wide shot, sitting, bench, park, autumn, falling leaves, brown coat, red scarf, black skirt, black pantyhose, brown boots, long hair, black hair',
+    '1girl, solo, wide shot, walking, city street, crowd, buildings, crosswalk, beige trench coat, black pants, black boots, short hair, blonde hair',
+    '1girl, solo, wide shot, library, tall bookshelves, ladder, reading, green cardigan, white shirt, brown skirt, black pantyhose, brown loafers, glasses, braid, dark brown hair',
+    '1girl, solo, wide shot, forest, path, trees, sunlight filtering through trees, white blouse, brown shorts, brown boots, brown backpack, short hair, orange hair',
+    '1girl, solo, wide shot, snow, snowing, white winter coat, red mittens, black pants, brown boots, footprints, long hair, black hair',
     '1girl, solo, wide shot, beach, waves, barefoot, holding sandals, light blue sundress, long hair, blonde hair',
-    '1girl, solo, wide shot, shrine, torii, stone stairs, miko, white kimono, red hakama, long hair, black hair',
-    '1girl, solo, wide shot, greenhouse, plants, holding watering can, green apron, white shirt, short hair, light brown hair',
+    '1girl, solo, wide shot, shrine, torii, stone stairs, miko, white kimono, red hakama, white tabi, zouri, long hair, black hair',
+    '1girl, solo, wide shot, greenhouse, plants, holding watering can, green apron, white shirt, blue jeans, green rubber boots, short hair, light brown hair',
     '1girl, solo, wide shot, castle, fantasy, courtyard, purple gown, silver tiara, long hair, silver hair',
-    '1girl, solo, wide shot, underwater, bubbles, fish, floating, white dress, long hair, blue hair',
-    '1girl, solo, wide shot, cafe interior, window seat, plants, sitting, mustard yellow sweater, short hair, black hair',
-    '1girl, solo, wide shot, festival, food stall, lanterns, blue yukata, floral print, red obi, hair bun, black hair',
-    '1boy, solo, wide shot, from behind, cliff, looking afar, mountains, dark green coat, short hair, black hair',
-    '1boy, solo, wide shot, train station, platform, waiting, train, navy blue coat, grey scarf, short hair, brown hair',
+    '1girl, solo, wide shot, underwater, bubbles, fish, floating, white dress, barefoot, long hair, blue hair',
+    '1girl, solo, wide shot, cafe interior, window seat, plants, sitting, mustard yellow sweater, black skirt, black pantyhose, brown loafers, short hair, black hair',
+    '1girl, solo, wide shot, festival, food stall, lanterns, blue yukata, floral print, red obi, geta, hair bun, black hair',
+    '1boy, solo, wide shot, from behind, cliff, looking afar, mountains, dark green coat, black pants, brown boots, short hair, black hair',
+    '1boy, solo, wide shot, train station, platform, waiting, train, navy blue coat, grey scarf, grey pants, black shoes, short hair, brown hair',
   ],
   light: [
     '1girl, solo, upper body, backlighting, sunset, orange sky, silhouette, wind, white shirt, long hair, black hair',
-    '1girl, solo, cowboy shot, night, city lights, bokeh, black coat, white scarf, short hair, silver hair',
-    '1girl, solo, portrait, window, sunlight, light rays, curtains, indoors, light blue blouse, long hair, blonde hair',
-    '1girl, solo, full body, moonlight, night sky, stars, field, white nightgown, long hair, blue hair',
-    '1girl, solo, cowboy shot, neon lights, purple lighting, night, street, black jacket, twintails, pink hair',
-    '1girl, solo, upper body, candlelight, dark room, holding candle, dark red dress, long hair, brown hair',
-    '1girl, solo, portrait, dappled sunlight, leaves, shade, summer, white sundress, short hair, black hair',
-    '1girl, solo, cowboy shot, overcast, rain, wet hair, grey sky, navy blue school uniform, long hair, brown hair',
-    '1girl, solo, full body, blue hour, twilight, street lamp, beige coat, red scarf, short hair, blonde hair',
-    '1girl, solo, upper body, fireworks, night, purple yukata, floral print, looking up, hair bun, black hair',
-    '1boy, solo, upper body, campfire, night, warm light, sitting, brown jacket, short hair, black hair',
+    '1girl, solo, cowboy shot, night, city lights, bokeh, black coat, white scarf, black skirt, short hair, silver hair, blue eyes',
+    '1girl, solo, portrait, window, sunlight, light rays, curtains, indoors, light blue blouse, long hair, blonde hair, green eyes',
+    '1girl, solo, full body, moonlight, night sky, stars, field, white nightgown, barefoot, long hair, blue hair, purple eyes',
+    '1girl, solo, cowboy shot, neon lights, purple lighting, night, street, black jacket, white t-shirt, black skirt, twintails, pink hair, blue eyes',
+    '1girl, solo, upper body, candlelight, dark room, holding candle, dark red dress, long hair, brown hair, brown eyes',
+    '1girl, solo, portrait, dappled sunlight, leaves, shade, summer, white sundress, short hair, black hair, brown eyes',
+    '1girl, solo, cowboy shot, overcast, rain, wet hair, grey sky, navy blue school uniform, navy blue pleated skirt, long hair, brown hair, grey eyes',
+    '1girl, solo, full body, blue hour, twilight, street lamp, beige coat, red scarf, black pantyhose, brown boots, short hair, blonde hair, blue eyes',
+    '1girl, solo, upper body, fireworks, night, purple yukata, floral print, looking up, hair bun, black hair, brown eyes',
+    '1boy, solo, upper body, campfire, night, warm light, sitting, brown jacket, blue jeans, short hair, black hair, brown eyes',
   ],
+  // Multi-person items keep the scene shared and give each person a native character
+  // prompt, so hair and clothing colours stay on the right person (requires V4+).
   multi: [
-    '2girls, upper body, friends, smile, looking at viewer, navy blue blazer, white shirt, long hair, black hair, short hair, blonde hair',
-    '2girls, sitting, bench, park, talking, eating, sandwich, pink sweater, grey hoodie, brown hair, silver hair',
-    '3girls, group, full body, standing, smile, red dress, blue dress, yellow dress, black hair, brown hair, blonde hair, outdoors',
-    '2girls, full body, dancing together, holding hands, stage, white dress, black dress, long hair, brown hair, short hair, black hair',
-    '2girls, portrait, cheek-to-cheek, selfie, peace sign, white t-shirt, pink t-shirt, pink hair, blue hair',
-    '2girls, full body, running, chasing, flowers, field, light blue dress, yellow dress, brown hair, black hair',
-    '2boys, upper body, back-to-back, arms crossed, serious, black jacket, white jacket, short hair, black hair, silver hair',
+    { prompt: '2girls, upper body, friends, smile, looking at viewer, classroom', characters: [
+      'girl, long hair, black hair, brown eyes, navy blue blazer, white shirt, red necktie',
+      'girl, short hair, blonde hair, blue eyes, navy blue blazer, white shirt, red necktie'] },
+    { prompt: '2girls, sitting, bench, park, talking, eating, sandwich', characters: [
+      'girl, long hair, brown hair, green eyes, pink sweater, blue jeans, white sneakers',
+      'girl, short hair, silver hair, red eyes, grey hoodie, black skirt, black boots'] },
+    { prompt: '3girls, group, full body, standing, smile, outdoors', characters: [
+      'girl, long hair, black hair, brown eyes, red dress, red shoes',
+      'girl, medium hair, brown hair, green eyes, blue dress, white sandals',
+      'girl, twintails, blonde hair, blue eyes, yellow dress, brown shoes'] },
+    { prompt: '2girls, full body, dancing together, holding hands, stage', characters: [
+      'girl, long hair, brown hair, blue eyes, white dress, white high heels',
+      'girl, short hair, black hair, red eyes, black dress, black high heels'] },
+    { prompt: '2girls, portrait, cheek-to-cheek, selfie, peace sign', characters: [
+      'girl, long hair, pink hair, purple eyes, white t-shirt',
+      'girl, bob cut, blue hair, yellow eyes, pink t-shirt'] },
+    { prompt: '2girls, full body, running, chasing, flowers, field', characters: [
+      'girl, ponytail, brown hair, green eyes, light blue dress, white sneakers',
+      'girl, long hair, black hair, brown eyes, yellow dress, brown sandals'] },
+    { prompt: '2boys, upper body, back-to-back, arms crossed, serious', characters: [
+      'boy, short hair, black hair, red eyes, black jacket, white t-shirt',
+      'boy, short hair, silver hair, blue eyes, white jacket, black shirt'] },
   ],
   // Wholesome, fully clothed everyday scenes only; never combine with body-shape style tags.
   boy: [
     'male child, 1boy, solo, portrait, smile, looking at viewer, short hair, brown hair, brown eyes, white t-shirt, simple background',
-    'male child, 1boy, solo, upper body, reading, holding book, white shirt, navy blue sweater vest, short hair, black hair, classroom',
-    'male child, 1boy, solo, full body, running, park, red t-shirt, blue shorts, white sneakers, short hair, blonde hair, smile',
-    'male child, 1boy, solo, full body, flying kite, holding string, green hoodie, khaki shorts, short hair, brown hair, blue sky, field',
-    'male child, 1boy, solo, upper body, eating, holding ice cream, yellow t-shirt, short hair, black hair, smile, summer',
-    'male child, 1boy, solo, full body, standing, rain, yellow raincoat, red backpack, green rain boots, short hair, black hair',
-    'male child, 1boy, solo, upper body, drawing, holding crayon, desk, light blue shirt, short hair, brown hair, indoors',
-    'male child, 1boy, solo, full body, playing with dog, golden retriever, white shirt, brown shorts, short hair, blonde hair, garden',
+    'male child, 1boy, solo, upper body, reading, holding book, white shirt, navy blue sweater vest, short hair, black hair, brown eyes, classroom',
+    'male child, 1boy, solo, full body, running, park, red t-shirt, blue shorts, white sneakers, short hair, blonde hair, blue eyes, smile',
+    'male child, 1boy, solo, full body, flying kite, holding string, green hoodie, khaki shorts, white sneakers, short hair, brown hair, brown eyes, blue sky, field',
+    'male child, 1boy, solo, upper body, eating, holding ice cream, yellow t-shirt, short hair, black hair, brown eyes, smile, summer',
+    'male child, 1boy, solo, full body, standing, rain, yellow raincoat, red backpack, green rain boots, short hair, black hair, brown eyes',
+    'male child, 1boy, solo, upper body, drawing, holding crayon, desk, light blue shirt, short hair, brown hair, brown eyes, indoors',
+    'male child, 1boy, solo, full body, playing with dog, golden retriever, white shirt, brown shorts, white sneakers, short hair, blonde hair, blue eyes, garden',
     'male child, 1boy, solo, portrait, surprised, open mouth, short hair, silver hair, blue eyes, dark blue hoodie',
-    'male child, 1boy, solo, full body, snow, making snowman, grey winter coat, red scarf, blue mittens, short hair, brown hair',
-    'male child, 1boy, solo, upper body, festival, holding cotton candy, blue jinbei, lanterns, night, short hair, black hair',
-    'male child, 1boy, solo, full body, sitting, bench, reading picture book, orange sweater, brown pants, short hair, black hair',
-    'male child, 1boy, solo, cowboy shot, sunset, backlighting, holding bug net, straw hat, white t-shirt, green shorts, short hair, brown hair',
+    'male child, 1boy, solo, full body, snow, making snowman, grey winter coat, red scarf, blue mittens, blue pants, brown boots, short hair, brown hair, brown eyes',
+    'male child, 1boy, solo, upper body, festival, holding cotton candy, blue jinbei, lanterns, night, short hair, black hair, brown eyes',
+    'male child, 1boy, solo, full body, sitting, bench, reading picture book, orange sweater, brown pants, white sneakers, short hair, black hair, brown eyes',
+    'male child, 1boy, solo, cowboy shot, sunset, backlighting, holding bug net, straw hat, white t-shirt, green shorts, short hair, brown hair, brown eyes',
     'male child, 1boy, solo, upper body, laughing, closed eyes, messy hair, light brown hair, blue and white striped shirt',
   ],
   nohuman: [
@@ -160,4 +181,7 @@ const PROMPTS: Record<string, readonly string[]> = {
 }
 
 export const DATASET_PROMPTS: readonly DatasetPrompt[] = DATASET_CATEGORIES.flatMap(category =>
-  (PROMPTS[category.id] ?? []).map((prompt, index) => ({ id: `${category.id}-${index + 1}`, category: category.id, prompt })))
+  (PROMPTS[category.id] ?? []).map((item, index) => ({
+    id: `${category.id}-${index + 1}`, category: category.id,
+    ...(typeof item === 'string' ? { prompt: item } : { prompt: item.prompt, characters: item.characters }),
+  })))

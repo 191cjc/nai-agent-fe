@@ -1,4 +1,4 @@
-import type { CharacterRunRequest, DatasetItem } from './api'
+import type { CharacterPrompt, CharacterRunRequest, DatasetItem } from './api'
 import { compilePromptComments } from './prompt-weights'
 
 export const MAX_DATASET_ITEMS = 300
@@ -7,13 +7,30 @@ export const MAX_STYLE_POOL = 8
 export const MAX_REFERENCES = 4
 export const MAX_TRAITS_LENGTH = 1000
 export const CUSTOM_CATEGORY = 'custom'
+export const MAX_ITEM_CHARACTERS = 6
 
 export interface DatasetEntry {
   id: string
   category: string
+  /** Shared scene; multi-person entries describe each person in `characters`. */
   prompt: string
+  /** One native character prompt per person, left to right. */
+  characters?: readonly string[]
   selected: boolean
 }
+
+/** People spread evenly left to right at mid height (NovelAI's 0.1–0.9 grid). */
+function characterPositions(prompts: readonly string[]): CharacterPrompt[] {
+  return prompts.map((prompt, index) => ({
+    prompt, x: Math.round((0.1 + 0.8 * (index + 1) / (prompts.length + 1)) * 100) / 100, y: 0.5,
+  }))
+}
+
+/** One-line view of a frozen item: the scene, then each person in order. */
+export function datasetItemText(item: DatasetItem): string {
+  return [item.prompt, ...(item.characters ?? []).map((character, index) => `人物 ${index + 1}：${character.prompt}`)].join(' ｜ ')
+}
+
 
 export function nextCustomId(entries: readonly DatasetEntry[]): string {
   let index = 1
@@ -30,7 +47,7 @@ export function hasCommentLine(prompt: string): boolean {
  * With a style pool, the longest effective style bounds every rotated combination;
  * character traits prefix every item.
  */
-export function datasetItems(entries: readonly DatasetEntry[], styles: readonly string[], traits = ''): DatasetItem[] {
+export function datasetItems(entries: readonly DatasetEntry[], styles: readonly string[], traits = '', nativeCharacters = true): DatasetItem[] {
   const selected = entries.filter(entry => entry.selected)
   if (!selected.length) throw new Error('请至少选择一条训练集提示词。')
   if (selected.length > MAX_DATASET_ITEMS) throw new Error(`一次最多运行 ${MAX_DATASET_ITEMS} 条提示词。`)
@@ -49,7 +66,18 @@ export function datasetItems(entries: readonly DatasetEntry[], styles: readonly 
     if (entry.prompt.length > MAX_DATASET_PROMPT_LENGTH) throw new Error(`${label}超过 ${MAX_DATASET_PROMPT_LENGTH} 字符。`)
     if (hasCommentLine(entry.prompt)) throw new Error(`${label}不能包含以 // 开头的注释行。`)
     if (longest + 2 + prefix + entry.prompt.trim().length > 3000) throw new Error(`${label}与画风${prefix ? '、角色特征' : ''}合计超过 3000 字符。`)
-    return { id: entry.id, prompt: entry.prompt }
+    const characters = entry.characters ?? []
+    if (!characters.length) return { id: entry.id, prompt: entry.prompt }
+    if (traits.trim()) throw new Error(`${label}是多人条目，角色训练集不支持，请取消选择。`)
+    if (!nativeCharacters) throw new Error(`${label}是多人条目，需要支持多角色提示词的 V4 / V4.5 / V5 模型；请切换模型或取消「多人互动」。`)
+    if (characters.length > MAX_ITEM_CHARACTERS) throw new Error(`${label}最多 ${MAX_ITEM_CHARACTERS} 个人物。`)
+    characters.forEach((character, person) => {
+      const name = `${label}的人物 ${person + 1}`
+      if (!character.trim()) throw new Error(`${name}为空。`)
+      if (character.length > MAX_DATASET_PROMPT_LENGTH) throw new Error(`${name}超过 ${MAX_DATASET_PROMPT_LENGTH} 字符。`)
+      if (hasCommentLine(character)) throw new Error(`${name}不能包含以 // 开头的注释行。`)
+    })
+    return { id: entry.id, prompt: entry.prompt, characters: characterPositions(characters) }
   })
 }
 

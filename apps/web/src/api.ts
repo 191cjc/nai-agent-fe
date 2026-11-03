@@ -27,7 +27,9 @@ export interface ExperimentWeight {
 
 export interface DatasetItem {
   id: string
+  /** Shared scene; on multi-person items each person lives in `characters`. */
   prompt: string
+  characters?: CharacterPrompt[]
 }
 
 export interface ReferenceImageUse {
@@ -263,7 +265,8 @@ function checkedRun(value: ExperimentRunState): ExperimentRunState {
     && value.ranges.every(range => range && Number.isInteger(range.tag_index)
       && typeof range.min === 'string' && typeof range.max === 'string' && typeof range.step === 'string')
     && (value.kind !== 'dataset' || (Array.isArray(value.items) && value.items.length > 0
-      && value.items.every(item => item && typeof item.id === 'string' && typeof item.prompt === 'string')))
+      && value.items.every(item => item && typeof item.id === 'string' && typeof item.prompt === 'string'
+        && (item.characters === undefined || (Array.isArray(item.characters) && item.characters.every(character => character && typeof character.prompt === 'string'))))))
   if (!valid) throw new ApiFailure(0, 'invalid_response', '实验响应无效，请重新连接核对。')
   return value
 }

@@ -107,6 +107,11 @@ def dataset_parameters(
     styles: list[str] | None = None, character: CharacterPlan | None = None,
 ) -> GenerationRequest:
     update: dict = {"positive_prompt": item.prompt, "seed": seed, "experiment": context}
+    if item.characters:
+        # Explicit per-person positions; the request validator rejects non-native models
+        # and reference (character-run) groups for items that carry characters.
+        update["character_prompts"] = [character.model_dump() for character in item.characters]
+        update["auto_character_position"] = False
     if styles:
         update["style_prompt"] = styles[(ordinal - 1) % len(styles)]
     if character is not None:
@@ -165,7 +170,10 @@ class DatasetRunCreate(BaseModel):
         )
         for item in self.items:
             # A comment line would silently drop content the caption still claims.
-            if parameters.prompt_comments and _has_comment_line(item.prompt):
+            if parameters.prompt_comments and any(
+                _has_comment_line(text)
+                for text in (item.prompt, *(character.prompt for character in item.characters))
+            ):
                 raise ValueError("Dataset prompts cannot contain comment lines")
             dataset_parameters(
                 parameters, item, seed=parameters.seed, ordinal=longest + 1,

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { observer } from 'mobx-react-lite'
 import { FlaskConical, RefreshCw, Square } from 'lucide-react'
 import { ApiFailure, errorText } from './api'
+import { datasetItemText } from './dataset-run'
 import { parsePromptTags } from './prompt-weights'
 import { createStyleExperimentPlan, type StyleExperimentPlan, type StyleExperimentRange } from './style-experiment'
 import { supportsNativeCharacters, type GenerationStore } from './store'
@@ -187,7 +188,7 @@ export const StyleExperimentProgress = observer(({ generation, saved }: { genera
       {run.character && 'references' in run.character && <p>{characterSnapshotSummary(run.character)}</p>}
       {run.styles && run.styles.length > 1 && <p>画风池：{run.styles.join(' ｜ ')}</p>}
       {dataset && <details><summary>{run.items?.length ?? 0} 条提示词</summary>
-        <ol className="dataset-run-items">{run.items?.map(item => <li key={item.id}>{item.prompt}</li>)}</ol></details>}
+        <ol className="dataset-run-items">{run.items?.map(item => <li key={item.id}>{datasetItemText(item)}</li>)}</ol></details>}
       <ul>{run.ranges.map(range => <li key={range.tag_index}>词条 {range.tag_index + 1} · {range.min} → {range.max} · 步长 {range.step}</li>)}</ul>
       <p>{run.parameters.model} · {run.parameters.width}×{run.parameters.height} · {run.parameters.sampler}</p>
       <p>{run.parameters.steps} 步 · CFG {run.parameters.cfg_scale} · 每{unit} {run.sample_count} 张 · {run.parameters.quality ? '高质量' : '标准质量'}</p>

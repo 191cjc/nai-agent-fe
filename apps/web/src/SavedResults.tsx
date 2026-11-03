@@ -2,6 +2,7 @@ import { Suspense, useEffect, useRef, useState } from 'react'
 import { observer } from 'mobx-react-lite'
 import { ArrowLeft, ArrowRight, Ban, Download, FlaskConical, Images, Layers, RefreshCw, RotateCcw, UserRound, X } from 'lucide-react'
 import { ApiFailure, errorText, type WorkspaceApi } from './api'
+import { datasetItemText } from './dataset-run'
 import { DatasetExportPanel } from './dataset-lazy'
 import { GenerationParameters } from './GenerationParameters'
 import type { SavedResultsStore } from './saved-results'
@@ -213,7 +214,7 @@ export const SavedResultViewer = observer(({ saved, api, onClose, onUseSeed, can
         <div className="experiment-result-heading"><h3>{groupLabel}</h3>
           <span>请求种子 {job.parameters.seed ?? '随机'}</span><span>实际种子 {job.effective_seed}</span>
         </div>
-        {context?.item && <p className="dataset-item-prompt" aria-label="训练集提示词">提示词（caption）：{context.item.prompt}</p>}
+        {context?.item && <p className="dataset-item-prompt" aria-label="训练集提示词">提示词：{datasetItemText(context.item)}</p>}
         {context?.item && job.parameters.reference && <p className="subtle">
           {job.parameters.reference.mode === 'gpt' ? `GPT 参考图生成 · ${job.parameters.model} · 质量 ${job.parameters.reference.gpt_quality ?? '自动'}` : job.parameters.reference.mode === 'vibe' ? `Vibe Transfer · 信息提取度 ${job.parameters.reference.information_extracted ?? 1} · 强度 ${job.parameters.reference.reference_strength ?? 1}` : `图生图 strength ${job.parameters.reference.strength} · noise ${job.parameters.reference.noise}`}
           {' · '}画风：{job.parameters.style_prompt}</p>}

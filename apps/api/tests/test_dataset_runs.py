@@ -193,3 +193,63 @@ def test_api_create_reattach_owner_origin_and_no_ordinary_injection(
         )
         login(client, database, "bob")
         assert client.get(f"/api/style-experiment-runs/{body['id']}").status_code == 404
+
+
+MULTI_ITEM = {
+    "id": "multi-1", "prompt": "2girls, upper body, friends, classroom",
+    "characters": [
+        {"prompt": "girl, long hair, black hair, navy blue blazer", "x": 0.3, "y": 0.5},
+        {"prompt": "girl, short hair, blonde hair, white cardigan", "x": 0.7, "y": 0.5},
+    ],
+}
+
+
+def test_multi_person_items_send_native_characters_and_keep_legacy_items_unchanged(
+    database: Database,  # noqa: F811
+) -> None:
+    user = owner(database)
+    provider = ScriptedProvider()
+    manager = GenerationManager(database, provider, cache=ResultCache())
+    service = StyleExperimentService(database, manager)
+    manager.start()
+    try:
+        run = service.store.create(
+            user, dataset(items=[ITEMS[0], MULTI_ITEM], model="nai-diffusion-4-5-full"),
+        )
+        assert pump(service, user, run.id).status == "completed"
+        single, multi = provider.calls
+        assert single.character_prompts == [] and "characters" not in (
+            single.experiment.item.model_dump()
+        )
+        assert multi.positive_prompt == MULTI_ITEM["prompt"]
+        assert multi.auto_character_position is False
+        assert [c.model_dump() for c in multi.character_prompts] == MULTI_ITEM["characters"]
+        assert multi.experiment.item.model_dump() == MULTI_ITEM
+    finally:
+        service.stop()
+        manager.stop()
+
+
+@pytest.mark.parametrize(
+    ("changes", "item"),
+    [
+        ({}, MULTI_ITEM),  # fixture-model has no native character prompts
+        ({"model": "nai-diffusion-4-5-full", "prompt_comments": True},
+         {**MULTI_ITEM, "characters": [{"prompt": "girl\n// hidden"}]}),
+        ({"model": "nai-diffusion-4-5-full"},
+         {**MULTI_ITEM, "characters": [{"prompt": "x" * 1001}]}),
+        ({"model": "nai-diffusion-4-5-full"},
+         {**MULTI_ITEM, "characters": [{"prompt": "girl"}] * 7}),
+        ({"model": "nai-diffusion-4-5-full"}, {**MULTI_ITEM, "characters": [{"prompt": " "}]}),
+    ],
+)
+def test_invalid_multi_person_items_are_rejected(changes, item) -> None:
+    with pytest.raises(ValidationError):
+        dataset(items=[item], **changes)
+
+
+def test_character_runs_reject_multi_person_items() -> None:
+    from test_character_runs import character_run
+
+    with pytest.raises(ValidationError):
+        character_run([uuid4()], items=[MULTI_ITEM])

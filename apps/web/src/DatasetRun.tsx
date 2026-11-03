@@ -4,7 +4,8 @@ import { Download, Layers, Plus, RotateCcw, Trash2, UserRound, X } from 'lucide-
 import { ApiFailure, errorText, type GenerationView, type WorkspaceApi } from './api'
 import { DATASET_CATEGORIES, type DatasetCategory } from './dataset-prompts'
 import { CHARACTER_CATEGORIES } from './character-prompts'
-import { CUSTOM_CATEGORY, MAX_DATASET_ITEMS, MAX_DATASET_PROMPT_LENGTH, datasetItems, nextCustomId, type DatasetEntry } from './dataset-run'
+import { CUSTOM_CATEGORY, MAX_DATASET_ITEMS, MAX_DATASET_PROMPT_LENGTH, datasetItemText, datasetItems, nextCustomId, type DatasetEntry } from './dataset-run'
+import { supportsNativeCharacters } from './store'
 import { defaultCharacterEntries, defaultDatasetEntries } from './dataset-defaults'
 import { ANIMAGINE_QUALITY_PREFIX, buildDatasetZip, downloadZip, experimentJobs, selectedJobs, type DatasetExportProgress } from './dataset-export'
 import { CharacterRunSettings, characterSnapshotSummary, useCharacterSettings } from './CharacterDataset'
@@ -23,9 +24,9 @@ function childSafetyError(entries: readonly DatasetEntry[], style: string): stri
     : ''
 }
 
-function validationError(entries: readonly DatasetEntry[], styles: readonly string[], traits?: string): string {
+function validationError(entries: readonly DatasetEntry[], styles: readonly string[], traits?: string, nativeCharacters?: boolean): string {
   try {
-    datasetItems(entries, styles, traits)
+    datasetItems(entries, styles, traits, nativeCharacters)
     return ''
   } catch (error) {
     return error instanceof Error ? error.message : '训练集提示词无效。'
@@ -75,8 +76,14 @@ export function PromptLibrary({ entries, setEntries, categories, defaults, place
           <ul className="dataset-items">{members.map(entry => <li key={entry.id} className={entry.selected ? '' : 'muted'}>
             <input type="checkbox" checked={entry.selected} aria-label={`选择提示词 ${entry.id}`}
               onChange={event => update(entry.id, { selected: event.target.checked })} />
-            <input type="text" value={entry.prompt} maxLength={MAX_DATASET_PROMPT_LENGTH} spellCheck={false} aria-label={`编辑提示词 ${entry.id}`}
-              onChange={event => update(entry.id, { prompt: event.target.value })} />
+            <div className="dataset-item-fields">
+              <input type="text" value={entry.prompt} maxLength={MAX_DATASET_PROMPT_LENGTH} spellCheck={false} aria-label={`编辑提示词 ${entry.id}`}
+                title={entry.characters?.length ? '共享场景：人数、构图、动作与背景' : undefined}
+                onChange={event => update(entry.id, { prompt: event.target.value })} />
+              {entry.characters?.map((character, person) => <label key={person} className="dataset-item-person"><span>人物 {person + 1}</span>
+                <input type="text" value={character} maxLength={MAX_DATASET_PROMPT_LENGTH} spellCheck={false} aria-label={`编辑提示词 ${entry.id} 的人物 ${person + 1}`}
+                  onChange={event => update(entry.id, { characters: entry.characters?.map((value, index) => index === person ? event.target.value : value) })} /></label>)}
+            </div>
             <button className="icon-button" type="button" title="移除这条提示词" aria-label={`移除提示词 ${entry.id}`}
               onClick={() => setEntries(current => current.filter(item => item.id !== entry.id))}><Trash2 size={14} /></button>
           </li>)}</ul>
@@ -110,7 +117,7 @@ export const DatasetRunConfig = observer(({ generation, api, hidden }: { generat
   const sampleText = gptMode ? character.settings.gptSamples : generation.draft.sample_count
   const samples = /^\d+$/.test(sampleText) ? Number(sampleText) : null
   const error = !selected.length ? '' : mode === 'style'
-    ? childSafetyError(entries, style) || validationError(entries, [style])
+    ? childSafetyError(entries, style) || validationError(entries, [style], '', supportsNativeCharacters(generation.draft.model))
     : validationError(characterEntries, character.styles, character.settings.traits) || character.error(generation.draft.model)
   const locked = generation.operationLocked || generation.activeId !== null || generation.busy || generation.submitUncertain
 
@@ -132,7 +139,7 @@ export const DatasetRunConfig = observer(({ generation, api, hidden }: { generat
       <button type="button" className={mode === 'character' ? 'active' : ''} aria-pressed={mode === 'character'} onClick={() => setMode('character')}><UserRound size={14} aria-hidden="true" /> 角色训练集</button>
     </div>}
     {mode === 'style'
-      ? <p className="prompt-hint">用当前「画风」固定风格，逐条运行下面的内容提示词，生成用于训练画风 LoRA 的图片。提示词只描述内容，不含画风与质量词；导出时作为 caption。默认全选：女性 70 条、成年男性 10 条、年幼男孩 14 条、无人物 15 条；人物条目都写明发色和带颜色的服装，让成图与 caption 对应。「男孩（年幼）」条目不能与身体描写类画风同时使用。</p>
+      ? <p className="prompt-hint">用当前「画风」固定风格，逐条运行下面的内容提示词，生成用于训练画风 LoRA 的图片。提示词只描述内容，不含画风与质量词；导出时作为 caption。默认全选：女性 70 条、成年男性 10 条、年幼男孩 14 条、无人物 15 条；人物条目都写明发色、瞳色、带颜色的上下装，全身和远景还写明鞋袜，让成图与 caption 对应；「多人互动」条目把每个人写成独立的人物提示词，避免颜色串到别人身上，需要 V4 / V4.5 / V5 模型。「男孩（年幼）」条目不能与身体描写类画风同时使用。</p>
       : <p className="prompt-hint">用参考图和固定的角色特征，逐条运行景别、表情、姿势、场景等内容提示词，生成用于训练角色 LoRA 的图片。导出的 caption 包含每张图使用的画风和内容提示词，不含角色特征（让画法不会被学成角色的一部分）。</p>}
     <p className="prompt-hint">公共分区和人物卡片不参与批跑；负面提示词、模型、尺寸、步数、CFG、采样器和每条张数取自当前生成设置。</p>
     {snapshot ? <div className="experiment-note" role="status">
@@ -278,7 +285,7 @@ export function DatasetExportPanel({ api, source, onClose }: { api: WorkspaceApi
                 else next.add(job.id)
                 return next
               })} />
-            <span>第 {context?.ordinal ?? '?'} 条 · {job.status === 'succeeded' ? `${job.image_urls.length} 张` : '无可用图片'} · {context?.item?.prompt ?? ''}</span>
+            <span>第 {context?.ordinal ?? '?'} 条 · {job.status === 'succeeded' ? `${job.image_urls.length} 张` : '无可用图片'} · {context?.item ? datasetItemText(context.item) : ''}</span>
             <span />
           </li>
         })}</ul></details>)}

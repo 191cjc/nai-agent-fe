@@ -512,7 +512,7 @@ export class GenerationStore {
     let character
     try {
       const styles = options.styles ?? [this.draft.style_prompt]
-      items = datasetItems(entries, styles, options.character?.traits)
+      items = datasetItems(entries, styles, options.character?.traits, supportsNativeCharacters(this.draft.model))
       if (options.character?.mode === 'gpt') {
         // GPT image runs are independent of NovelAI: no NAI draft settings are used.
         const size = GPT_SIZES[options.character.gptSize]

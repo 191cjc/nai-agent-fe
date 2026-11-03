@@ -126,12 +126,25 @@ class ExperimentWeight(BaseModel):
 class DatasetItem(BaseModel):
     id: str = Field(min_length=1, max_length=64, pattern=r"^[a-z0-9][a-z0-9-]*$")
     prompt: str = Field(min_length=1, max_length=1000)
+    # Multi-person items: one native character prompt per person (scene stays in `prompt`),
+    # so each person's hair and clothing colours stay bound to that person. Absent on
+    # single-person items and on every stored legacy item.
+    characters: list[CharacterPrompt] = Field(
+        default_factory=list, max_length=6, exclude_if=lambda value: not value,
+    )
 
     @field_validator("prompt")
     @classmethod
     def nonblank_prompt(cls, value: str) -> str:
         if not value.strip():
             raise ValueError("Dataset prompt cannot be blank")
+        return value
+
+    @field_validator("characters")
+    @classmethod
+    def bounded_characters(cls, value: list[CharacterPrompt]) -> list[CharacterPrompt]:
+        if any(len(character.prompt) > 1000 for character in value):
+            raise ValueError("Dataset character prompt exceeds 1000 characters")
         return value
 
 
