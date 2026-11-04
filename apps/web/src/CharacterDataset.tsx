@@ -4,7 +4,7 @@ import { ApiFailure, errorText, type Capabilities, type ReferenceImage, type Wor
 import { GPT_SIZES, MAX_REFERENCES, MAX_STYLE_POOL, MAX_TRAITS_LENGTH, characterRequest, type CharacterSettings, type GptSize } from './dataset-run'
 import { PRECISE_MODELS, VIBE_MODELS } from './store'
 import type { PreciseType } from './api'
-import { STYLE_PRESETS, presetStyles } from './style-presets'
+import { DEFAULT_PRESET_IDS, STYLE_PRESETS, presetStyles } from './style-presets'
 
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 
@@ -274,6 +274,8 @@ export function CharacterRunSettings({ api, state, model, draftStyle }: {
   // Optional shared prefix (e.g. quality tags), empty by default. Never the draft style:
   // that is itself a style and would mix into every preset.
   const [prefix, setPrefix] = useState('')
+  const [presetIds, setPresetIds] = useState<readonly string[]>(DEFAULT_PRESET_IDS)
+  const chosenPresets = presetStyles(prefix, presetIds)
   const vibeSupported = VIBE_MODELS.includes(model.trim())
   const preciseSupported = PRECISE_MODELS.includes(model.trim())
 
@@ -345,7 +347,7 @@ export function CharacterRunSettings({ api, state, model, draftStyle }: {
     </fieldset>
     <fieldset className="dataset-categories">
       <legend>画风池（{styles.length} / {MAX_STYLE_POOL}，按条目轮流使用）</legend>
-      <p className="prompt-hint">多种画风可减少角色 LoRA 顺带学到某一种画风。caption 不含画风。</p>
+      <p className="prompt-hint">多种画风可减少角色 LoRA 顺带学到某一种画风。导出时默认把每张图的画风写进 caption，让画风与角色分开学习。建议 8–12 种：再多每种画风只剩一两张，作用不大。</p>
       {styles.map((style, index) => <div className="dataset-custom" key={index}>
         <input type="text" value={style} spellCheck={false} aria-label={`画风 ${index + 1}`} placeholder="画风、媒介与画质标签"
           onChange={event => setStyles(current => current.map((item, position) => position === index ? event.target.value : item))} />
@@ -359,23 +361,36 @@ export function CharacterRunSettings({ api, state, model, draftStyle }: {
           onClick={() => setStyles(current => [...current.filter(item => item.trim()), draftStyle])}>加入当前草稿画风</button>
       </div>
       <div className="dataset-style-presets">
-        <span>预设画风组（{STYLE_PRESETS.map(preset => preset.label).join('、')}）</span>
+        <span>预设画风（已选 {presetIds.length} 个）</span>
+        <div className="style-preset-picks" role="group" aria-label="选择预设画风">
+          {STYLE_PRESETS.map(preset => <label key={preset.id} title={preset.tags}>
+            <input type="checkbox" checked={presetIds.includes(preset.id)}
+              onChange={event => setPresetIds(current => event.target.checked ? [...current, preset.id] : current.filter(id => id !== preset.id))} />
+            {preset.label}{preset.note && <small>（{preset.note}）</small>}
+          </label>)}
+        </div>
+        <div className="dataset-custom">
+          <button className="text-action" type="button" onClick={() => setPresetIds(DEFAULT_PRESET_IDS)}>恢复推荐</button>
+          <button className="text-action" type="button" onClick={() => setPresetIds(STYLE_PRESETS.map(preset => preset.id))}>全选</button>
+          <button className="text-action" type="button" onClick={() => setPresetIds([])}>全不选</button>
+        </div>
         <input type="text" value={prefix} spellCheck={false} aria-label="预设公共前缀"
           placeholder="可选：公共前缀，只填质量词等非画风标签，例如 best quality, very aesthetic"
           onChange={event => setPrefix(event.target.value)} />
         <div className="dataset-custom">
-          <button className="secondary" type="button" onClick={() => {
-            if (styles.some(item => item.trim()) && !window.confirm('用预设画风组覆盖当前画风池？')) return
-            setStyles(() => presetStyles(prefix))
-          }}><Palette size={14} aria-hidden="true" /> 填入预设（覆盖）</button>
-          <button className="text-action" type="button" disabled={styles.filter(item => item.trim()).length >= MAX_STYLE_POOL}
+          <button className="secondary" type="button" disabled={!chosenPresets.length} onClick={() => {
+            if (styles.some(item => item.trim()) && !window.confirm('用所选预设画风覆盖当前画风池？')) return
+            setStyles(() => chosenPresets.slice(0, MAX_STYLE_POOL))
+          }}><Palette size={14} aria-hidden="true" /> 填入所选（覆盖）</button>
+          <button className="text-action" type="button" disabled={!chosenPresets.length || styles.filter(item => item.trim()).length >= MAX_STYLE_POOL}
             onClick={() => setStyles(current => {
               const kept = current.filter(item => item.trim())
-              const added = presetStyles(prefix).filter(item => !kept.includes(item))
+              const added = chosenPresets.filter(item => !kept.includes(item))
               return [...kept, ...added].slice(0, MAX_STYLE_POOL)
-            })}>追加预设（最多 {MAX_STYLE_POOL} 个）</button>
+            })}>追加所选（最多 {MAX_STYLE_POOL} 个）</button>
         </div>
-        <p className="prompt-hint">预设只用媒介和技法标签，不含画师标签；填入后可自由修改。不同模型效果不同，建议先用 3–5 条试跑。</p>
+        {chosenPresets.length > MAX_STYLE_POOL && <p className="experiment-note">已选 {chosenPresets.length} 个，超过画风池上限 {MAX_STYLE_POOL}，只会填入前 {MAX_STYLE_POOL} 个。</p>}
+        <p className="prompt-hint">预设只用常见的媒介和技法标签，不含画师标签；鼠标悬停可看具体标签，填入后可自由修改。不同模型效果不同，建议先用 3–5 条试跑。</p>
       </div>
     </fieldset>
   </>

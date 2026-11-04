@@ -23,7 +23,7 @@ runs are dataset runs (`kind: "dataset"`) and inherit every rule in
 - `POST /api/reference-images/trait-advice {reference_ids (1..4), traits}`
   → `{suggestion}`; same errors as `/api/advice` plus
   `422 reference_not_found` and `502 advice_image_unsupported`.
-- `POST /api/dataset-runs` optional `styles: [str] (1..8)` (first must equal
+- `POST /api/dataset-runs` optional `styles: [str] (1..12)` (first must equal
   `parameters.style_prompt`) and `character: {traits, mode: vibe|img2img,
   reference_ids (1..4), strength?, noise?}`. The response/definition stores
   `character.references: [{id, sha256}]` pinned at creation.

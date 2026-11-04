@@ -147,7 +147,7 @@ class DatasetRunCreate(BaseModel):
     parameters: GenerationRequest
     items: list[DatasetItem] = Field(min_length=1, max_length=300)
     # Optional rotation pool; absent keeps the single frozen style (stored runs unchanged).
-    styles: list[str] | None = Field(default=None, min_length=1, max_length=8)
+    styles: list[str] | None = Field(default=None, min_length=1, max_length=12)
     character: CharacterRequest | None = None
     # Display name only; never part of the frozen definition or its retry comparison.
     name: ExperimentName = Field(default=None, max_length=400)

@@ -151,7 +151,9 @@ def test_manual_only_history_skips_experiment_and_dataset_groups(
             assert time.monotonic() < deadline
             time.sleep(0.01)
         everything = client.get("/api/generations", params={"limit": 10}).json()["items"]
-        assert len(everything) == 4 and everything[0]["parameters"].get("experiment")
+        # Same-second timestamps make the relative order of manual/run rows unstable.
+        assert len(everything) == 4
+        assert sum(1 for item in everything if item["parameters"].get("experiment")) == 3
         latest_manual = client.get(
             "/api/generations", params={"limit": 1, "manual_only": "true"},
         ).json()

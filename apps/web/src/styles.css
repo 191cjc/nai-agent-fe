@@ -594,3 +594,7 @@ h1, h2, h3 { letter-spacing: 0; }
 .dataset-type-badge.style { color: var(--gold); }
 .dataset-type-badge.character { color: var(--teal); }
 .dataset-run-name { display: grid; gap: 4px; margin: 8px 0; }
+.style-preset-picks { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 4px 0; font-size: 13px; }
+.style-preset-picks label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+.style-preset-picks input { width: 15px; height: 15px; margin: 0; accent-color: var(--gold); }
+.style-preset-picks small { color: var(--muted); }

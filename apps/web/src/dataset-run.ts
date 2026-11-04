@@ -3,7 +3,7 @@ import { compilePromptComments } from './prompt-weights'
 
 export const MAX_DATASET_ITEMS = 300
 export const MAX_DATASET_PROMPT_LENGTH = 1000
-export const MAX_STYLE_POOL = 8
+export const MAX_STYLE_POOL = 12
 export const MAX_REFERENCES = 4
 export const MAX_TRAITS_LENGTH = 1000
 export const CUSTOM_CATEGORY = 'custom'

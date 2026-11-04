@@ -737,3 +737,10 @@ def test_vibe_reference_strength_is_frozen_and_rejected_for_img2img() -> None:
         bad["character"].update(invalid)
         with pytest.raises(ValidationError):
             DatasetRunCreate.model_validate(bad)
+
+
+def test_style_pool_accepts_twelve_and_rejects_thirteen() -> None:
+    styles = [f"style {index}" for index in range(13)]
+    assert len(character_run([uuid4()], styles=styles[:12]).styles) == 12
+    with pytest.raises(ValidationError):
+        character_run([uuid4()], styles=styles)

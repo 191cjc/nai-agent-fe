@@ -603,7 +603,7 @@
                 "items": {
                   "type": "string"
                 },
-                "maxItems": 8,
+                "maxItems": 12,
                 "minItems": 1,
                 "type": "array"
               },
