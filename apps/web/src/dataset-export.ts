@@ -79,9 +79,16 @@ class ZipWriter {
   }
 }
 
-/** Remove NovelAI emphasis syntax and normalize tag separators for training captions. */
+/**
+ * Remove NovelAI emphasis syntax and normalize tag separators for training captions.
+ * A numeric group keeps its text when the weight is positive; zero or negative groups
+ * (things the image avoids) are dropped, as is an unclosed group's tail. Mirrors
+ * api/src/novelai_api/prompt_weights.py and ~/lora-kit/build_dataset.py.
+ */
 function captionTags(text: string): string[] {
   return text
+    .replace(/(^|[\s,([{])([+-]?(?:\d+(?:\.\d+)?|\.\d+))::([\s\S]*?)(?:::|$)/g,
+      (_match, lead: string, weight: string, body: string) => Number(weight) > 0 ? `${lead}${body}` : lead)
     .replace(/(^|[\s,([{])[+-]?(?:\d+(?:\.\d+)?|\.\d+)::/g, '$1')
     .replace(/::/g, '')
     .replace(/[{}[\]]/g, '')
@@ -91,14 +98,11 @@ function captionTags(text: string): string[] {
 }
 
 /**
- * Style tags that describe how a character image was drawn. Negative-weighted groups
- * (things the image avoids), artist tags and NovelAI weight syntax are dropped.
+ * Style tags that describe how a character image was drawn. Comment lines, negative-weighted
+ * groups (things the image avoids), artist tags and NovelAI weight syntax are dropped.
  */
 export function styleCaptionTags(style: string): string[] {
-  const kept = compilePromptComments(style)
-    .replace(/(^|[\s,([{])([+-]?(?:\d+(?:\.\d+)?|\.\d+))::([\s\S]*?)::/g,
-      (_match, lead: string, weight: string, body: string) => Number(weight) > 0 ? `${lead}${body}` : lead)
-  return captionTags(kept).filter(tag => !/^artist:/i.test(tag))
+  return captionTags(compilePromptComments(style)).filter(tag => !/^artist:/i.test(tag))
 }
 
 /** Animagine XL 4.0 quality tags; captioned so the base model's quality prompt recalls the style. */

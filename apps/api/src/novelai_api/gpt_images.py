@@ -25,6 +25,7 @@ from .generations import (
     VibeTokens,
 )
 from .prompt_comments import compile_prompt_comments
+from .prompt_weights import strip_prompt_weights
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,7 @@ PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
 
 def gpt_prompt(parameters: GenerationRequest) -> str:
-    """Deterministic English instruction around the frozen traits, item and style."""
+    """Deterministic English instruction around the frozen traits, item and style (no weights)."""
     item = parameters.experiment.item.prompt.strip() if (
         parameters.experiment is not None and parameters.experiment.item is not None
     ) else ""
@@ -44,6 +45,8 @@ def gpt_prompt(parameters: GenerationRequest) -> str:
         compile_prompt_comments(parameters.style_prompt)
         if parameters.prompt_comments else parameters.style_prompt
     ).strip()
+    # GPT reads plain text: NovelAI weights would be noise, negative groups the opposite intent.
+    traits, item, style = (strip_prompt_weights(text) for text in (traits, item, style))
     lines = [
         "Use the attached reference image(s); they all show the same character.",
         "Draw exactly this character: keep the face, hair, eyes, outfit, accessories and "

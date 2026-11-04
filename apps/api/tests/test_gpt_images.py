@@ -86,6 +86,18 @@ def test_prompt_template_separates_traits_item_and_style() -> None:
     ])
 
 
+def test_prompt_drops_novelai_weights_for_gpt() -> None:
+    group = gpt_group()
+    group.style_prompt = "1.2::watercolor::, -1::monochrome::"
+    group.positive_prompt = "1girl, 6::white hair::, {katana}, 1.5::sitting::"
+    group.experiment.item.prompt = "1.5::sitting::"
+    prompt = gpt_prompt(group)
+    assert "Character: 1girl, white hair, katana" in prompt
+    assert "Scene and pose: sitting" in prompt
+    assert "Art style: watercolor\n" in prompt
+    assert "::" not in prompt and "{" not in prompt and "monochrome" not in prompt
+
+
 def test_edits_request_is_multipart_with_all_references_and_redacted_snapshot() -> None:
     transport, calls = relay()
     provider = GptImageProvider("https://relay.example/v1/", "secret-key", "gpt-image-x",
