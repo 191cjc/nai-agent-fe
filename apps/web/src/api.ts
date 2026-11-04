@@ -382,7 +382,7 @@ export function errorText(error: unknown): string {
       reference_in_use: '这张参考图正被进行中的批跑使用，结束后才能删除。',
       reference_not_found: '参考图不存在或已删除，请重新选择。',
       reference_unavailable: '参考图已被删除或内容变化，本条已跳过。',
-      unsupported_reference_mode: 'NovelAI 服务不支持该参考图模式（精准参考需要 MCP 服务提供 director_reference_* 参数）。',
+      unsupported_reference_mode: 'NovelAI 服务不支持该参考图模式（MCP 服务未提供精准参考参数），本组未付费。',
       gpt_image_unavailable: 'GPT 生图未配置（服务器缺少 NAI_GPT_IMAGE_API_KEY）。',
       content_policy: '被 GPT 内容审核拒绝，本条已跳过。',
       not_ready: '服务暂不可用，请稍后重试。',

@@ -31,7 +31,7 @@ from novelai_api.generations import (
     ReferenceImageUse,
     ResultCache,
 )
-from novelai_api.mcp_images import PRECISE_FIELDS, NovelAiMcpProvider
+from novelai_api.mcp_images import NATIVE_PRECISE_FIELDS, PRECISE_FIELDS, NovelAiMcpProvider
 from novelai_api.reference_images import ReferenceImageStore
 from novelai_api.style_experiments import StyleExperimentService
 
@@ -82,6 +82,28 @@ def test_mcp_precise_reference_arguments_and_redacted_snapshot() -> None:
     assert recorded[0]["director_reference_images"] == [
         {"sha256": "a" * 64, "byte_size": len(png())},
     ]
+    assert base64.b64encode(png()).decode() not in json.dumps(recorded)
+
+
+def test_mcp_native_precise_reference_fields_and_redacted_snapshot() -> None:
+    # novelai-image 4.x names: one image, direct fidelity (server applies the complement).
+    tools = [
+        {"name": "generate_image",
+         "inputSchema": schema(*BASE_FIELDS, "references", *NATIVE_PRECISE_FIELDS)},
+        ENCODE_VIBE,
+    ]
+    transport, calls = reference_transport(tools)
+    provider = NovelAiMcpProvider("https://mcp.example/x", "token", transport=transport)
+    recorded = []
+    provider.generate_with_request(precise_parameters(), recorded.append, references=[png()])
+    assert tool_calls(calls, "encode_vibe") == []
+    arguments = tool_calls(calls, "generate_image")[-1]["arguments"]
+    assert arguments["precise_reference"] == base64.b64encode(png()).decode()
+    assert (arguments["precise_reference_mode"], arguments["precise_reference_strength"],
+            arguments["precise_reference_fidelity"]) == ("character", 0.8, 0.75)
+    assert not any(key.startswith("director_reference") for key in arguments)
+    assert "references" not in arguments
+    assert recorded[0]["precise_reference"] == {"sha256": "a" * 64, "byte_size": len(png())}
     assert base64.b64encode(png()).decode() not in json.dumps(recorded)
 
 

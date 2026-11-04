@@ -57,6 +57,16 @@ PRECISE_FIELDS = frozenset(
         "director_reference_secondary_strength_values",
     }
 )
+# Newer novelai-image MCP servers (4.x) take one Precise Reference image under their
+# own names, convert fidelity themselves and letterbox the image (2026-11-04).
+NATIVE_PRECISE_FIELDS = frozenset(
+    {
+        "precise_reference",
+        "precise_reference_mode",
+        "precise_reference_strength",
+        "precise_reference_fidelity",
+    }
+)
 SCHEMA_ANNOTATIONS = frozenset(
     {
         "title", "description", "default", "$comment", "examples", "deprecated",
@@ -277,7 +287,8 @@ class NovelAiMcpProvider:
                 or (reference.mode == "img2img"
                     and not IMAGE_TO_IMAGE_FIELDS.issubset(schema["properties"]))
                 or (reference.mode == "precise"
-                    and not PRECISE_FIELDS.issubset(schema["properties"]))
+                    and not PRECISE_FIELDS.issubset(schema["properties"])
+                    and not NATIVE_PRECISE_FIELDS.issubset(schema["properties"]))
                 or (reference.mode == "vibe" and (
                     "references" not in schema["properties"]
                     # V4/V4.5 vibes must be pre-encoded; raw images make NovelAI fail (500).
@@ -347,7 +358,16 @@ class NovelAiMcpProvider:
                 )
                 if "extra_noise_seed" in properties:
                     arguments["extra_noise_seed"] = parameters.seed
-            if reference is not None and reference.mode == "precise":
+            native_precise = NATIVE_PRECISE_FIELDS.issubset(properties)
+            if reference is not None and reference.mode == "precise" and native_precise:
+                arguments.update(
+                    precise_reference=encoded[0],
+                    precise_reference_mode=reference.precise_type,
+                    precise_reference_strength=reference.precise_strength,
+                    # The server applies NovelAI's complement itself (1.0 = closest).
+                    precise_reference_fidelity=reference.precise_fidelity,
+                )
+            elif reference is not None and reference.mode == "precise":
                 arguments.update(
                     director_reference_images=[encoded[0]],
                     director_reference_descriptions=[{
@@ -383,6 +403,8 @@ class NovelAiMcpProvider:
                 ]
                 if reference.mode == "img2img":
                     snapshot["image"] = digests[0]
+                elif reference.mode == "precise" and native_precise:
+                    snapshot["precise_reference"] = digests[0]
                 elif reference.mode == "precise":
                     snapshot["director_reference_images"] = digests
                 else:
