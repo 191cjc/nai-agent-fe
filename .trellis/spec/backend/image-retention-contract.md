@@ -34,7 +34,8 @@ supersedes older memory-only image contracts; SQLite still contains no PNG.
   fail safely without paths/prompts/credentials in errors. Cleanup deletes only
   managed UUID/temp/reservation names; preserve unknown artifacts and include
   their bytes in capacity accounting. Reject unbudgetable nested trees safely.
-- Budget 2 GiB with at least 1 GiB free disk. Reserve worst-case accepted output
+- No fixed store budget by default (2026-11-04); admission keeps at least 3 GiB
+  free disk. An explicit budget is still honoured. Reserve worst-case accepted output
   min(sample_count*8 MiB,32 MiB) before paid admission; include all pending
   reservations. Do not evict unexpired images to admit new work. Release on
   success/failure/queue rejection/canceled future/shutdown; canceled futures

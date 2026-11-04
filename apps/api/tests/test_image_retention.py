@@ -18,6 +18,7 @@ from novelai_api.auth import create_token
 from novelai_api.config import Settings
 from novelai_api.db import Database
 from novelai_api.generations import (
+    MAX_RESULT_BYTES,
     ExperimentConflict,
     GeneratedImage,
     GenerationManager,
@@ -275,6 +276,23 @@ def test_capacity_reserves_all_pending_work_and_never_evicts_unexpired(tmp_path:
     reservation = cache.reserve(1)
     cache.release(reservation)
     assert not (cache.path / job_id).exists()
+
+
+def test_default_store_has_no_fixed_budget_and_keeps_three_gib_free(tmp_path: Path) -> None:
+    gib = 1024 * 1024 * 1024
+    amount = MAX_RESULT_BYTES + DIRECTORY_OVERHEAD_BYTES
+    free = [100 * gib]
+    cache = DiskResultStore(tmp_path / "images", disk_free=lambda _path: free[0])
+    # Far more pending work than the old 2 GiB budget is admitted while disk is free.
+    reservations = [cache.reserve(4) for _ in range(100)]
+    assert sum(cache._reservations.values()) > 2 * gib
+    for reservation in reservations:
+        cache.release(reservation)
+    free[0] = 3 * gib + amount
+    cache.release(cache.reserve(4))
+    free[0] = 3 * gib + amount - 1
+    with pytest.raises(ResultStorageUnavailable):
+        cache.reserve(4)
 
 
 @pytest.mark.parametrize("failure", ["low-disk", "write"])

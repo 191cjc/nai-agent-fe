@@ -23,8 +23,10 @@ from .generations import (
 )
 
 IMAGE_RETENTION_SECONDS = 7 * 24 * 60 * 60
-IMAGE_BUDGET_BYTES = 2 * 1024 * 1024 * 1024
-FREE_DISK_RESERVE_BYTES = 1024 * 1024 * 1024
+# No fixed store budget by default: admission stops only when free disk would drop
+# below the reserve. Tests may still pass an explicit budget.
+IMAGE_BUDGET_BYTES: int | None = None
+FREE_DISK_RESERVE_BYTES = 3 * 1024 * 1024 * 1024
 MAX_MANIFEST_BYTES = 8192
 DIRECTORY_OVERHEAD_BYTES = 64 * 1024
 DIRECTORY_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
@@ -50,7 +52,7 @@ class DiskResultStore:
     def __init__(
         self, path: Path, *, clock: Callable[[], float] = time.time,
         disk_free: Callable[[Path], int] = _disk_free,
-        budget_bytes: int = IMAGE_BUDGET_BYTES,
+        budget_bytes: int | None = IMAGE_BUDGET_BYTES,
         free_reserve_bytes: int = FREE_DISK_RESERVE_BYTES,
         sweep_interval: float = 60,
     ):
@@ -123,7 +125,7 @@ class DiskResultStore:
                     used = self._sweep(root)
                     pending = sum(self._reservations.values())
                     if (
-                        used + pending + amount > self._budget
+                        (self._budget is not None and used + pending + amount > self._budget)
                         or self._disk_free(self.path) - pending - amount < self._free_reserve
                     ):
                         raise ResultStorageUnavailable("Image storage has no capacity")
@@ -193,7 +195,7 @@ class DiskResultStore:
                 with self._root(create=True) as root:
                     size = sum(len(image.data) for image in images) + DIRECTORY_OVERHEAD_BYTES
                     if (
-                        self._sweep(root) + size > self._budget
+                        (self._budget is not None and self._sweep(root) + size > self._budget)
                         or self._disk_free(self.path) - size < self._free_reserve
                     ):
                         raise OSError("Image storage has no capacity")

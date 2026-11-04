@@ -375,7 +375,8 @@ Existing authenticated API image routes serve these bytes; never add an Nginx
 alias for this directory. Browser history can reopen ordinary images or saved
 experiment comparisons without submitting a paid request.
 
-The default store budgets 2 GiB and reserves at least 1 GiB free disk. Pending
+The default store has no fixed size budget; it refuses new work when free disk
+would drop below 3 GiB. Pending
 accepted jobs reserve their maximum bounded image output before provider work.
 Full/unwritable storage refuses new generation safely; it does not evict
 unexpired seven-day results. Monitor filesystem space/inodes and plan capacity
