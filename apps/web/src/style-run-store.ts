@@ -132,7 +132,7 @@ export class StyleRunStore {
   }
 
   /** Fixed-style dataset run: same single POST, reconciliation and Stop safeguards. */
-  async startDataset(parameters: GenerationRequest, items: DatasetItem[], extra: { styles?: string[]; character?: CharacterRunRequest } = {}): Promise<void> {
+  async startDataset(parameters: GenerationRequest, items: DatasetItem[], extra: { styles?: string[]; character?: CharacterRunRequest; name?: string } = {}): Promise<void> {
     if (this.locked || !this.observing) return
     const id = this.newRunId()
     if (!id) return
@@ -141,6 +141,7 @@ export class StyleRunStore {
       items: items.map(item => ({ ...item })),
       ...(extra.styles ? { styles: [...extra.styles] } : {}),
       ...(extra.character ? { character: { ...extra.character, reference_ids: [...extra.character.reference_ids] } } : {}),
+      ...(extra.name?.trim() ? { name: extra.name.trim() } : {}),
     })
   }
 

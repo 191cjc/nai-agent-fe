@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { observer } from 'mobx-react-lite'
 import { Download, FileUp, Layers, Plus, RotateCcw, Trash2, Upload, UserRound, X } from 'lucide-react'
-import { ApiFailure, errorText, type GenerationView, type WorkspaceApi } from './api'
+import { ApiFailure, errorText, MAX_EXPERIMENT_NAME, type GenerationView, type WorkspaceApi } from './api'
 import { DATASET_CATEGORIES, type DatasetCategory } from './dataset-prompts'
 import { CHARACTER_CATEGORIES } from './character-prompts'
 import { CUSTOM_CATEGORY, MAX_DATASET_ITEMS, MAX_DATASET_PROMPT_LENGTH, datasetItemText, datasetItems, nextCustomId, type DatasetEntry } from './dataset-run'
@@ -171,6 +171,7 @@ type DatasetMode = 'style' | 'character'
 
 export const DatasetRunConfig = observer(({ generation, api, hidden }: { generation: GenerationStore; api: WorkspaceApi; hidden: boolean }) => {
   const [mode, setMode] = useState<DatasetMode>('style')
+  const [runName, setRunName] = useState('')
   const [entries, setEntries] = useState<DatasetEntry[]>(defaultDatasetEntries)
   const [characterEntries, setCharacterEntries] = useState<DatasetEntry[]>(defaultCharacterEntries)
   const character = useCharacterSettings(generation.draft.style_prompt)
@@ -189,9 +190,9 @@ export const DatasetRunConfig = observer(({ generation, api, hidden }: { generat
 
   function start() {
     if (locked || error || !selected.length) return
-    if (mode === 'style') void generation.startDatasetRun(entries)
+    if (mode === 'style') void generation.startDatasetRun(entries, { name: runName })
     else void generation.startDatasetRun(characterEntries, {
-      styles: character.styles, character: character.settings, gptModel: character.gpt?.gpt_image_model ?? undefined,
+      styles: character.styles, character: character.settings, gptModel: character.gpt?.gpt_image_model ?? undefined, name: runName,
     })
   }
 
@@ -234,6 +235,11 @@ export const DatasetRunConfig = observer(({ generation, api, hidden }: { generat
     <p className="prompt-hint">批跑在服务器依次执行，单条失败后继续下一条，不会自动重试。刷新、关闭页面或退出登录不会停止；只有“停止实验”会阻止后续条目。与画风实验共用“同时只能运行一个”的限制。</p>
     <p className="prompt-hint">图片私有保存 7 天，请在过期前从历史记录的「实验与训练集」中导出训练集。</p>
     {!snapshot && generation.error && !generation.submitUncertain && <p className="alert" role="alert">{generation.error}</p>}
+    {!snapshot && <label className="dataset-run-name">训练集名称（可选）
+      <input value={runName} maxLength={MAX_EXPERIMENT_NAME} placeholder={mode === 'style' ? '例如：水彩画风 第 1 版' : '例如：希望 角色 v2'}
+        onChange={event => setRunName(event.target.value)} />
+      <span className="prompt-hint">会显示在「已保存的画风实验与训练集」里，并用作导出 zip 的文件名；之后可以改名。</span>
+    </label>}
     <div className="experiment-config-actions">
       <button className="primary" type="button" disabled={locked || Boolean(error) || !selected.length || selected.length > MAX_DATASET_ITEMS} onClick={start}>
         <Layers size={15} aria-hidden="true" /> 开始批跑
@@ -256,7 +262,15 @@ async function sourceJobs(api: WorkspaceApi, source: DatasetExportSource, signal
   return jobs
 }
 
-export function DatasetExportPanel({ api, source, onClose }: { api: WorkspaceApi; source: DatasetExportSource; onClose: () => void }) {
+/** File-system-safe zip name from a training-set name; falls back to a dated default. */
+function zipName(name: string | undefined): string {
+  const date = new Date().toISOString().slice(0, 10)
+  // eslint-disable-next-line no-control-regex
+  const safe = (name ?? '').replace(/[\u0000-\u001f\u007f\\/:*?"<>|]+/g, '_').replace(/\s+/g, ' ').trim().replace(/^\.+/, '').slice(0, 80)
+  return safe ? `${safe}-${date}.zip` : `lora-dataset-${date}.zip`
+}
+
+export function DatasetExportPanel({ api, source, fileName, onClose }: { api: WorkspaceApi; source: DatasetExportSource; fileName?: string; onClose: () => void }) {
   const [trigger, setTrigger] = useState('')
   const [prefix, setPrefix] = useState('')
   // On by default: character LoRA captions must name each image's drawing style.
@@ -308,7 +322,7 @@ export function DatasetExportPanel({ api, source, onClose }: { api: WorkspaceApi
       const discardedText = result.discarded ? `，已弃置 ${result.discarded} 张未导出` : ''
       if (!result.blob) setError(`没有可导出的图片（跳过 ${result.skipped} 张：失败、已过期或不可用${discardedText}）。`)
       else {
-        downloadZip(result.blob, `lora-dataset-${new Date().toISOString().slice(0, 10)}.zip`)
+        downloadZip(result.blob, zipName(fileName))
         setMessage(`已导出 ${result.written} 张图片和对应 caption${result.skipped ? `，跳过 ${result.skipped} 张（失败、已过期或不可用）` : ''}${discardedText}。`)
       }
     } catch (exception) {

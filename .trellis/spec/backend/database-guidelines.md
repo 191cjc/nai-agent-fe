@@ -29,7 +29,7 @@ generated image bytes to it.
 - Admin migrations run before API readiness. DB schema lives in
   `migrations/0001_auth.sql`, `0002_generations.sql` and
   `0003_style_experiments.sql`, `0004_prompt_snapshots.sql` and
-  `0005_provider_requests.sql` and `0006_reference_images.sql` and `0007_discarded_images.sql` (current schema7), with
+  `0005_provider_requests.sql` and `0006_reference_images.sql` and `0007_discarded_images.sql` and `0008_experiment_names.sql` (current schema8), with
   `PRAGMA user_version` and transactional scripts. Store job parameters, effective
   seed, timestamps and outcome, including optional experiment metadata in
   settings_json. Durable compact run/cursor/seed/Stop state uses the schema3 run table; see

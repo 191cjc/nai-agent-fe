@@ -506,7 +506,7 @@ export class GenerationStore {
    * Freeze the draft's settings; each dataset item supplies all content. An optional
    * style pool (first entry becomes the frozen style) and character block are frozen too.
    */
-  async startDatasetRun(entries: readonly DatasetEntry[], options: { styles?: string[]; character?: CharacterSettings; gptModel?: string } = {}): Promise<void> {
+  async startDatasetRun(entries: readonly DatasetEntry[], options: { styles?: string[]; character?: CharacterSettings; gptModel?: string; name?: string } = {}): Promise<void> {
     if (this.operationLocked || this.busy || this.activeId || this.submitUncertain) return
     this.error = ''
     let parameters: GenerationRequest
@@ -538,7 +538,7 @@ export class GenerationStore {
     }
     this.clearActiveResult()
     this.operationVersion += 1
-    await this.runs.startDataset(parameters, items, { styles: options.styles, character })
+    await this.runs.startDataset(parameters, items, { styles: options.styles, character, name: options.name })
   }
 
   /** Ordinary generation only; server experiments never use this POST path. */

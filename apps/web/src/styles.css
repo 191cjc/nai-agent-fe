@@ -585,3 +585,12 @@ h1, h2, h3 { letter-spacing: 0; }
 .review-grid-label { overflow: hidden; color: var(--muted); font-size: 11px; white-space: nowrap; text-overflow: ellipsis; }
 .review-grid-open { position: absolute; top: 4px; right: 4px; background: rgba(20, 20, 26, 0.75); }
 .review-grid-pages { display: flex; align-items: center; justify-content: center; gap: 12px; font-size: 12px; }
+.experiment-title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-bottom: 4px; }
+.experiment-title strong { font-size: 14px; overflow-wrap: anywhere; }
+.experiment-title .icon-button { width: 26px; height: 26px; }
+.experiment-rename { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex: 1 1 220px; }
+.experiment-rename input { flex: 1 1 160px; min-width: 0; }
+.dataset-type-badge { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border: 1px solid currentColor; border-radius: 999px; font-size: 12px; line-height: 18px; }
+.dataset-type-badge.style { color: var(--gold); }
+.dataset-type-badge.character { color: var(--teal); }
+.dataset-run-name { display: grid; gap: 4px; margin: 8px 0; }

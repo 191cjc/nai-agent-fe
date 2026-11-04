@@ -34,6 +34,7 @@ from .generations import (
     ExperimentConflict,
     ExperimentDetail,
     ExperimentPage,
+    ExperimentRename,
     GenerationManager,
     GenerationNotConfigured,
     GenerationRequest,
@@ -617,6 +618,24 @@ def create_app(
             summary=summary, items=manager.views(items, user.id),
             next_offset=next_offset,
         )
+
+    @app.put(
+        "/api/style-experiments/{experiment_id}/name",
+        status_code=204,
+        responses={
+            401: {"model": ApiError}, 403: {"model": ApiError}, 404: {"model": ApiError},
+            422: {"model": ApiError}, 503: {"model": ApiError},
+        },
+    )
+    def rename_style_experiment(
+        experiment_id: UUID, payload: ExperimentRename,
+        user: Annotated[UserInfo, Depends(require_user)],
+    ) -> None:
+        if not manager.store.rename_experiment(user.id, str(experiment_id), payload.name):
+            raise HTTPException(
+                status_code=404,
+                detail=ApiError(code="not_found", message="Experiment not found").model_dump(),
+            )
 
     @app.get(
         "/api/generation-results/{job_id}/images/{image_id}",

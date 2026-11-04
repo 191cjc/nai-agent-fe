@@ -7,13 +7,21 @@ import secrets
 import sqlite3
 import threading
 import time
+import unicodedata
 from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Annotated, Any, Literal, Protocol, Self, runtime_checkable
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    Field,
+    PrivateAttr,
+    field_validator,
+    model_validator,
+)
 
 from .db import Database
 from .prompt_comments import compile_prompt_comments
@@ -372,6 +380,28 @@ class HistoryPage(BaseModel):
     next_offset: int | None
 
 
+MAX_EXPERIMENT_NAME = 80
+
+
+def _clean_experiment_name(value: str | None) -> str | None:
+    """Collapse whitespace; blank means unnamed. Control/format characters are refused."""
+    if value is None:
+        return None
+    text = " ".join(value.split())
+    if any(unicodedata.category(char) in ("Cc", "Cf", "Cs", "Co", "Cn") for char in text):
+        raise ValueError("Name contains control characters")
+    if len(text) > MAX_EXPERIMENT_NAME:
+        raise ValueError(f"Name is longer than {MAX_EXPERIMENT_NAME} characters")
+    return text or None
+
+
+ExperimentName = Annotated[str | None, AfterValidator(_clean_experiment_name)]
+
+
+class ExperimentRename(BaseModel):
+    name: ExperimentName = Field(max_length=400)
+
+
 class ExperimentSummary(BaseModel):
     id: str
     kind: Literal["style", "dataset"] = "style"
@@ -381,6 +411,10 @@ class ExperimentSummary(BaseModel):
     image_count: int
     created_at: int
     updated_at: int
+    # Owner display name; absent for unnamed (older) sets.
+    name: str | None = None
+    # Training sets only: character sets carry reference images, style sets do not.
+    dataset_type: Literal["style", "character"] | None = None
 
 
 class ExperimentPage(BaseModel):
@@ -419,8 +453,12 @@ SELECT experiment_id AS id,
     SUM(CASE WHEN rerun_of IS NULL AND status IN ('succeeded', 'failed') THEN 1 ELSE 0 END)
         AS completed_count,
     SUM(image_count) AS image_count, MIN(created_at) AS created_at,
-    MAX(updated_at) AS updated_at
-FROM experiment_rows
+    MAX(updated_at) AS updated_at, MAX(names.name) AS name,
+    CASE WHEN MAX(json_extract(settings_json, '$.experiment.kind')) IS NOT 'dataset' THEN NULL
+        WHEN MAX(CASE WHEN json_type(settings_json, '$.reference') = 'object' THEN 1 ELSE 0 END) = 1
+        THEN 'character' ELSE 'style' END AS dataset_type
+FROM experiment_rows LEFT JOIN experiment_names AS names
+    ON names.user_id = experiment_rows.user_id AND names.run_id = experiment_rows.experiment_id
 """
 
 
@@ -525,6 +563,36 @@ class JobStore:
                 (json.dumps(arguments, ensure_ascii=False, allow_nan=False), job_id, user_id),
             )
         return bool(updated.rowcount)
+
+    def rename_experiment(self, user_id: str, run_id: str, name: str | None) -> bool:
+        """Set or clear an owner's display name; False when the experiment is unknown."""
+        with self.database.connect(write=True) as connection:
+            known = connection.execute(
+                "SELECT 1 FROM style_experiment_runs WHERE user_id = ? AND id = ?",
+                (user_id, run_id),
+            ).fetchone()
+            if known is None:
+                _experiment_connection(connection)
+                known = connection.execute(
+                    EXPERIMENT_ROWS
+                    + "SELECT 1 FROM experiment_rows WHERE experiment_id = ? LIMIT 1",
+                    (user_id, run_id),
+                ).fetchone()
+            if known is None:
+                return False
+            if name is None:
+                connection.execute(
+                    "DELETE FROM experiment_names WHERE user_id = ? AND run_id = ?",
+                    (user_id, run_id),
+                )
+            else:
+                connection.execute(
+                    "INSERT INTO experiment_names (user_id, run_id, name, named_at) "
+                    "VALUES (?, ?, ?, ?) ON CONFLICT(user_id, run_id) DO UPDATE SET "
+                    "name = excluded.name, named_at = excluded.named_at",
+                    (user_id, run_id, name, int(time.time())),
+                )
+            return True
 
     def set_discarded(self, user_id: str, job_id: str, index: int, discarded: bool) -> None:
         with self.database.connect(write=True) as connection:

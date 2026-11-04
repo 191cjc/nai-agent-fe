@@ -102,6 +102,15 @@ export class SavedResultsStore {
     }
   }
 
+  /** Set or clear a saved training set's name; throws so the caller can show the error. */
+  async renameExperiment(id: string, name: string): Promise<void> {
+    const cleaned = name.split(/\s+/).filter(Boolean).join(' ')
+    await this.api.renameExperiment(id, cleaned || null)
+    runInAction(() => {
+      this.experiments = this.experiments.map(item => item.id === id ? { ...item, name: cleaned || null } : item)
+    })
+  }
+
   async openGeneration(id: string): Promise<void> {
     this.close()
     this.selection = { kind: 'generation', id }

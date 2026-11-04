@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from .generations import (
     DatasetItem,
     ExperimentContext,
+    ExperimentName,
     GenerationRequest,
     ReferenceImageUse,
     ReferenceUse,
@@ -148,6 +149,8 @@ class DatasetRunCreate(BaseModel):
     # Optional rotation pool; absent keeps the single frozen style (stored runs unchanged).
     styles: list[str] | None = Field(default=None, min_length=1, max_length=8)
     character: CharacterRequest | None = None
+    # Display name only; never part of the frozen definition or its retry comparison.
+    name: ExperimentName = Field(default=None, max_length=400)
 
     @model_validator(mode="after")
     def valid_plan(self) -> Self:

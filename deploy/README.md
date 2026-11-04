@@ -449,3 +449,12 @@ This release migrates schema 6 → 7 at `ExecStartPre` (adds the
 confirm no active jobs/runs before the restart; deploy the API before the web
 release. Rolling the API back below schema 7 requires restoring the
 pre-upgrade backup.
+
+## Training-set names (schema 8)
+
+This release migrates schema 7 → 8 at `ExecStartPre` (adds the
+`experiment_names` table only) and removes the fixed 2 GiB image budget: new
+work is refused only when free disk would drop below 3 GiB. Take the verified
+private online backup and confirm no active jobs/runs before the restart;
+deploy the API before the web release. Rolling the API back below schema 8
+requires restoring the pre-upgrade backup.

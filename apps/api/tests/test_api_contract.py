@@ -63,6 +63,7 @@ def test_openapi_contract_matches_snapshot_without_database_or_provider_calls(
         },
         ("/api/style-experiments", "get"): {401, 422, 503},
         ("/api/style-experiments/{experiment_id}", "get"): {401, 404, 422, 503},
+        ("/api/style-experiments/{experiment_id}/name", "put"): {401, 403, 404, 422, 503},
         ("/api/style-experiment-runs", "post"): {401, 403, 409, 422, 503},
         ("/api/dataset-runs", "post"): {401, 403, 409, 422, 503},
         ("/api/capabilities", "get"): {401, 422, 503},

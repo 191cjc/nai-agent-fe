@@ -219,7 +219,7 @@ def test_legacy_same_definition_keeps_version_and_restart_never_repeats_ordinal(
                 "SELECT definition_json FROM style_experiment_runs WHERE user_id = ? AND id = ?",
                 (user, run.id),
             ).fetchone()[0] == frozen
-            assert connection.execute("PRAGMA user_version").fetchone()[0] == 7
+            assert connection.execute("PRAGMA user_version").fetchone()[0] == 8
         assert store.create(user, original).model_dump() == ended.model_dump()
         payload["parameters"]["width"] = 1024
         with pytest.raises(RunConflict, match="experiment_run_conflict"):
@@ -914,7 +914,7 @@ def test_v2_migration_and_backup_preserve_auth_jobs_and_private_run_state(tmp_pa
     database.migrate()
     assert database.check_ready()
     with database.connect() as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 7
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 8
         assert connection.execute("SELECT COUNT(*) FROM browser_sessions").fetchone()[0] == 1
         assert connection.execute("SELECT COUNT(*) FROM generation_jobs").fetchone()[0] == 1
     run = RunStore(database).create(owner_id, request(seed=77))

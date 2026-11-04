@@ -168,7 +168,14 @@ export interface ExperimentSummary {
   image_count: number
   created_at: number
   updated_at: number
+  /** Owner display name; null/absent when unnamed. */
+  name?: string | null
+  /** Training sets only: character sets use reference images. */
+  dataset_type?: 'style' | 'character' | null
 }
+
+/** Longest training-set name the server accepts (after whitespace is collapsed). */
+export const MAX_EXPERIMENT_NAME = 80
 
 export interface ExperimentPage {
   items: ExperimentSummary[]
@@ -197,6 +204,8 @@ export interface ExperimentRunDefinition {
   styles?: string[] | null
   /** Request shape on create; the server answers with the frozen CharacterRunPlan. */
   character?: CharacterRunRequest | CharacterRunPlan | null
+  /** Create-only display name; not part of the frozen run definition. */
+  name?: string
 }
 
 export interface ExperimentRunState extends ExperimentRunDefinition {
@@ -502,6 +511,7 @@ export class WorkspaceApi {
       id: definition.id, parameters: definition.parameters, items: definition.items,
       ...(definition.styles ? { styles: definition.styles } : {}),
       ...(definition.character ? { character: definition.character } : {}),
+      ...(definition.name ? { name: definition.name } : {}),
     }
     const run = checkedRun(await this.request<ExperimentRunState>('/api/dataset-runs', { method: 'POST', body: JSON.stringify(body), signal }))
     if (run.id !== definition.id || run.kind !== 'dataset') throw new ApiFailure(0, 'invalid_response', '实验编号不匹配，请重新连接核对。')
@@ -523,6 +533,10 @@ export class WorkspaceApi {
     const run = checkedRun(await this.request<ExperimentRunState>(`/api/style-experiment-runs/${encodeURIComponent(id)}/stop`, { method: 'POST', signal }))
     if (run.id !== id) throw new ApiFailure(0, 'invalid_response', '实验编号不匹配，请重新连接核对。')
     return run
+  }
+
+  renameExperiment(id: string, name: string | null): Promise<void> {
+    return this.request(`/api/style-experiments/${encodeURIComponent(id)}/name`, { method: 'PUT', body: JSON.stringify({ name }) })
   }
 
   setImageDiscarded(jobId: string, index: number, discarded: boolean): Promise<void> {

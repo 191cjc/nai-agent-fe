@@ -172,6 +172,12 @@ class RunStore:
                 "VALUES (?, ?, ?, ?, ?, 'running', ?, ?)",
                 (user_id, run_id, definition, total, seed, now, now),
             )
+            name = request.name if isinstance(request, DatasetRunCreate) else None
+            if name is not None:
+                connection.execute(
+                    "INSERT INTO experiment_names (user_id, run_id, name, named_at) "
+                    "VALUES (?, ?, ?, ?)", (user_id, run_id, name, now),
+                )
             row = connection.execute(
                 "SELECT * FROM style_experiment_runs WHERE user_id = ? AND id = ?",
                 (user_id, run_id),

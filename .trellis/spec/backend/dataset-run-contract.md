@@ -189,3 +189,18 @@ review only (operator restriction); no paid probes.
   learns how they are drawn instead of adding them to every character.
 - Fantasy share is about a fifth of the set so ordinary scenes are not
   pulled towards fantasy; keep that balance when extending.
+
+## Names and type badge (schema 8)
+
+- `experiment_names(user_id, run_id, name, named_at)` holds an optional owner
+  display name (1–80 chars after whitespace collapse; control/format chars
+  refused; blank = unnamed). It is **not** part of the frozen definition, so a
+  create retry with a different name keeps the original name and identity.
+- `POST /api/dataset-runs` accepts optional `name`; `PUT
+  /api/style-experiments/{id}/name` `{name: string|null}` sets/clears it (204;
+  404 for unknown or foreign experiments).
+- Summaries add `name` and `dataset_type` (`character` when any group carries a
+  `reference`, `style` for other training sets, `null` for style experiments).
+- Web: optional name field before 开始批跑; saved list shows 画风/角色 badge,
+  name (or 未命名训练集) and inline rename; single-set export zips are named
+  `<name>-<date>.zip`.

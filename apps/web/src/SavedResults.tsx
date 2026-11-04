@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useRef, useState } from 'react'
 import { observer } from 'mobx-react-lite'
-import { ArrowLeft, ArrowRight, Ban, CheckSquare, Dices, Download, FlaskConical, Images, LayoutGrid, Layers, RefreshCw, RotateCcw, UserRound, X } from 'lucide-react'
-import { ApiFailure, errorText, type WorkspaceApi } from './api'
+import { ArrowLeft, ArrowRight, Ban, CheckSquare, Dices, Download, FlaskConical, Images, LayoutGrid, Layers, Pencil, RefreshCw, RotateCcw, UserRound, X } from 'lucide-react'
+import { ApiFailure, errorText, MAX_EXPERIMENT_NAME, type ExperimentSummary, type WorkspaceApi } from './api'
 import { datasetItemText } from './dataset-run'
 import { DatasetExportPanel, ReviewGrid } from './dataset-lazy'
 import { GenerationParameters } from './GenerationParameters'
@@ -40,6 +40,7 @@ export const SavedExperimentList = observer(({ saved, api, onView }: { saved: Sa
     <div className="history-list">{saved.experiments.map(experiment => <article className="history-item saved-experiment-item" key={experiment.id}>
       {experiment.kind === 'dataset' && <label className="history-select"><input type="checkbox" checked={chosen.includes(experiment.id)} disabled={exportingChosen}
         onChange={event => setChosen(current => event.target.checked ? [...current.filter(id => id !== experiment.id), experiment.id] : current.filter(id => id !== experiment.id))} /> 选择</label>}
+      {experiment.kind === 'dataset' && <ExperimentTitle saved={saved} experiment={experiment} />}
       <time dateTime={new Date(experiment.created_at * 1000).toISOString()}>{new Date(experiment.created_at * 1000).toLocaleString()}</time>
       {experiment.kind === 'dataset' ? <>
         <p><Layers size={14} aria-hidden="true" /> 训练集批跑 · 已提交 <strong>{experiment.group_count}</strong> / {experiment.total} 条</p>
@@ -55,7 +56,7 @@ export const SavedExperimentList = observer(({ saved, api, onView }: { saved: Sa
         {experiment.kind === 'dataset' && <button className="text-action" type="button" aria-expanded={exportingId === experiment.id}
           onClick={() => setExportingId(exportingId === experiment.id ? null : experiment.id)}><Download size={15} aria-hidden="true" /> 导出训练集</button>}
       </div>
-      {exportingId === experiment.id && <Suspense fallback={null}><DatasetExportPanel api={api} source={{ kind: 'experiment', id: experiment.id }} onClose={() => setExportingId(null)} /></Suspense>}
+      {exportingId === experiment.id && <Suspense fallback={null}><DatasetExportPanel api={api} source={{ kind: 'experiment', id: experiment.id }} fileName={experiment.name ?? undefined} onClose={() => setExportingId(null)} /></Suspense>}
     </article>)}</div>
     {saved.listLoaded && <div className="pager">
       <button className="icon-button" type="button" title="上一页实验" aria-label="上一页实验" disabled={saved.listLoading || saved.listOffset === 0}
@@ -64,6 +65,43 @@ export const SavedExperimentList = observer(({ saved, api, onView }: { saved: Sa
       <button className="icon-button" type="button" title="下一页实验" aria-label="下一页实验" disabled={saved.listLoading || saved.nextListOffset === null}
         onClick={() => { if (saved.nextListOffset !== null) void saved.loadExperiments(saved.nextListOffset) }}><ArrowRight size={18} /></button>
     </div>}
+  </div>
+})
+
+/** 画风/角色 badge plus the owner's name, renamed in place. */
+const ExperimentTitle = observer(({ saved, experiment }: { saved: SavedResultsStore; experiment: ExperimentSummary }) => {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const character = experiment.dataset_type === 'character'
+  const label = experiment.name || '未命名训练集'
+  async function save() {
+    setSaving(true)
+    setError('')
+    try {
+      await saved.renameExperiment(experiment.id, draft)
+      setEditing(false)
+    } catch (failure) {
+      setError(errorText(failure))
+    } finally {
+      setSaving(false)
+    }
+  }
+  return <div className="experiment-title">
+    {experiment.dataset_type && <span className={`dataset-type-badge ${character ? 'character' : 'style'}`}>
+      {character ? <UserRound size={12} aria-hidden="true" /> : <Layers size={12} aria-hidden="true" />} {character ? '角色' : '画风'}</span>}
+    {editing ? <form className="experiment-rename" onSubmit={event => { event.preventDefault(); void save() }}>
+      <input value={draft} maxLength={MAX_EXPERIMENT_NAME} autoFocus disabled={saving} aria-label="训练集名称" placeholder="留空则为未命名"
+        onChange={event => setDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') setEditing(false) }} />
+      <button className="text-action" type="submit" disabled={saving}>{saving ? '保存中...' : '保存'}</button>
+      <button className="text-action" type="button" disabled={saving} onClick={() => setEditing(false)}>取消</button>
+    </form> : <>
+      <strong className={experiment.name ? '' : 'subtle'}>{label}</strong>
+      <button className="icon-button" type="button" title="重命名" aria-label={`重命名 ${label}`}
+        onClick={() => { setDraft(experiment.name ?? ''); setError(''); setEditing(true) }}><Pencil size={14} /></button>
+    </>}
+    {error && <span className="alert" role="alert">{error}</span>}
   </div>
 })
 
