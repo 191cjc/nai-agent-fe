@@ -105,6 +105,12 @@ export function styleCaptionTags(style: string): string[] {
 export const ANIMAGINE_QUALITY_PREFIX = 'masterpiece, high score, great score, absurdres'
 
 /**
+ * NoobAI-XL quality tags (also what the ComfyUI workflows prompt with). Year, rating and
+ * aesthetic tags are left out on purpose: they would bind to the style.
+ */
+export const NOOBAI_QUALITY_PREFIX = 'masterpiece, best quality, newest, absurdres, highres'
+
+/**
  * Caption order: trigger, optional shared prefix (quality tags), then content tags.
  * The prefix is user text for every image; style and trait tags are never added.
  */

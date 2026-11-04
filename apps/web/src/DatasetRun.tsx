@@ -7,7 +7,7 @@ import { CHARACTER_CATEGORIES } from './character-prompts'
 import { CUSTOM_CATEGORY, MAX_DATASET_ITEMS, MAX_DATASET_PROMPT_LENGTH, datasetItemText, datasetItems, nextCustomId, type DatasetEntry } from './dataset-run'
 import { supportsNativeCharacters } from './store'
 import { defaultCharacterEntries, defaultDatasetEntries } from './dataset-defaults'
-import { ANIMAGINE_QUALITY_PREFIX, buildDatasetZip, downloadZip, experimentJobs, selectedJobs, type DatasetExportProgress } from './dataset-export'
+import { ANIMAGINE_QUALITY_PREFIX, NOOBAI_QUALITY_PREFIX, buildDatasetZip, downloadZip, experimentJobs, selectedJobs, type DatasetExportProgress } from './dataset-export'
 import { CharacterRunSettings, characterSnapshotSummary, useCharacterSettings } from './CharacterDataset'
 import { downloadText, formatPrompts, parsePrompts } from './prompt-io'
 import type { GenerationStore } from './store'
@@ -341,11 +341,12 @@ export function DatasetExportPanel({ api, source, fileName, onClose }: { api: Wo
       <input type="text" value={trigger} maxLength={100} spellCheck={false} disabled={running} placeholder="例如 mystyle"
         onChange={event => setTrigger(event.target.value)} /></label>
     <label className="field"><span>质量词前缀（可选，加在触发词之后、内容标签之前；生成时也写同样的词）</span>
-      <input type="text" value={prefix} maxLength={300} spellCheck={false} disabled={running} placeholder="例如 masterpiece, high score, great score, absurdres"
+      <input type="text" value={prefix} maxLength={300} spellCheck={false} disabled={running} placeholder="例如 masterpiece, best quality, newest, absurdres, highres"
         onChange={event => setPrefix(event.target.value)} /></label>
     <label className="history-select"><input type="checkbox" checked={characterStyle} disabled={running}
       onChange={event => setCharacterStyle(event.target.checked)} /> 角色训练集：caption 写入每张图使用的画风（推荐，默认开启；画风训练集不受影响）</label>
     <div className="experiment-config-actions">
+      <button className="text-action" type="button" disabled={running} onClick={() => setPrefix(NOOBAI_QUALITY_PREFIX)}>NoobAI-XL 预设</button>
       <button className="text-action" type="button" disabled={running} onClick={() => setPrefix(ANIMAGINE_QUALITY_PREFIX)}>Animagine XL 4.0 预设</button>
       {prefix && <button className="text-action" type="button" disabled={running} onClick={() => setPrefix('')}>清空前缀</button>}
     </div>
