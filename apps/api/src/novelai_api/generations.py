@@ -973,8 +973,10 @@ class GenerationManager:
         self.cache = cache if cache is not None else DiskResultStore(
             database.path.parent / "generation-images",
         )
-        self._capacity = threading.BoundedSemaphore(3)
-        self._executor: ThreadPoolExecutor | None = None
+        # One worker per provider lane: GPT image groups never wait behind NovelAI
+        # groups (or the reverse), while each provider still sees one call at a time.
+        self._capacity = {lane: threading.BoundedSemaphore(3) for lane in ("novelai", "gpt")}
+        self._executors: dict[str, ThreadPoolExecutor] = {}
         self._work_lock = threading.Lock()
         self._working: dict[str, _Admission] = {}
 
@@ -982,13 +984,25 @@ class GenerationManager:
         self.store.mark_interrupted()
         self.cache.start()
         if self.provider is not None:
-            self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="nai-gen")
+            self._executors["novelai"] = ThreadPoolExecutor(
+                max_workers=1, thread_name_prefix="nai-gen",
+            )
+        if self.provider is not None or self.gpt_provider is not None:
+            # Without a GPT provider its groups still finish as gpt_image_unavailable.
+            self._executors["gpt"] = ThreadPoolExecutor(
+                max_workers=1, thread_name_prefix="gpt-gen",
+            )
 
     def stop(self) -> None:
-        if self._executor is not None:
-            self._executor.shutdown(wait=True, cancel_futures=True)
-            self._executor = None
+        executors, self._executors = self._executors, {}
+        for executor in executors.values():
+            executor.shutdown(wait=True, cancel_futures=True)
         self.cache.stop()
+
+    @staticmethod
+    def lane(request: GenerationRequest) -> str:
+        reference = request.reference
+        return "gpt" if reference is not None and reference.mode == "gpt" else "novelai"
 
     def views(self, jobs: Sequence[HistoryItem], user_id: str) -> list[GenerationView]:
         """Batch the discard lookup for pages instead of one query per job."""
@@ -1029,19 +1043,22 @@ class GenerationManager:
         self, user_id: str, request: GenerationRequest,
         *, create: Callable[[str, GenerationRequest], str | None] | None = None,
     ) -> str | None:
-        if self._executor is None:
+        lane = self.lane(request)
+        executor = self._executors.get(lane)
+        if executor is None:
             raise GenerationNotConfigured("Generation provider not configured")
-        if not self._capacity.acquire(blocking=False):
+        capacity = self._capacity[lane]
+        if not capacity.acquire(blocking=False):
             return None
         try:
             reservation = self.cache.reserve(request.sample_count)
         except BaseException:
-            self._capacity.release()
+            capacity.release()
             raise
 
         def release() -> None:
             self.cache.release(reservation)
-            self._capacity.release()
+            capacity.release()
 
         admission = _Admission(release)
         job_id = None
@@ -1055,7 +1072,7 @@ class GenerationManager:
             if job_id is None:
                 admission.finish()
                 return None
-            future = self._executor.submit(self._run, job_id, user_id, parameters, admission)
+            future = executor.submit(self._run, job_id, user_id, parameters, admission)
 
             def cancelled(finished) -> None:
                 if finished.cancelled():

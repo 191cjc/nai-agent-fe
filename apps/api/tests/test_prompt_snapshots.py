@@ -334,7 +334,7 @@ def test_schema3_upgrade_preserves_all_rows_raw_definitions_auth_and_private_bac
     _, token = create_token(database, "alice")
     session, user = issue_session(database, token)
     job_id = JobStore(database).create(user["id"], GenerationRequest(**INPUT, seed=77))
-    run = RunStore(database).create(user["id"], run_request(seed=77))
+    run_id = legacy_run(database, user["id"], run_request(seed=77))
     with database.connect(write=True) as connection:
         # Simulate a frozen legacy definition before optional placement metadata.
         definition = json.loads(
@@ -366,15 +366,17 @@ def test_schema3_upgrade_preserves_all_rows_raw_definitions_auth_and_private_bac
     assert database.check_ready()
     assert current_user(database, session) == user
     with database.connect() as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 8
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 9
         for table in tables:
             assert [
-                tuple(value for key, value in dict(row).items() if key != "provider_request_json")
+                # Later schemas only append columns to the preserved rows.
+                tuple(value for key, value in dict(row).items()
+                      if key not in ("provider_request_json", "lane"))
                 for row in connection.execute(f"SELECT * FROM {table}")
             ] == before[table]
         assert connection.execute("SELECT COUNT(*) FROM prompt_snapshots").fetchone()[0] == 0
     assert JobStore(database).get(user["id"], job_id).parameters.prompt_sections is None
-    assert RunStore(database).get(user["id"], run.id).parameters.prompt_sections is None
+    assert RunStore(database).get(user["id"], run_id).parameters.prompt_sections is None
     saved = PromptSnapshotStore(database).create(user["id"], PromptSnapshotCreate(**snapshot()))
     backup = tmp_path / "schema4-backup.sqlite3"
     database.backup(backup)
@@ -385,7 +387,9 @@ def test_schema3_upgrade_preserves_all_rows_raw_definitions_auth_and_private_bac
     with restored.connect() as connection:
         for table in tables:
             assert [
-                tuple(value for key, value in dict(row).items() if key != "provider_request_json")
+                # Later schemas only append columns to the preserved rows.
+                tuple(value for key, value in dict(row).items()
+                      if key not in ("provider_request_json", "lane"))
                 for row in connection.execute(f"SELECT * FROM {table}")
             ] == before[table]
     if os.name == "posix":
@@ -395,3 +399,15 @@ def test_schema3_upgrade_preserves_all_rows_raw_definitions_auth_and_private_bac
     with restored.connect(write=True) as connection:
         connection.execute("DROP TABLE prompt_snapshots")
     assert not restored.check_ready()
+
+
+def legacy_run(database: Database, user_id: str, definition) -> str:
+    """Insert a run row the way schemas 3-8 stored it (no lane column yet)."""
+    definition_json, total = definition.definition()
+    with database.connect(write=True) as connection:
+        connection.execute(
+            "INSERT INTO style_experiment_runs (user_id, id, definition_json, total, seed, "
+            "status, created_at, updated_at) VALUES (?, ?, ?, ?, 77, 'running', 1, 1)",
+            (user_id, str(definition.id), definition_json, total),
+        )
+    return str(definition.id)

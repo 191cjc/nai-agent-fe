@@ -1,4 +1,4 @@
-"""Durable owner-scoped style runs using the sole paid generation manager."""
+"""Durable owner-scoped style runs, queued per owner and lane, on the paid generation manager."""
 
 import json
 import secrets
@@ -50,10 +50,27 @@ class RunCreate(BaseModel):
         return json.dumps(definition, sort_keys=True, separators=(",", ":")), str(plan.total)
 
 
+Lane = Literal["novelai", "gpt"]
+ACTIVE_STATUSES = "('running', 'stopping')"
+# Unfinished (running, stopping or queued) runs one owner may hold at once.
+MAX_ACTIVE_RUNS = 10
+_ROW = "SELECT rowid AS seq, * FROM style_experiment_runs "
+
+
+def run_lane(request: "RunCreate | DatasetRunCreate") -> Lane:
+    """GPT image character runs use the relay; everything else uses NovelAI."""
+    character = getattr(request, "character", None)
+    return "gpt" if character is not None and character.mode == "gpt" else "novelai"
+
+
 class RunState(BaseModel):
     _plan_version: Literal[1, 2] = PrivateAttr(default=2)
     id: str
     kind: Literal["style", "dataset"] = "style"
+    lane: Lane = "novelai"
+    # Unfinished runs only: 0 is the run its lane is executing, N waits behind N others.
+    queue_position: int | None = None
+    name: str | None = None
     status: Literal["running", "stopping", "stopped", "completed"]
     total: str
     next_ordinal: str
@@ -78,8 +95,12 @@ class ActiveRun(BaseModel):
     run: RunState | None
 
 
+class ActiveRuns(BaseModel):
+    runs: list[RunState]
+
+
 class RunConflict(Exception):
-    def __init__(self, code: Literal["experiment_run_conflict", "experiment_run_active"]):
+    def __init__(self, code: Literal["experiment_run_conflict", "experiment_run_queue_full"]):
         self.code = code
         super().__init__(code)
 
@@ -93,6 +114,22 @@ class RunStore:
         self.database = database
 
     @staticmethod
+    def _position(connection: sqlite3.Connection, row: sqlite3.Row) -> int | None:
+        if row["status"] not in ("running", "stopping"):
+            return None
+        return connection.execute(
+            "SELECT COUNT(*) FROM style_experiment_runs WHERE user_id = ? AND lane = ? "
+            f"AND status IN {ACTIVE_STATUSES} AND (created_at, rowid) < (?, ?)",
+            (row["user_id"], row["lane"], row["created_at"], row["seq"]),
+        ).fetchone()[0]
+
+    @classmethod
+    def _located(cls, connection: sqlite3.Connection, row: sqlite3.Row) -> RunState:
+        state = cls._state(row)
+        state.queue_position = cls._position(connection, row)
+        return state
+
+    @staticmethod
     def _state(row: sqlite3.Row) -> RunState:
         definition = json.loads(row["definition_json"])
         kind = definition.get("kind", "style")
@@ -103,9 +140,9 @@ class RunStore:
             kind=kind, items=definition.get("items", []), styles=definition.get("styles"),
             character=definition.get("character"),
             **{key: row[key] for key in (
-                "id", "status", "total", "next_ordinal", "processed_count", "succeeded_count",
-                "failed_count", "current_ordinal", "current_job_id", "seed", "created_at",
-                "updated_at", "error_code",
+                "id", "lane", "status", "total", "next_ordinal", "processed_count",
+                "succeeded_count", "failed_count", "current_ordinal", "current_job_id", "seed",
+                "created_at", "updated_at", "error_code",
             )},
             parameters=definition["parameters"], ranges=definition.get("ranges", []),
             sample_count=definition["parameters"]["sample_count"],
@@ -124,8 +161,7 @@ class RunStore:
         run_id = str(request.id)
         with self.database.connect(write=True) as connection:
             existing = connection.execute(
-                "SELECT * FROM style_experiment_runs WHERE user_id = ? AND id = ?",
-                (user_id, run_id),
+                _ROW + "WHERE user_id = ? AND id = ?", (user_id, run_id),
             ).fetchone()
             if existing:
                 saved = json.loads(existing["definition_json"])
@@ -140,13 +176,13 @@ class RunStore:
                 saved["parameters"].setdefault("auto_character_position", False)
                 if saved != requested:
                     raise RunConflict("experiment_run_conflict")
-                return self._state(existing)
+                return self._located(connection, existing)
             active = connection.execute(
-                "SELECT 1 FROM style_experiment_runs WHERE user_id = ? "
-                "AND status IN ('running', 'stopping')", (user_id,),
-            ).fetchone()
-            if active:
-                raise RunConflict("experiment_run_active")
+                "SELECT COUNT(*) FROM style_experiment_runs WHERE user_id = ? "
+                f"AND status IN {ACTIVE_STATUSES}", (user_id,),
+            ).fetchone()[0]
+            if active >= MAX_ACTIVE_RUNS:
+                raise RunConflict("experiment_run_queue_full")
             _experiment_connection(connection)
             used = connection.execute(
                 EXPERIMENT_ROWS + "SELECT 1 FROM experiment_rows WHERE experiment_id = ? LIMIT 1",
@@ -167,10 +203,10 @@ class RunStore:
                 seed = secrets.randbelow(4294967295) + 1
             now = int(time.time())
             connection.execute(
-                "INSERT INTO style_experiment_runs "
-                "(user_id, id, definition_json, total, seed, status, created_at, updated_at) "
-                "VALUES (?, ?, ?, ?, ?, 'running', ?, ?)",
-                (user_id, run_id, definition, total, seed, now, now),
+                "INSERT INTO style_experiment_runs (user_id, id, definition_json, total, "
+                "seed, lane, status, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, 'running', ?, ?)",
+                (user_id, run_id, definition, total, seed, run_lane(request), now, now),
             )
             name = request.name if isinstance(request, DatasetRunCreate) else None
             if name is not None:
@@ -179,26 +215,50 @@ class RunStore:
                     "VALUES (?, ?, ?, ?)", (user_id, run_id, name, now),
                 )
             row = connection.execute(
-                "SELECT * FROM style_experiment_runs WHERE user_id = ? AND id = ?",
-                (user_id, run_id),
+                _ROW + "WHERE user_id = ? AND id = ?", (user_id, run_id),
             ).fetchone()
-        return self._state(row)
+            state = self._located(connection, row)
+        state.name = name
+        return state
 
     def get(self, user_id: str, run_id: str) -> RunState | None:
         with self.database.connect() as connection:
             row = connection.execute(
-                "SELECT * FROM style_experiment_runs WHERE user_id = ? AND id = ?",
-                (user_id, run_id),
+                _ROW + "WHERE user_id = ? AND id = ?", (user_id, run_id),
             ).fetchone()
-        return self._state(row) if row else None
+            return self._located(connection, row) if row else None
+
+    def queue(self, user_id: str) -> list[RunState]:
+        """The owner's unfinished runs, oldest first, with lane positions and names."""
+        with self.database.connect() as connection:
+            rows = connection.execute(
+                "SELECT r.rowid AS seq, r.*, n.name AS display_name "
+                "FROM style_experiment_runs r LEFT JOIN experiment_names n "
+                "ON n.user_id = r.user_id AND n.run_id = r.id "
+                f"WHERE r.user_id = ? AND r.status IN {ACTIVE_STATUSES} "
+                "ORDER BY r.created_at, r.rowid", (user_id,),
+            ).fetchall()
+        lanes: dict[str, int] = {}
+        runs = []
+        for row in rows:
+            state = self._state(row)
+            state.queue_position = lanes.get(row["lane"], 0)
+            lanes[row["lane"]] = state.queue_position + 1
+            state.name = row["display_name"]
+            runs.append(state)
+        return runs
 
     def active(self, user_id: str) -> RunState | None:
+        """Oldest unfinished run (kept for clients that observe only one run)."""
+        runs = self.queue(user_id)
+        return runs[0] if runs else None
+
+    def is_lane_head(self, user_id: str, run_id: str) -> bool:
         with self.database.connect() as connection:
             row = connection.execute(
-                "SELECT * FROM style_experiment_runs WHERE user_id = ? "
-                "AND status IN ('running', 'stopping')", (user_id,),
+                _ROW + "WHERE user_id = ? AND id = ?", (user_id, run_id),
             ).fetchone()
-        return self._state(row) if row else None
+            return row is not None and self._position(connection, row) == 0
 
     def active_keys(self, *, after: tuple[str, str] | None) -> list[tuple[str, str]]:
         with self.database.connect() as connection:
@@ -228,10 +288,9 @@ class RunStore:
                 (int(time.time()), user_id, run_id),
             )
             row = connection.execute(
-                "SELECT * FROM style_experiment_runs WHERE user_id = ? AND id = ?",
-                (user_id, run_id),
+                _ROW + "WHERE user_id = ? AND id = ?", (user_id, run_id),
             ).fetchone()
-        return self._state(row) if row else None
+            return self._located(connection, row) if row else None
 
     def claim(
         self, user_id: str, run_id: str, ordinal: str, parameters: GenerationRequest,
@@ -284,19 +343,18 @@ class RunStore:
     def reconcile(self, user_id: str, run_id: str) -> RunState | None:
         with self.database.connect(write=True) as connection:
             row = connection.execute(
-                "SELECT * FROM style_experiment_runs WHERE user_id = ? AND id = ?",
-                (user_id, run_id),
+                _ROW + "WHERE user_id = ? AND id = ?", (user_id, run_id),
             ).fetchone()
             if row is None:
                 return None
             if row["current_job_id"] is None:
-                return self._state(row)
+                return self._located(connection, row)
             job = connection.execute(
                 "SELECT status, error_code FROM generation_jobs WHERE user_id = ? AND id = ?",
                 (user_id, row["current_job_id"]),
             ).fetchone()
             if job is not None and job["status"] in ("queued", "running"):
-                return self._state(row)
+                return self._located(connection, row)
             # Missing private state is never grounds to repeat a possibly paid group.
             succeeded = job is not None and job["status"] == "succeeded"
             processed = int(row["processed_count"]) + 1
@@ -317,10 +375,9 @@ class RunStore:
                 ),
             )
             row = connection.execute(
-                "SELECT * FROM style_experiment_runs WHERE user_id = ? AND id = ?",
-                (user_id, run_id),
+                _ROW + "WHERE user_id = ? AND id = ?", (user_id, run_id),
             ).fetchone()
-        return self._state(row)
+            return self._located(connection, row)
 
 
 def group_parameters(run: RunState) -> GenerationRequest:
@@ -399,6 +456,9 @@ class StyleExperimentService:
             self.store.fail_unowned_current(user_id, run_id)
         run = self.store.reconcile(user_id, run_id)
         if run is None or run.status != "running" or run.current_job_id is not None:
+            return
+        if run.queue_position != 0:
+            # Queued behind an earlier run of this owner's lane; waits without a claim.
             return
         parameters = group_parameters(run)
 

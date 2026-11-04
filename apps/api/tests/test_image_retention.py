@@ -318,8 +318,8 @@ def test_storage_refusal_is_before_seed_history_or_provider(
         assert provider.calls == []
         assert cache._reservations == {}
         seed.assert_not_called()
-        assert client.app.state.generations._capacity.acquire(blocking=False)
-        client.app.state.generations._capacity.release()
+        assert client.app.state.generations._capacity["novelai"].acquire(blocking=False)
+        client.app.state.generations._capacity["novelai"].release()
 
 
 def test_storage_failure_after_paid_work_is_terminal_without_retry(
@@ -356,7 +356,7 @@ def test_enqueue_failure_releases_reservation_and_late_queued_work_cannot_start(
             enqueued.append(args)
             raise RuntimeError("fixture queued before thread startup error")
 
-        monkeypatch.setattr(manager._executor, "submit", failed_submit)
+        monkeypatch.setattr(manager._executors["novelai"], "submit", failed_submit)
         response = client.post("/api/generations", json=INPUT, headers=ORIGIN)
         assert response.status_code == 500
         assert manager.cache._reservations == {}
@@ -397,10 +397,10 @@ def test_shutdown_cancels_queued_jobs_and_releases_each_admission(database: Data
         assert len(provider.calls) == 1
         assert manager.store.get(owner, first).status == "succeeded"
         assert all(manager.store.get(owner, job_id).status == "queued" for job_id in others)
-        assert all(manager._capacity.acquire(blocking=False) for _ in range(3))
-        assert manager._capacity.acquire(blocking=False) is False
+        assert all(manager._capacity["novelai"].acquire(blocking=False) for _ in range(3))
+        assert manager._capacity["novelai"].acquire(blocking=False) is False
         for _ in range(3):
-            manager._capacity.release()
+            manager._capacity["novelai"].release()
     finally:
         gate.set()
         if stopping is not None:

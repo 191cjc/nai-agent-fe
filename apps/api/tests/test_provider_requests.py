@@ -265,7 +265,7 @@ def test_schema4_upgrade_preserves_private_rows_and_marks_legacy_snapshot_unavai
     _, token = create_token(database, "alice")
     session, user = issue_session(database, token)
     job_id = JobStore(database).create(user["id"], GenerationRequest(**INPUT, seed=77))
-    run = RunStore(database).create(user["id"], run_request(seed=77))
+    run_id = legacy_run(database, user["id"], run_request(seed=77))
     saved = PromptSnapshotStore(database).create(user["id"], PromptSnapshotCreate(**snapshot()))
     with database.connect() as connection:
         before = dict(connection.execute("SELECT * FROM generation_jobs").fetchone())
@@ -275,13 +275,28 @@ def test_schema4_upgrade_preserves_private_rows_and_marks_legacy_snapshot_unavai
     assert database.check_ready()
     assert current_user(database, session) == user
     assert PromptSnapshotStore(database).get(user["id"], str(saved.id)) == saved
-    assert RunStore(database).get(user["id"], run.id).model_dump() == run.model_dump()
+    migrated = RunStore(database).get(user["id"], run_id)
+    assert (migrated.id, migrated.seed, migrated.lane, migrated.queue_position) == (
+        run_id, 77, "novelai", 0,
+    )
     with database.connect() as connection:
         after = dict(connection.execute("SELECT * FROM generation_jobs").fetchone())
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 8
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 9
     assert after.pop("provider_request_json") is None
     assert after == before
     # Existing test providers and old rows have no captured request; never infer one.
     with client_for(database, FakeProvider()) as client:
         client.cookies.set(SESSION_COOKIE, session)
         assert client.get(f"/api/generations/{job_id}").json()["provider_request"] is None
+
+
+def legacy_run(database: Database, user_id: str, definition) -> str:
+    """Insert a run row the way schemas 3-8 stored it (no lane column yet)."""
+    definition_json, total = definition.definition()
+    with database.connect(write=True) as connection:
+        connection.execute(
+            "INSERT INTO style_experiment_runs (user_id, id, definition_json, total, seed, "
+            "status, created_at, updated_at) VALUES (?, ?, ?, ?, 77, 'running', 1, 1)",
+            (user_id, str(definition.id), definition_json, total),
+        )
+    return str(definition.id)

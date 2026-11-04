@@ -66,6 +66,7 @@ from .reference_images import (
 from .security import SESSION_COOKIE, SESSION_LIFETIME_SECONDS
 from .style_experiments import (
     ActiveRun,
+    ActiveRuns,
     ReferenceMissing,
     RunConflict,
     RunCreate,
@@ -567,6 +568,17 @@ def create_app(
     )
     def active_style_run(user: Annotated[UserInfo, Depends(require_user)]) -> ActiveRun:
         return ActiveRun(run=experiments.store.active(user.id))
+
+    @app.get(
+        "/api/style-experiment-runs/queue",
+        response_model=ActiveRuns,
+        responses={
+            401: {"model": ApiError}, 422: {"model": ApiError}, 503: {"model": ApiError},
+        },
+    )
+    def queued_style_runs(user: Annotated[UserInfo, Depends(require_user)]) -> ActiveRuns:
+        # Unfinished runs oldest first; each lane executes its queue_position 0 run.
+        return ActiveRuns(runs=experiments.store.queue(user.id))
 
     @app.get(
         "/api/style-experiment-runs/{run_id}",

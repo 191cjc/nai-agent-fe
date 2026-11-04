@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { observer } from 'mobx-react-lite'
-import { FlaskConical, RefreshCw, Square } from 'lucide-react'
-import { ApiFailure, errorText } from './api'
+import { FlaskConical, RefreshCw, Square, X } from 'lucide-react'
+import { ApiFailure, errorText, type ExperimentRunState } from './api'
 import { datasetItemText } from './dataset-run'
 import { parsePromptTags } from './prompt-weights'
 import { createStyleExperimentPlan, type StyleExperimentPlan, type StyleExperimentRange } from './style-experiment'
@@ -9,6 +9,7 @@ import { supportsNativeCharacters, type GenerationStore } from './store'
 import { PromptSummary } from './PromptSummary'
 import { characterSnapshotSummary } from './character-summary'
 import type { SavedResultsStore } from './saved-results'
+import type { StyleRunStore } from './style-run-store'
 import { sharedPrompt } from './prompt-sections'
 
 interface Configuration {
@@ -126,62 +127,56 @@ export const StyleExperimentConfig = observer(({ generation, hidden }: { generat
       <p className="prompt-hint">从下限递增，未恰好落在步长上的上限不追加；按词条顺序组合，最后一个词条变化最快。</p>
     </div>}
     <p className="prompt-hint">固定种子用于所有组；留空时服务器在创建实验时随机一次，即使首组失败也沿用同一种子。</p>
-    <p className="prompt-hint">实验在服务器依次执行，单组失败后继续下一组。刷新、关闭页面、断线或退出登录都不会停止；重新进入会接回进度。只在点击“停止实验”后停止后续组。</p>
+    <p className="prompt-hint">实验在服务器依次执行，单组失败后继续下一组。已有实验或训练集在运行时，新实验加入队列，按顺序开始。刷新、关闭页面、断线或退出登录都不会停止；重新进入会接回进度。只在点击“停止”后停止后续组。</p>
     <p className="prompt-hint">新图片私有保存 7 天，参数和权重保留更久；从进度区或历史记录的“画风实验”打开对比。</p>
     {!frozen && !supportedModel && <p className="experiment-note">画风实验需要生成设置列表中的 V4 / V4.5 / V5 模型。</p>}
     {!frozen && generation.error && !generation.submitUncertain && <p className="alert" role="alert">{generation.error}</p>}
     <div className="experiment-config-actions">
       <button className="primary" type="button" disabled={locked || Boolean(error) || !plan || samples === null || !supportedModel} onClick={start}>
-        <FlaskConical size={15} aria-hidden="true" /> 开始批量测试
+        <FlaskConical size={15} aria-hidden="true" /> {generation.runs.running ? '加入队列' : '开始批量测试'}
       </button>
     </div>
   </section>
 })
 
-function experimentStatus(status: string): string {
-  return { running: '服务器运行中', stopping: '正在停止', stopped: '已停止', completed: '已完成' }[status] ?? status
+function runStatus(run: ExperimentRunState): string {
+  if (run.status === 'running') return run.queue_position ? `排队中 · 前面还有 ${run.queue_position} 个` : '生成中'
+  return { stopping: '正在停止', stopped: '已停止', completed: '已完成' }[run.status] ?? run.status
 }
 
-export const StyleExperimentProgress = observer(({ generation, saved }: { generation: GenerationStore; saved: SavedResultsStore }) => {
-  const runs = generation.runs
-  const run = runs.run
-  if (!run && runs.initialized && !runs.pendingId && !runs.error && !runs.creating) return null
-  const dataset = runs.kind === 'dataset'
+const LANES = { novelai: 'NovelAI', gpt: 'GPT' } as const
+
+const RunRow = observer(({ runs, run, saved }: { runs: StyleRunStore; run: ExperimentRunState; saved: SavedResultsStore }) => {
+  const dataset = run.kind === 'dataset'
+  const character = dataset && !!run.character
   const unit = dataset ? '条' : '组'
-  const title = dataset ? '训练集批跑' : '画风实验'
-  const stateLabel = run ? experimentStatus(run.status) : runs.creating ? '正在创建'
-    : runs.pendingId ? '提交待核对' : runs.checking ? '正在检查服务器' : '等待连接'
-  return <div className="experiment-progress" aria-label={`${title}进度`}>
+  const fallback = dataset ? (character ? '角色训练集' : '画风训练集') : '画风实验'
+  const unfinished = run.status === 'running' || run.status === 'stopping'
+  const queued = run.status === 'running' && !!run.queue_position
+  const stopping = runs.isStopping(run.id)
+  return <li className={`run-queue-item${queued ? ' queued' : ''}`}>
     <div className="experiment-progress-line" role="status" aria-live="polite" aria-atomic="true">
-      <strong>{title} · {stateLabel}</strong>
-      {run && <>
-        <span>已处理 {run.processed_count} / {run.total} {unit}</span>
-        <span>成功 {run.succeeded_count} · 失败 {run.failed_count}</span>
-        {run.current_ordinal !== null && <span>当前第 {run.current_ordinal} {unit}</span>}
-        {runs.running && !runs.connected && <span>进度连接中断，后台可能仍在运行</span>}
-      </>}
-      {runs.pendingId && <span>实验编号 {runs.pendingId}</span>}
+      <span className={`dataset-type-badge ${character ? 'character' : 'style'}`}>{dataset ? (character ? '角色' : '画风') : '实验'}</span>
+      <strong>{run.name || fallback} · {runStatus(run)}</strong>
+      <span className="run-lane">{LANES[run.lane ?? 'novelai']}</span>
+      <span>已处理 {run.processed_count} / {run.total} {unit}</span>
+      <span>成功 {run.succeeded_count} · 失败 {run.failed_count}</span>
+      {run.current_ordinal !== null && <span>当前第 {run.current_ordinal} {unit}</span>}
     </div>
     <div className="server-run-actions">
-      <button className="secondary" type="button" disabled={runs.creating || runs.checking || runs.stopping}
-        onClick={() => void runs.refresh()}><RefreshCw size={14} aria-hidden="true" />{runs.checking ? '正在连接...' : runs.connected ? '刷新进度' : '重新连接'}</button>
-      {run && <button className="secondary" type="button" onClick={() => void saved.openExperiment(run.id)}>
+      {!queued && <button className="secondary" type="button" onClick={() => void saved.openExperiment(run.id)}>
         <FlaskConical size={14} aria-hidden="true" /> 查看已保存结果
       </button>}
-      {(runs.running || runs.pendingId) && <button className="secondary" type="button"
-        disabled={runs.creating || runs.stopping || run?.status === 'stopping'} onClick={() => void runs.stop()}>
-        <Square size={13} aria-hidden="true" />{runs.stopping ? '正在请求停止...' : run?.status === 'stopping' ? '等待当前组结束' : '停止实验'}
-      </button>}
+      {unfinished ? <button className="secondary" type="button" disabled={stopping || run.status === 'stopping'} onClick={() => {
+        if (queued || window.confirm(`停止「${run.name || fallback}」？当前${unit}会完成，后续${unit}不再生成。`)) void runs.stop(run.id)
+      }}>
+        <Square size={13} aria-hidden="true" />{stopping ? '正在请求停止...' : run.status === 'stopping' ? `等待当前${unit}结束` : queued ? '取消排队' : '停止'}
+      </button> : <button className="icon-button" type="button" title="从列表移除" aria-label={`从列表移除 ${run.name || fallback}`}
+        onClick={() => runs.dismissFinished(run.id)}><X size={14} aria-hidden="true" /></button>}
     </div>
-    {runs.error && <p className="alert" role="alert">{runs.error}</p>}
-    {runs.stopError && <p className="alert" role="alert">{runs.stopError}</p>}
-    {runs.pendingId && runs.missing && <button className="text-action" type="button" disabled={runs.creating || runs.checking || runs.stopping}
-      onClick={() => {
-        if (window.confirm('请先核对历史和已保存实验。解除锁后将再次检查服务器是否有活动实验，不会重新提交原实验。确认已核对？')) void runs.acknowledgeMissing()
-      }}>已核对历史，解除未知提交锁</button>}
-    {run?.error_code && <p className="experiment-note">最近一{unit}诊断：{errorText(new ApiFailure(0, run.error_code, `本${unit}处理失败。`))}
+    {run.error_code && <p className="experiment-note">最近一{unit}诊断：{errorText(new ApiFailure(0, run.error_code, `本${unit}处理失败。`))}
       {run.status === 'running' && ` 服务器会继续处理后续${unit}，不会重试这一${unit}。`}</p>}
-    {run && <details className="result-parameters server-run-snapshot"><summary>{dataset ? '批跑信息与固定配置' : '实验信息与固定配置'}</summary>
+    <details className="result-parameters server-run-snapshot"><summary>{dataset ? '批跑信息与固定配置' : '实验信息与固定配置'}</summary>
       <p>每{unit} {run.sample_count} 张 · 计划 {(BigInt(run.total) * BigInt(run.sample_count)).toString()} 张 · {dataset ? `基础种子 ${run.seed}，第 N 条使用基础种子 + N − 1` : `统一请求种子 ${run.seed}`}</p>
       <PromptSummary parameters={run.parameters} />
       {run.parameters.negative_prompt && <p>负向：{run.parameters.negative_prompt}</p>}
@@ -194,7 +189,39 @@ export const StyleExperimentProgress = observer(({ generation, saved }: { genera
       <p>{run.parameters.steps} 步 · CFG {run.parameters.cfg_scale} · 每{unit} {run.sample_count} 张 · {run.parameters.quality ? '高质量' : '标准质量'}</p>
       <p>原始请求种子 {run.parameters.seed ?? '随机'} · {dataset ? '基础' : '统一'}实际种子 {run.seed}</p>
       <p>实验编号 {run.id} · {new Date(run.created_at * 1000).toLocaleString()}</p>
-      <p>服务器执行实验；离开页面或退出登录仅断开查看。单{unit}失败会继续后续{unit}，只有“停止实验”会阻止新的{unit}。</p>
-    </details>}
+    </details>
+  </li>
+})
+
+export const StyleExperimentProgress = observer(({ generation, saved }: { generation: GenerationStore; saved: SavedResultsStore }) => {
+  const runs = generation.runs
+  const visible = runs.runs.length > 0 || runs.finished.length > 0 || runs.pendingId !== null || runs.creating
+    || !!runs.error || !!runs.createError || !!runs.stopError || !runs.initialized
+  if (!visible || (!runs.initialized && runs.checking && !runs.error)) return null
+  const pendingLabel = runs.creating ? '正在加入队列' : runs.pendingId ? '提交待核对' : ''
+  return <div className="experiment-progress run-queue" aria-label="实验与训练集队列">
+    <div className="experiment-progress-line">
+      <strong>实验与训练集队列</strong>
+      <span>{runs.runs.length ? `${runs.runs.length} 个未完成 · NovelAI 与 GPT 各自按顺序执行` : '没有未完成的任务'}</span>
+      {runs.running && !runs.connected && <span>进度连接中断，后台可能仍在运行</span>}
+      {pendingLabel && <span>{pendingLabel}{runs.pendingId && ` · 编号 ${runs.pendingId}`}</span>}
+    </div>
+    <div className="server-run-actions">
+      <button className="secondary" type="button" disabled={runs.creating || runs.checking}
+        onClick={() => void runs.refresh()}><RefreshCw size={14} aria-hidden="true" />{runs.checking ? '正在连接...' : runs.connected ? '刷新进度' : '重新连接'}</button>
+      {runs.finished.length > 0 && <button className="secondary" type="button" onClick={() => runs.dismissFinished()}>清除已结束</button>}
+    </div>
+    {runs.error && <p className="alert" role="alert">{runs.error}</p>}
+    {runs.createError && <p className="alert" role="alert">{runs.createError}</p>}
+    {runs.stopError && <p className="alert" role="alert">{runs.stopError}</p>}
+    {runs.pendingId && runs.missing && <button className="text-action" type="button" disabled={runs.creating || runs.checking}
+      onClick={() => {
+        if (window.confirm('请先核对历史和已保存实验。解除锁后将重新读取服务器队列，不会重新提交原实验。确认已核对？')) void runs.acknowledgeMissing()
+      }}>已核对历史，解除未知提交锁</button>}
+    {(runs.runs.length > 0 || runs.finished.length > 0) && <ol className="run-queue-list">
+      {runs.runs.map(run => <RunRow key={run.id} runs={runs} run={run} saved={saved} />)}
+      {runs.finished.map(run => <RunRow key={run.id} runs={runs} run={run} saved={saved} />)}
+    </ol>}
+    <p className="experiment-note">服务器执行队列；离开页面或退出登录仅断开查看。单{'条/组'}失败会继续后续内容，只有“停止”会阻止后续生成。</p>
   </div>
 })

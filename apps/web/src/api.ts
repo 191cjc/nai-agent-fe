@@ -204,12 +204,18 @@ export interface ExperimentRunDefinition {
   styles?: string[] | null
   /** Request shape on create; the server answers with the frozen CharacterRunPlan. */
   character?: CharacterRunRequest | CharacterRunPlan | null
-  /** Create-only display name; not part of the frozen run definition. */
-  name?: string
+  /** Display name: sent on create, echoed by the queue listing; never frozen. */
+  name?: string | null
 }
+
+export type ExperimentLane = 'novelai' | 'gpt'
 
 export interface ExperimentRunState extends ExperimentRunDefinition {
   status: 'running' | 'stopping' | 'stopped' | 'completed'
+  /** Execution lane: GPT image runs queue apart from NovelAI runs. */
+  lane?: ExperimentLane
+  /** Unfinished runs: 0 is executing in its lane, N waits behind N earlier runs. */
+  queue_position?: number | null
   total: string
   next_ordinal: string
   processed_count: string
@@ -332,6 +338,7 @@ export function errorText(error: unknown): string {
       result_storage_error: '图片保存失败，请检查历史记录；请勿自动重新生成。',
       experiment_conflict: '这组画风实验已经提交或实验信息不一致，请先检查历史记录。',
       experiment_run_active: '已有进行中的画风实验或训练集批跑，请查看其进度或手动停止。',
+      experiment_run_queue_full: '排队中的实验与训练集已达 10 个上限，请等待完成或停止其中一些后再加入。',
       experiment_run_conflict: '实验编号已被其他定义使用，请检查已保存的实验。',
       prompt_snapshot_conflict: '此快照编号已用于其他内容，请关闭后重新保存。',
       experiment_run_unknown: '实验提交结果未知，请重新连接核对，不要重复开始。',
@@ -521,6 +528,13 @@ export class WorkspaceApi {
   async activeExperimentRun(signal?: AbortSignal): Promise<{ run: ExperimentRunState | null }> {
     const response = await this.request<{ run: ExperimentRunState | null }>('/api/style-experiment-runs/active', { signal })
     return { run: response?.run === null ? null : checkedRun(response?.run) }
+  }
+
+  /** The owner's unfinished runs, oldest first. */
+  async queuedExperimentRuns(signal?: AbortSignal): Promise<ExperimentRunState[]> {
+    const response = await this.request<{ runs: ExperimentRunState[] }>('/api/style-experiment-runs/queue', { signal })
+    if (!Array.isArray(response?.runs)) throw new ApiFailure(0, 'invalid_response', '实验队列响应无效，请重新连接。')
+    return response.runs.map(checkedRun)
   }
 
   async experimentRun(id: string, signal?: AbortSignal): Promise<ExperimentRunState> {

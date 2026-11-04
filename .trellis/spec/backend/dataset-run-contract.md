@@ -7,7 +7,7 @@ prompt library, dataset group metadata, or the browser zip export. A dataset
 run is a second kind of the [Durable Experiments](./durable-experiment-contract.md)
 run and inherits every lifecycle guarantee there (single create POST, known-id
 reconciliation, failure continuation, explicit Stop, no paid retry, restart
-reconciliation, one active run per owner). Frontend lifecycle rules follow
+reconciliation, per-owner per-lane run queue). Frontend lifecycle rules follow
 [Style Experiment Contract](../frontend/style-experiment-contract.md).
 
 Character runs (reference images, style pools, traits) extend this contract;
@@ -60,7 +60,8 @@ see [Character Dataset Runs](./character-dataset-contract.md).
 | Shared/character/sections content in run parameters | 422, no state |
 | Blank or comment-only style | 422 |
 | 0 or >300 items, duplicate/invalid id, blank/comment/over-limit item | 422 |
-| Another active style or dataset run | 409 `experiment_run_active` |
+| 10 unfinished style/dataset runs already | 409 `experiment_run_queue_full` |
+| Earlier unfinished run in the same lane | Accepted; waits in queue order |
 | Ordinary generation with dataset context | 409 `experiment_conflict` |
 | Item group fails | Counted failed, next item continues, no retry |
 | Image expired/unavailable during export | Skipped and reported; zip continues |

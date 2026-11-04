@@ -54,11 +54,15 @@ absent/false preserves the legacy contracts below.
   starting and use the server snapshot for running/reconnected displays.
 - Server chooses one seed once if blank; every group uses it even if the first
   fails. Never infer a new seed from draft edits, image availability or GETs.
-- Authentication entry checks for an active run and attaches via GET without
-  changing the draft. Preserve separately guarded latest-history restoration.
-  An unresolved active check/creation or attached running/stopping state blocks
-  overlapping new ordinary/batch submissions locally. Backend also enforces
-  at most one active run per owner.
+- Authentication entry reads the owner's run queue
+  (`GET /api/style-experiment-runs/queue`) and attaches without changing the
+  draft. Preserve separately guarded latest-history restoration. An unresolved
+  queue check or create blocks new batch submissions; running runs do not — a
+  new experiment/training set is added to the queue ("加入队列"). Unfinished runs
+  still block ordinary generation locally. The progress area lists every
+  unfinished run (badge, name, lane, 生成中 / 排队中 N, own Stop) plus runs that
+  finished while observed until dismissed; saved-set delete is disabled for
+  every unfinished run.
 - Failed groups advance automatically. Show processed/success/failure counts
   and safe errors, including completion with failures. A disconnected poll is
   an observation error, not a stopped run. Offer reconnect/retry read actions.

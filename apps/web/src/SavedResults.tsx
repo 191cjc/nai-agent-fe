@@ -15,8 +15,8 @@ function experimentLabel(experiment: ExperimentSummary): string {
   return experiment.name ? `「${experiment.name}」` : `未命名${kind}（${new Date(experiment.created_at * 1000).toLocaleString()}）`
 }
 
-export const SavedExperimentList = observer(({ saved, api, onView, activeId }: {
-  saved: SavedResultsStore; api: WorkspaceApi; onView: () => void; activeId?: string | null
+export const SavedExperimentList = observer(({ saved, api, onView, activeIds = [] }: {
+  saved: SavedResultsStore; api: WorkspaceApi; onView: () => void; activeIds?: readonly string[]
 }) => {
   const [exportingId, setExportingId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -67,8 +67,8 @@ export const SavedExperimentList = observer(({ saved, api, onView, activeId }: {
         : [...current, ...pageDatasetIds.filter(id => !current.includes(id))])}>
         <CheckSquare size={15} aria-hidden="true" /> {allPageChosen ? '取消本页' : '全选本页训练集'}</button>
       <button className="text-action" type="button" disabled={exportingChosen || chosen.length === 0} onClick={() => setExportingChosen(true)}><Download size={15} aria-hidden="true" /> 合并导出所选{chosen.length ? `（${chosen.length}）` : ''}</button>
-      <button className="text-action danger-text" type="button" disabled={exportingChosen || deleting || chosen.length === 0 || (!!activeId && chosen.includes(activeId))}
-        title={activeId && chosen.includes(activeId) ? '所选中有正在运行的训练集，结束或停止后可删除' : '永久删除所选训练集'}
+      <button className="text-action danger-text" type="button" disabled={exportingChosen || deleting || chosen.length === 0 || chosen.some(id => activeIds.includes(id))}
+        title={chosen.some(id => activeIds.includes(id)) ? '所选中有正在运行或排队的训练集，结束或停止后可删除' : '永久删除所选训练集'}
         onClick={() => void remove(chosen)}><Trash2 size={15} aria-hidden="true" /> 删除所选{chosen.length ? `（${chosen.length}）` : ''}</button>
       {chosen.length > 0 && <button className="text-action" type="button" disabled={exportingChosen || deleting} onClick={() => setChosen([])}>清除选择</button>}
     </div>}
@@ -95,8 +95,8 @@ export const SavedExperimentList = observer(({ saved, api, onView, activeId }: {
         </button>
         {experiment.kind === 'dataset' && <button className="text-action" type="button" aria-expanded={exportingId === experiment.id}
           onClick={() => setExportingId(exportingId === experiment.id ? null : experiment.id)}><Download size={15} aria-hidden="true" /> 导出训练集</button>}
-        <button className="icon-button danger" type="button" disabled={deleting || experiment.id === activeId}
-          title={experiment.id === activeId ? '正在运行，结束或停止后可删除' : '永久删除'}
+        <button className="icon-button danger" type="button" disabled={deleting || activeIds.includes(experiment.id)}
+          title={activeIds.includes(experiment.id) ? '正在运行或排队，结束或停止后可删除' : '永久删除'}
           aria-label={`删除 ${experimentLabel(experiment)}`} onClick={() => void remove([experiment.id])}><Trash2 size={16} /></button>
       </div>
       {exportingId === experiment.id && <Suspense fallback={null}><DatasetExportPanel api={api} source={{ kind: 'experiment', id: experiment.id }} fileName={experiment.name ?? undefined} onClose={() => setExportingId(null)} /></Suspense>}

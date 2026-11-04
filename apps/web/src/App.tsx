@@ -173,7 +173,7 @@ const GenerateControls = observer(({ store, onOpenSettings }: { store: AppStore;
         </button>
         <button className="primary generate-button" type="submit" form="generation-form" disabled={active}>
           <WandSparkles size={17} aria-hidden="true" />{generation.runs.creating ? '正在创建实验...' : generation.runs.pendingId ? '实验待核对'
-            : !generation.runs.initialized ? '待连接实验状态' : generation.experimentRunning ? '画风实验进行中'
+            : !generation.runs.initialized ? '待连接实验状态' : generation.experimentRunning ? '实验/训练集进行中'
               : generation.activeId ? '正在生成...' : generation.submitUncertain ? '待核对历史' : generation.busy ? '正在提交...' : '生成图像'}
         </button>
       </div>
@@ -294,7 +294,7 @@ const Result = observer(({ store, hidden }: { store: AppStore; hidden: boolean }
 
   const placeholder = generation.busy ? '正在提交生成任务...'
     : generation.activeId || generation.checking ? '正在生成，请稍候...'
-      : generation.experimentRunning ? '画风实验正在服务器运行，可在进度区查看已保存结果。'
+      : generation.experimentRunning ? '实验或训练集正在服务器运行，可在队列中查看进度和已保存结果。'
         : job?.status === 'failed' ? '本次生成失败，参数仍可查看。'
           : job?.status === 'succeeded' ? '图片已过期或暂不可用，参数仍可在历史记录中查看。'
             : '在下方填写提示词，开始创作。'
@@ -420,7 +420,7 @@ const HistoryPanel = observer(({ store, onView, onReuse, onResume, mode, onModeC
   mode: HistoryMode; onModeChange: (mode: HistoryMode) => void
 }) => {
   const history = store.history
-  const activeExperimentId = store.styleRuns.running ? store.styleRuns.run?.id : null
+  const activeExperimentIds = store.styleRuns.activeIds
   const [selecting, setSelecting] = useState(false)
   const [selected, setSelected] = useState<readonly string[]>([])
   const [exporting, setExporting] = useState(false)
@@ -471,8 +471,8 @@ const HistoryPanel = observer(({ store, onView, onReuse, onResume, mode, onModeC
         {(item.status === 'queued' || item.status === 'running') && <button className="text-action" type="button"
           disabled={store.generation.experimentRunning || store.generation.operationLocked || store.generation.activeId !== null || store.generation.busy || store.generation.submitUncertain}
           onClick={() => { store.generation.resume(item.id); onResume() }}><RefreshCw size={15} /> 查看状态</button>}
-        <button className="icon-button danger" type="button" title={activeExperimentId && item.parameters.experiment?.id === activeExperimentId ? '实验结束或停止后可删除' : item.status === 'queued' || item.status === 'running' ? '任务完成后可删除' : '删除历史记录'} aria-label={`删除 ${new Date(item.created_at * 1000).toLocaleString()} 的历史记录`}
-          disabled={history.deletingId !== null || item.status === 'queued' || item.status === 'running' || (!!activeExperimentId && item.parameters.experiment?.id === activeExperimentId)} onClick={() => {
+        <button className="icon-button danger" type="button" title={item.parameters.experiment && activeExperimentIds.includes(item.parameters.experiment.id) ? '实验结束或停止后可删除' : item.status === 'queued' || item.status === 'running' ? '任务完成后可删除' : '删除历史记录'} aria-label={`删除 ${new Date(item.created_at * 1000).toLocaleString()} 的历史记录`}
+          disabled={history.deletingId !== null || item.status === 'queued' || item.status === 'running' || (!!item.parameters.experiment && activeExperimentIds.includes(item.parameters.experiment.id))} onClick={() => {
             if (window.confirm('确定删除这条记录及其保存的图片？此操作无法撤销。')) void history.delete(item.id)
           }}><Trash2 size={16} /></button>
       </div>
@@ -485,7 +485,7 @@ const HistoryPanel = observer(({ store, onView, onReuse, onResume, mode, onModeC
         onClick={() => { if (history.nextOffset !== null) void history.load(history.nextOffset) }}><ArrowRight size={18} /></button>
     </div>
     </div>
-    <div className="history-tab-content" hidden={mode !== 'experiments'}><SavedExperimentList saved={store.savedResults} api={store.api} onView={onView} activeId={activeExperimentId} /></div>
+    <div className="history-tab-content" hidden={mode !== 'experiments'}><SavedExperimentList saved={store.savedResults} api={store.api} onView={onView} activeIds={activeExperimentIds} /></div>
   </div>
 })
 

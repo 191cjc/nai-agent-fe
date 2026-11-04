@@ -610,11 +610,11 @@ def test_missing_executor_refuses_before_submission_side_effects(
     provider = FakeProvider()
     manager = GenerationManager(database, provider)
     request = GenerationRequest(**INPUT)
-    capacity = Mock(wraps=manager._capacity)
+    capacity = Mock(wraps=manager._capacity["novelai"])
     create = Mock(wraps=manager.store.create)
     random_seed = Mock(return_value=76)
     run = Mock(wraps=manager._run)
-    monkeypatch.setattr(manager, "_capacity", capacity)
+    monkeypatch.setitem(manager._capacity, "novelai", capacity)
     monkeypatch.setattr(manager.store, "create", create)
     monkeypatch.setattr(manager, "_run", run)
     monkeypatch.setattr("novelai_api.generations.secrets.randbelow", random_seed)
@@ -643,7 +643,7 @@ def test_history_runtime_error_is_not_a_provider_configuration_refusal(
         login(client, database, "alice")
         manager = app.state.generations
         create = manager.store.create
-        enqueue = Mock(wraps=manager._executor.submit)
+        enqueue = Mock(wraps=manager._executors["novelai"].submit)
 
         def failing_create(user_id: str, parameters: GenerationRequest) -> str:
             if persist_first:
@@ -651,7 +651,7 @@ def test_history_runtime_error_is_not_a_provider_configuration_refusal(
             raise RuntimeError("Fixture history failure")
 
         monkeypatch.setattr(manager.store, "create", failing_create)
-        monkeypatch.setattr(manager._executor, "submit", enqueue)
+        monkeypatch.setattr(manager._executors["novelai"], "submit", enqueue)
         response = client.post("/api/generations", json={**INPUT, "seed": 77}, headers=ORIGIN)
 
         assert response.status_code == 500
@@ -684,7 +684,7 @@ def test_executor_runtime_error_after_enqueue_keeps_history_and_unknown_outcome(
             queued.append((work, job_id, user_id, parameters))
             raise RuntimeError("Fixture executor failure after enqueue")
 
-        monkeypatch.setattr(manager._executor, "submit", failing_submit)
+        monkeypatch.setattr(manager._executors["novelai"], "submit", failing_submit)
         response = client.post("/api/generations", json={**INPUT, "seed": 77}, headers=ORIGIN)
 
         assert response.status_code == 500

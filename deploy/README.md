@@ -458,3 +458,16 @@ work is refused only when free disk would drop below 3 GiB. Take the verified
 private online backup and confirm no active jobs/runs before the restart;
 deploy the API before the web release. Rolling the API back below schema 8
 requires restoring the pre-upgrade backup.
+
+## Run queue and provider lanes (schema 9)
+
+This release migrates schema 8 → 9 at `ExecStartPre`: it adds
+`style_experiment_runs.lane` (back-filled `gpt` for GPT image character runs),
+drops the one-active-run-per-owner unique index and adds a queue index. Owners
+may then queue up to 10 runs; NovelAI and GPT image work run on separate
+single-worker executors. Take the verified private online backup and confirm
+no active jobs/runs before the restart (a restart marks an in-flight group
+`outcome_unknown`; the run then continues with its next group). Deploy the API
+before the web release — the new web reads `GET /api/style-experiment-runs/queue`.
+Rolling the API back below schema 9 requires restoring the pre-upgrade backup,
+because older code cannot hold several unfinished runs per owner.

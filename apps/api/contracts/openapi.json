@@ -57,6 +57,22 @@
         "title": "ActiveRun",
         "type": "object"
       },
+      "ActiveRuns": {
+        "properties": {
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/RunState"
+            },
+            "title": "Runs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "runs"
+        ],
+        "title": "ActiveRuns",
+        "type": "object"
+      },
       "AdviceRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1876,6 +1892,26 @@
             "title": "Kind",
             "type": "string"
           },
+          "lane": {
+            "default": "novelai",
+            "enum": [
+              "novelai",
+              "gpt"
+            ],
+            "title": "Lane",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
           "next_ordinal": {
             "title": "Next Ordinal",
             "type": "string"
@@ -1886,6 +1922,17 @@
           "processed_count": {
             "title": "Processed Count",
             "type": "string"
+          },
+          "queue_position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Queue Position"
           },
           "ranges": {
             "items": {
@@ -4846,6 +4893,72 @@
           }
         },
         "summary": "Active Style Run"
+      }
+    },
+    "/api/style-experiment-runs/queue": {
+      "get": {
+        "operationId": "queued_style_runs_api_style_experiment_runs_queue_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "__Host-nai_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "  Host-Nai Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActiveRuns"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Queued Style Runs"
       }
     },
     "/api/style-experiment-runs/{run_id}": {

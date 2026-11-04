@@ -190,10 +190,13 @@ export const DatasetRunConfig = observer(({ generation, api, hidden }: { generat
 
   function start() {
     if (locked || error || !selected.length) return
-    if (mode === 'style') void generation.startDatasetRun(entries, { name: runName })
-    else void generation.startDatasetRun(characterEntries, {
-      styles: character.styles, character: character.settings, gptModel: character.gpt?.gpt_image_model ?? undefined, name: runName,
-    })
+    const started = mode === 'style'
+      ? generation.startDatasetRun(entries, { name: runName })
+      : generation.startDatasetRun(characterEntries, {
+        styles: character.styles, character: character.settings, gptModel: character.gpt?.gpt_image_model ?? undefined, name: runName,
+      })
+    // A queued run keeps its name; clear the field so the next set gets its own.
+    void started.then(() => { if (!runs.createError && !runs.pendingId && !generation.error) setRunName('') })
   }
 
   const frozenCharacter = snapshot?.character && 'references' in snapshot.character ? snapshot.character : null
@@ -232,7 +235,7 @@ export const DatasetRunConfig = observer(({ generation, api, hidden }: { generat
         : '每条提示词是一次付费生成，Vibe Transfer / 图生图可能额外消耗 Anlas。角色 LoRA 一般 15–40 张一致的精选图即可，跑完请人工筛掉不像的图。'}</p>
     </div>}
     <p className="prompt-hint">每条使用不同种子：生成设置中的种子作为基础种子（留空则服务器随机一次），第 N 条使用基础种子 + N − 1，便于复现。</p>
-    <p className="prompt-hint">批跑在服务器依次执行，单条失败后继续下一条，不会自动重试。刷新、关闭页面或退出登录不会停止；只有“停止实验”会阻止后续条目。与画风实验共用“同时只能运行一个”的限制。</p>
+    <p className="prompt-hint">批跑在服务器依次执行，单条失败后继续下一条，不会自动重试。刷新、关闭页面或退出登录不会停止；只有“停止”会阻止后续条目。已有任务在运行时会加入队列：NovelAI 与 GPT 各自按加入顺序逐个执行，互不等待；最多 10 个未完成任务。</p>
     <p className="prompt-hint">图片私有保存 7 天，请在过期前从历史记录的「实验与训练集」中导出训练集。</p>
     {!snapshot && generation.error && !generation.submitUncertain && <p className="alert" role="alert">{generation.error}</p>}
     {!snapshot && <label className="dataset-run-name">训练集名称（可选）
@@ -242,7 +245,7 @@ export const DatasetRunConfig = observer(({ generation, api, hidden }: { generat
     </label>}
     <div className="experiment-config-actions">
       <button className="primary" type="button" disabled={locked || Boolean(error) || !selected.length || selected.length > MAX_DATASET_ITEMS} onClick={start}>
-        <Layers size={15} aria-hidden="true" /> 开始批跑
+        <Layers size={15} aria-hidden="true" /> {runs.running ? '加入队列' : '开始批跑'}
       </button>
     </div>
   </section>

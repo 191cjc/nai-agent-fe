@@ -14,7 +14,7 @@ from novelai_api.config import Settings
 from novelai_api.dataset_plan import DatasetRunCreate, item_seed
 from novelai_api.db import Database
 from novelai_api.generations import GenerationManager, ResultCache
-from novelai_api.style_experiments import RunConflict, StyleExperimentService
+from novelai_api.style_experiments import MAX_ACTIVE_RUNS, RunConflict, StyleExperimentService
 
 ITEMS = [
     {"id": "portrait-1", "prompt": "1girl, portrait, smile"},
@@ -126,7 +126,7 @@ def test_stop_and_restart_never_repeat_a_dataset_item(database: Database) -> Non
         restarted.stop()
 
 
-def test_idempotency_conflicts_and_one_active_run_across_kinds(
+def test_idempotency_conflicts_and_queued_runs_across_kinds(
     database: Database,  # noqa: F811
 ) -> None:
     user = owner(database)
@@ -142,15 +142,20 @@ def test_idempotency_conflicts_and_one_active_run_across_kinds(
     with pytest.raises(RunConflict) as style_same_id:
         store.create(user, request(run_id=run_id))
     assert style_same_id.value.code == "experiment_run_conflict"
-    with pytest.raises(RunConflict) as style_active:
-        store.create(user, request())
-    assert style_active.value.code == "experiment_run_active"
-    store.stop(user, first.id)
+    # A second run of either kind queues behind the first in the NovelAI lane.
     style = store.create(user, request())
-    with pytest.raises(RunConflict) as dataset_active:
+    assert (style.lane, style.queue_position) == ("novelai", 1)
+    assert [run.id for run in store.queue(user)] == [first.id, style.id]
+    assert store.active(user).id == first.id
+    store.stop(user, first.id)
+    assert store.get(user, style.id).queue_position == 0
+    assert store.get(user, first.id).queue_position is None
+    for _ in range(MAX_ACTIVE_RUNS - 1):
         store.create(user, dataset())
-    assert dataset_active.value.code == "experiment_run_active"
-    assert store.active(user).id == style.id and store.active(user).kind == "style"
+    with pytest.raises(RunConflict) as full:
+        store.create(user, request())
+    assert full.value.code == "experiment_run_queue_full"
+    assert [run.queue_position for run in store.queue(user)] == list(range(MAX_ACTIVE_RUNS))
 
 
 def test_api_create_reattach_owner_origin_and_no_ordinary_injection(

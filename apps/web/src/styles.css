@@ -599,3 +599,10 @@ h1, h2, h3 { letter-spacing: 0; }
 .style-preset-picks input { width: 15px; height: 15px; margin: 0; accent-color: var(--gold); }
 .style-preset-picks small { color: var(--muted); }
 .text-action.danger-text:not(:disabled) { color: #f4b0b5; }
+
+/* Run queue: one row per unfinished (or just finished) experiment / training set. */
+.run-queue-list { flex-basis: 100%; display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.run-queue-item { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 12px; padding: 7px 10px; border: 1px solid #45443a; border-radius: 6px; background: #232521; }
+.run-queue-item.queued { opacity: .78; border-style: dashed; }
+.run-queue-item > .experiment-note, .run-queue-item > .server-run-snapshot { flex-basis: 100%; margin: 0; }
+.run-lane { padding: 0 6px; border-radius: 4px; background: #3a3a31; color: #d8d4c6; font-size: 11px; }

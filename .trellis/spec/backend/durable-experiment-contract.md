@@ -69,8 +69,19 @@ absent/false preserves the legacy contracts below.
   definitions require no new normalization. Effective fields must match the
   metadata; style-only group overrides preserve it. Changed hidden metadata
   still conflicts even if effective prompts match. See prompt-sections-contract.md.
-- Single lifecycle scheduler uses GenerationManager's existing single-worker
-  bounded executor/reservations. At most one group per run in flight. Queue
+- Single lifecycle scheduler on GenerationManager's per-lane executors: lane
+  `novelai` (NovelAI provider, ordinary generation, style and non-GPT dataset
+  runs) and lane `gpt` (GPT image character groups), each one worker with its
+  own 3-slot bounded admission, so one provider never waits behind the other.
+  A run's lane is frozen at create (`style_experiment_runs.lane`, schema 9).
+- Run queue (schema 9): an owner may hold up to 10 unfinished runs
+  (`MAX_ACTIVE_RUNS`, else 409 `experiment_run_queue_full`). Within one
+  owner's lane only the oldest unfinished run (ORDER BY created_at, rowid)
+  claims groups; later runs wait with no claim, history or paid call.
+  `queue_position` (0 executing, N waiting behind N) is reported by run reads
+  and `GET /api/style-experiment-runs/queue` (oldest first, with names).
+  Stopping a waiting run settles it immediately as stopped. `GET .../active`
+  remains and returns the oldest unfinished run. At most one group per run in flight. Queue
   contention waits without consuming a group. Rotate the starting owner across
   bounded scheduler ticks so earlier continuously active owners cannot starve
   later runs. Definite admission failures may
@@ -102,7 +113,8 @@ absent/false preserves the legacy contracts below.
 | Stored v1 zero group after restart | Original numeric-zero semantics |
 | Existing same owner/id/definition | Return existing run; no duplicate work |
 | Same id with changed definition | 409 experiment_run_conflict |
-| Another active run | 409 experiment_run_active |
+| Owner already holds 10 unfinished runs | 409 experiment_run_queue_full |
+| Earlier unfinished run in the same owner lane | 202; new run waits (queue_position > 0) |
 | Foreign/missing run | 404 |
 | Group provider/storage/outcome failure | Failed history + counter, continue next ordinal |
 | Queue temporarily full | Wait without consuming ordinal |

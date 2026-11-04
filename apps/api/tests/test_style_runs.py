@@ -219,7 +219,7 @@ def test_legacy_same_definition_keeps_version_and_restart_never_repeats_ordinal(
                 "SELECT definition_json FROM style_experiment_runs WHERE user_id = ? AND id = ?",
                 (user, run.id),
             ).fetchone()[0] == frozen
-            assert connection.execute("PRAGMA user_version").fetchone()[0] == 8
+            assert connection.execute("PRAGMA user_version").fetchone()[0] == 9
         assert store.create(user, original).model_dump() == ended.model_dump()
         payload["parameters"]["width"] = 1024
         with pytest.raises(RunConflict, match="experiment_run_conflict"):
@@ -687,7 +687,7 @@ def test_enqueue_uncertainty_counts_once_and_continues_without_late_paid_retry(
     service = StyleExperimentService(database, manager)
     manager.start()
     queued = []
-    original = manager._executor.submit
+    original = manager._executors["novelai"].submit
 
     def fail_first(*args):
         if not queued:
@@ -695,7 +695,7 @@ def test_enqueue_uncertainty_counts_once_and_continues_without_late_paid_retry(
             raise RuntimeError("fixture failure after accepting work")
         return original(*args)
 
-    monkeypatch.setattr(manager._executor, "submit", fail_first)
+    monkeypatch.setattr(manager._executors["novelai"], "submit", fail_first)
     try:
         run = service.store.create(user, request())
         ended = pump(service, user, run.id)
@@ -787,8 +787,7 @@ def test_concurrent_idempotent_create_one_active_owner_and_used_id_refusal(
         results = list(executor.map(lambda _: create(), range(2)))
     assert results[0].model_dump() == results[1].model_dump()
     assert random.call_count == 1
-    with pytest.raises(RunConflict, match="experiment_run_active"):
-        store.create(user, request())
+    assert store.create(user, request()).queue_position == 1
     with pytest.raises(RunConflict, match="experiment_run_conflict"):
         store.create(user, request(run_id=definition.id, width=1024))
     store.stop(user, str(definition.id))
@@ -914,7 +913,7 @@ def test_v2_migration_and_backup_preserve_auth_jobs_and_private_run_state(tmp_pa
     database.migrate()
     assert database.check_ready()
     with database.connect() as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 8
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 9
         assert connection.execute("SELECT COUNT(*) FROM browser_sessions").fetchone()[0] == 1
         assert connection.execute("SELECT COUNT(*) FROM generation_jobs").fetchone()[0] == 1
     run = RunStore(database).create(owner_id, request(seed=77))
