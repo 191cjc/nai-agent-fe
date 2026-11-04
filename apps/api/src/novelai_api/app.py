@@ -32,6 +32,7 @@ from .dataset_plan import DatasetRunCreate
 from .db import Database
 from .generations import (
     ExperimentConflict,
+    ExperimentDeleted,
     ExperimentDetail,
     ExperimentPage,
     ExperimentRename,
@@ -618,6 +619,33 @@ def create_app(
             summary=summary, items=manager.views(items, user.id),
             next_offset=next_offset,
         )
+
+    @app.delete(
+        "/api/style-experiments/{experiment_id}",
+        response_model=ExperimentDeleted,
+        responses={
+            401: {"model": ApiError}, 403: {"model": ApiError}, 404: {"model": ApiError},
+            409: {"model": ApiError}, 422: {"model": ApiError}, 503: {"model": ApiError},
+        },
+    )
+    def delete_style_experiment(
+        experiment_id: UUID, user: Annotated[UserInfo, Depends(require_user)],
+    ) -> ExperimentDeleted | JSONResponse:
+        outcome = manager.store.delete_experiment(user.id, str(experiment_id))
+        if outcome is None:
+            raise HTTPException(
+                status_code=404,
+                detail=ApiError(code="not_found", message="Experiment not found").model_dump(),
+            )
+        status, job_ids, images = outcome
+        if status == "experiment_active":
+            return error(409, "experiment_run_active", "Experiment run is still active")
+        if status == "active":
+            return error(409, "job_active", "A group of this experiment is still running")
+        for job_id in job_ids:
+            manager.cache.discard(job_id)
+            thumbnails.discard(job_id)
+        return ExperimentDeleted(deleted_groups=len(job_ids), deleted_images=images)
 
     @app.put(
         "/api/style-experiments/{experiment_id}/name",

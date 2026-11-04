@@ -598,3 +598,4 @@ h1, h2, h3 { letter-spacing: 0; }
 .style-preset-picks label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
 .style-preset-picks input { width: 15px; height: 15px; margin: 0; accent-color: var(--gold); }
 .style-preset-picks small { color: var(--muted); }
+.text-action.danger-text:not(:disabled) { color: #f4b0b5; }

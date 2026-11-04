@@ -102,6 +102,35 @@ export class SavedResultsStore {
     }
   }
 
+  /**
+   * Permanently delete saved experiments one by one (server refuses active ones).
+   * Closes the viewer if it shows a deleted set, then reloads the current page.
+   */
+  async deleteExperiments(ids: readonly string[]): Promise<{ deleted: string[]; groups: number; images: number; failed: { id: string; error: string }[] }> {
+    const deleted: string[] = []
+    const failed: { id: string; error: string }[] = []
+    let groups = 0
+    let images = 0
+    for (const id of ids) {
+      try {
+        const result = await this.api.deleteExperiment(id)
+        deleted.push(id)
+        groups += result.deleted_groups
+        images += result.deleted_images
+      } catch (error) {
+        failed.push({ id, error: errorText(error) })
+      }
+    }
+    runInAction(() => {
+      if (this.selection?.kind === 'experiment' && deleted.includes(this.selection.id)) this.close()
+      this.experiments = this.experiments.filter(item => !deleted.includes(item.id))
+    })
+    // A now-empty later page falls back one page.
+    const offset = !this.experiments.length && this.listOffset > 0 ? Math.max(0, this.listOffset - 20) : this.listOffset
+    await this.loadExperiments(offset)
+    return { deleted, groups, images, failed }
+  }
+
   /** Set or clear a saved training set's name; throws so the caller can show the error. */
   async renameExperiment(id: string, name: string): Promise<void> {
     const cleaned = name.split(/\s+/).filter(Boolean).join(' ')

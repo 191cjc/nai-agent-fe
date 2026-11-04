@@ -485,7 +485,7 @@ const HistoryPanel = observer(({ store, onView, onReuse, onResume, mode, onModeC
         onClick={() => { if (history.nextOffset !== null) void history.load(history.nextOffset) }}><ArrowRight size={18} /></button>
     </div>
     </div>
-    <div className="history-tab-content" hidden={mode !== 'experiments'}><SavedExperimentList saved={store.savedResults} api={store.api} onView={onView} /></div>
+    <div className="history-tab-content" hidden={mode !== 'experiments'}><SavedExperimentList saved={store.savedResults} api={store.api} onView={onView} activeId={activeExperimentId} /></div>
   </div>
 })
 

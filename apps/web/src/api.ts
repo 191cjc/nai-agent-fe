@@ -535,6 +535,10 @@ export class WorkspaceApi {
     return run
   }
 
+  deleteExperiment(id: string): Promise<{ deleted_groups: number; deleted_images: number }> {
+    return this.request(`/api/style-experiments/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  }
+
   renameExperiment(id: string, name: string | null): Promise<void> {
     return this.request(`/api/style-experiments/${encodeURIComponent(id)}/name`, { method: 'PUT', body: JSON.stringify({ name }) })
   }

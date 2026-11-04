@@ -694,6 +694,24 @@
         "title": "ExperimentContext",
         "type": "object"
       },
+      "ExperimentDeleted": {
+        "properties": {
+          "deleted_groups": {
+            "title": "Deleted Groups",
+            "type": "integer"
+          },
+          "deleted_images": {
+            "title": "Deleted Images",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "deleted_groups",
+          "deleted_images"
+        ],
+        "title": "ExperimentDeleted",
+        "type": "object"
+      },
       "ExperimentDetail": {
         "properties": {
           "items": {
@@ -5103,6 +5121,110 @@
       }
     },
     "/api/style-experiments/{experiment_id}": {
+      "delete": {
+        "operationId": "delete_style_experiment_api_style_experiments__experiment_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "experiment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Experiment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "__Host-nai_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "  Host-Nai Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExperimentDeleted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Delete Style Experiment"
+      },
       "get": {
         "operationId": "get_style_experiment_api_style_experiments__experiment_id__get",
         "parameters": [

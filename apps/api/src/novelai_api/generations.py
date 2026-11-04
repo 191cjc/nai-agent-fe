@@ -398,6 +398,11 @@ def _clean_experiment_name(value: str | None) -> str | None:
 ExperimentName = Annotated[str | None, AfterValidator(_clean_experiment_name)]
 
 
+class ExperimentDeleted(BaseModel):
+    deleted_groups: int
+    deleted_images: int
+
+
 class ExperimentRename(BaseModel):
     name: ExperimentName = Field(max_length=400)
 
@@ -563,6 +568,51 @@ class JobStore:
                 (json.dumps(arguments, ensure_ascii=False, allow_nan=False), job_id, user_id),
             )
         return bool(updated.rowcount)
+
+    def delete_experiment(
+        self, user_id: str, run_id: str,
+    ) -> tuple[str, list[str], int] | None:
+        """Delete one owner experiment/training set atomically.
+
+        Returns None when unknown, else (outcome, deleted job ids, deleted image count).
+        Outcomes: "deleted", "experiment_active" (its run is running/stopping) or
+        "active" (a group or re-run is still queued/running). Reference images,
+        snapshots and ordinary history are never touched; callers remove image files
+        after this commits.
+        """
+        with self.database.connect(write=True) as connection:
+            _experiment_connection(connection)
+            run = connection.execute(
+                "SELECT status FROM style_experiment_runs WHERE user_id = ? AND id = ?",
+                (user_id, run_id),
+            ).fetchone()
+            rows = connection.execute(
+                EXPERIMENT_ROWS
+                + "SELECT id, status, image_count FROM experiment_rows WHERE experiment_id = ?",
+                (user_id, run_id),
+            ).fetchall()
+            if run is None and not rows:
+                return None
+            if run is not None and run["status"] in ("running", "stopping"):
+                return "experiment_active", [], 0
+            if any(row["status"] in ("queued", "running") for row in rows):
+                return "active", [], 0
+            job_ids = [row["id"] for row in rows]
+            for start in range(0, len(job_ids), 500):
+                chunk = job_ids[start:start + 500]
+                connection.execute(
+                    f"DELETE FROM generation_jobs WHERE user_id = ? "
+                    f"AND id IN ({','.join('?' * len(chunk))})", (user_id, *chunk),
+                )
+            connection.execute(
+                "DELETE FROM experiment_names WHERE user_id = ? AND run_id = ?",
+                (user_id, run_id),
+            )
+            connection.execute(
+                "DELETE FROM style_experiment_runs WHERE user_id = ? AND id = ?",
+                (user_id, run_id),
+            )
+        return "deleted", job_ids, sum(row["image_count"] or 0 for row in rows)
 
     def rename_experiment(self, user_id: str, run_id: str, name: str | None) -> bool:
         """Set or clear an owner's display name; False when the experiment is unknown."""

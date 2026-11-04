@@ -204,3 +204,17 @@ review only (operator restriction); no paid probes.
 - Web: optional name field before 开始批跑; saved list shows 画风/角色 badge,
   name (or 未命名训练集) and inline rename; single-set export zips are named
   `<name>-<date>.zip`.
+
+## Deleting a saved experiment / training set
+
+- `DELETE /api/style-experiments/{id}` (owner only; 404 unknown/foreign) returns
+  `{deleted_groups, deleted_images}`. 409 `experiment_run_active` while its run is
+  running/stopping; 409 `job_active` while any group or re-run is queued/running.
+- One write transaction deletes every `generation_jobs` row of the experiment
+  (re-runs included; `discarded_images` cascade), its `experiment_names` row and
+  its `style_experiment_runs` row. Image files and thumbnails are discarded after
+  commit; a failed file removal only lingers until the 7-day sweep.
+- Never touched: reference images, prompt snapshots, ordinary history. Existing
+  SQLite backups still contain the deleted prompts until those backups age out.
+- Web: per-item delete in the saved list (disabled for the active run) and
+  「删除所选（N）」 in the selection bar; a plain confirm names every set.

@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useRef, useState } from 'react'
 import { observer } from 'mobx-react-lite'
-import { ArrowLeft, ArrowRight, Ban, CheckSquare, Dices, Download, FlaskConical, Images, LayoutGrid, Layers, Pencil, RefreshCw, RotateCcw, UserRound, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Ban, CheckSquare, Dices, Download, FlaskConical, Images, LayoutGrid, Layers, Pencil, RefreshCw, RotateCcw, Trash2, UserRound, X } from 'lucide-react'
 import { ApiFailure, errorText, MAX_EXPERIMENT_NAME, type ExperimentSummary, type WorkspaceApi } from './api'
 import { datasetItemText } from './dataset-run'
 import { DatasetExportPanel, ReviewGrid } from './dataset-lazy'
@@ -9,8 +9,42 @@ import type { SavedResultsStore } from './saved-results'
 import { ImageSaveButton, ImageSeedButton } from './ImageActions'
 import { preciseLabel } from './character-summary'
 
-export const SavedExperimentList = observer(({ saved, api, onView }: { saved: SavedResultsStore; api: WorkspaceApi; onView: () => void }) => {
+/** Name shown in confirmations; unnamed sets fall back to kind and creation time. */
+function experimentLabel(experiment: ExperimentSummary): string {
+  const kind = experiment.kind !== 'dataset' ? '画风实验' : experiment.dataset_type === 'character' ? '角色训练集' : '画风训练集'
+  return experiment.name ? `「${experiment.name}」` : `未命名${kind}（${new Date(experiment.created_at * 1000).toLocaleString()}）`
+}
+
+export const SavedExperimentList = observer(({ saved, api, onView, activeId }: {
+  saved: SavedResultsStore; api: WorkspaceApi; onView: () => void; activeId?: string | null
+}) => {
   const [exportingId, setExportingId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteMessage, setDeleteMessage] = useState('')
+  const [deleteError, setDeleteError] = useState('')
+  // Labels of every set seen so far, so a cross-page batch confirmation can name them.
+  const labels = useRef(new Map<string, string>())
+  saved.experiments.forEach(experiment => labels.current.set(experiment.id, experimentLabel(experiment)))
+
+  async function remove(ids: readonly string[]) {
+    if (!ids.length || deleting) return
+    const names = ids.map(id => labels.current.get(id) ?? id)
+    const shown = names.length > 12 ? [...names.slice(0, 12), `……等共 ${names.length} 个`] : names
+    if (!window.confirm(`确定永久删除以下 ${ids.length} 个实验/训练集？\n\n${shown.join('\n')}\n\n会删除全部生成记录、图片、弃置标记和名称，此操作无法撤销。参考图不会被删除。`)) return
+    setDeleting(true)
+    setDeleteMessage('')
+    setDeleteError('')
+    try {
+      const result = await saved.deleteExperiments(ids)
+      setChosen(current => current.filter(id => !result.deleted.includes(id)))
+      if (result.deleted.includes(exportingId ?? '')) setExportingId(null)
+      if (result.deleted.length) setDeleteMessage(`已删除 ${result.deleted.length} 个，共 ${result.groups} 条记录、${result.images} 张图片。`)
+      if (result.failed.length) setDeleteError(`${result.failed.length} 个未删除：${result.failed.map(item => `${labels.current.get(item.id) ?? item.id} ${item.error}`).join('；')}`)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   // Multi-select export of several training sets into one zip.
   const [chosen, setChosen] = useState<readonly string[]>([])
   const [exportingChosen, setExportingChosen] = useState(false)
@@ -33,8 +67,14 @@ export const SavedExperimentList = observer(({ saved, api, onView }: { saved: Sa
         : [...current, ...pageDatasetIds.filter(id => !current.includes(id))])}>
         <CheckSquare size={15} aria-hidden="true" /> {allPageChosen ? '取消本页' : '全选本页训练集'}</button>
       <button className="text-action" type="button" disabled={exportingChosen || chosen.length === 0} onClick={() => setExportingChosen(true)}><Download size={15} aria-hidden="true" /> 合并导出所选{chosen.length ? `（${chosen.length}）` : ''}</button>
-      {chosen.length > 0 && <button className="text-action" type="button" disabled={exportingChosen} onClick={() => setChosen([])}>清除选择</button>}
+      <button className="text-action danger-text" type="button" disabled={exportingChosen || deleting || chosen.length === 0 || (!!activeId && chosen.includes(activeId))}
+        title={activeId && chosen.includes(activeId) ? '所选中有正在运行的训练集，结束或停止后可删除' : '永久删除所选训练集'}
+        onClick={() => void remove(chosen)}><Trash2 size={15} aria-hidden="true" /> 删除所选{chosen.length ? `（${chosen.length}）` : ''}</button>
+      {chosen.length > 0 && <button className="text-action" type="button" disabled={exportingChosen || deleting} onClick={() => setChosen([])}>清除选择</button>}
     </div>}
+    {deleting && <p className="subtle" role="status">正在删除...</p>}
+    {deleteMessage && <p className="experiment-note" role="status">{deleteMessage}</p>}
+    {deleteError && <p className="alert" role="alert">{deleteError}</p>}
     {exportingChosen && chosen.length > 0 && <Suspense fallback={null}><DatasetExportPanel key={chosen.join(',')} api={api}
       source={{ kind: 'experiments', ids: chosen }} onClose={() => setExportingChosen(false)} /></Suspense>}
     <div className="history-list">{saved.experiments.map(experiment => <article className="history-item saved-experiment-item" key={experiment.id}>
@@ -55,6 +95,9 @@ export const SavedExperimentList = observer(({ saved, api, onView }: { saved: Sa
         </button>
         {experiment.kind === 'dataset' && <button className="text-action" type="button" aria-expanded={exportingId === experiment.id}
           onClick={() => setExportingId(exportingId === experiment.id ? null : experiment.id)}><Download size={15} aria-hidden="true" /> 导出训练集</button>}
+        <button className="icon-button danger" type="button" disabled={deleting || experiment.id === activeId}
+          title={experiment.id === activeId ? '正在运行，结束或停止后可删除' : '永久删除'}
+          aria-label={`删除 ${experimentLabel(experiment)}`} onClick={() => void remove([experiment.id])}><Trash2 size={16} /></button>
       </div>
       {exportingId === experiment.id && <Suspense fallback={null}><DatasetExportPanel api={api} source={{ kind: 'experiment', id: experiment.id }} fileName={experiment.name ?? undefined} onClose={() => setExportingId(null)} /></Suspense>}
     </article>)}</div>
