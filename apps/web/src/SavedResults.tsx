@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useRef, useState } from 'react'
 import { observer } from 'mobx-react-lite'
-import { ArrowLeft, ArrowRight, Ban, Dices, Download, FlaskConical, Images, LayoutGrid, Layers, RefreshCw, RotateCcw, UserRound, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Ban, CheckSquare, Dices, Download, FlaskConical, Images, LayoutGrid, Layers, RefreshCw, RotateCcw, UserRound, X } from 'lucide-react'
 import { ApiFailure, errorText, type WorkspaceApi } from './api'
 import { datasetItemText } from './dataset-run'
 import { DatasetExportPanel, ReviewGrid } from './dataset-lazy'
@@ -14,6 +14,8 @@ export const SavedExperimentList = observer(({ saved, api, onView }: { saved: Sa
   // Multi-select export of several training sets into one zip.
   const [chosen, setChosen] = useState<readonly string[]>([])
   const [exportingChosen, setExportingChosen] = useState(false)
+  const pageDatasetIds = saved.experiments.filter(experiment => experiment.kind === 'dataset').map(experiment => experiment.id)
+  const allPageChosen = pageDatasetIds.length > 0 && pageDatasetIds.every(id => chosen.includes(id))
   return <div className="saved-experiment-list">
     <div className="history-toolbar"><span>已保存的画风实验与训练集</span>
       <button type="button" className="icon-button" title="刷新已保存实验" aria-label="刷新已保存实验" disabled={saved.listLoading}
@@ -24,16 +26,20 @@ export const SavedExperimentList = observer(({ saved, api, onView }: { saved: Sa
     {saved.listLoading && <p className="subtle" role="status">正在加载实验...</p>}
     {saved.listError && <p className="alert" role="alert">{saved.listError}</p>}
     {saved.listLoaded && !saved.listLoading && !saved.listError && !saved.experiments.length && <p className="subtle">暂无已保存的画风实验</p>}
-    {chosen.length > 0 && <div className="history-selection">
-      <span>已选 {chosen.length} 个训练集（可跨页）</span>
-      <button className="text-action" type="button" disabled={exportingChosen} onClick={() => setExportingChosen(true)}><Download size={15} aria-hidden="true" /> 合并导出所选</button>
-      <button className="text-action" type="button" disabled={exportingChosen} onClick={() => setChosen([])}>清除选择</button>
+    {pageDatasetIds.length > 0 && <div className="history-selection merge-export-bar">
+      <span>{chosen.length ? <>已选 <strong>{chosen.length}</strong> 个训练集（可跨页）</> : '勾选多个训练集，可合并导出到一个 zip'}</span>
+      <button className="text-action" type="button" disabled={exportingChosen} onClick={() => setChosen(current => allPageChosen
+        ? current.filter(id => !pageDatasetIds.includes(id))
+        : [...current, ...pageDatasetIds.filter(id => !current.includes(id))])}>
+        <CheckSquare size={15} aria-hidden="true" /> {allPageChosen ? '取消本页' : '全选本页训练集'}</button>
+      <button className="text-action" type="button" disabled={exportingChosen || chosen.length === 0} onClick={() => setExportingChosen(true)}><Download size={15} aria-hidden="true" /> 合并导出所选{chosen.length ? `（${chosen.length}）` : ''}</button>
+      {chosen.length > 0 && <button className="text-action" type="button" disabled={exportingChosen} onClick={() => setChosen([])}>清除选择</button>}
     </div>}
     {exportingChosen && chosen.length > 0 && <Suspense fallback={null}><DatasetExportPanel key={chosen.join(',')} api={api}
       source={{ kind: 'experiments', ids: chosen }} onClose={() => setExportingChosen(false)} /></Suspense>}
     <div className="history-list">{saved.experiments.map(experiment => <article className="history-item saved-experiment-item" key={experiment.id}>
       {experiment.kind === 'dataset' && <label className="history-select"><input type="checkbox" checked={chosen.includes(experiment.id)} disabled={exportingChosen}
-        onChange={event => setChosen(current => event.target.checked ? [...current.filter(id => id !== experiment.id), experiment.id] : current.filter(id => id !== experiment.id))} /> 选入合并导出</label>}
+        onChange={event => setChosen(current => event.target.checked ? [...current.filter(id => id !== experiment.id), experiment.id] : current.filter(id => id !== experiment.id))} /> 选择</label>}
       <time dateTime={new Date(experiment.created_at * 1000).toISOString()}>{new Date(experiment.created_at * 1000).toLocaleString()}</time>
       {experiment.kind === 'dataset' ? <>
         <p><Layers size={14} aria-hidden="true" /> 训练集批跑 · 已提交 <strong>{experiment.group_count}</strong> / {experiment.total} 条</p>

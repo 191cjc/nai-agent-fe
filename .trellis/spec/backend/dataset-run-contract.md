@@ -96,6 +96,9 @@ review only (operator restriction); no paid probes.
 - Every export (one set, several sets merged, selected history) re-reads
   groups at export time and skips discarded images, counting them separately
   from failed/expired ones; numbering stays contiguous across merged sets.
+- The saved-experiment list always shows the merge-export bar when the page
+  has training sets: per-set 「选择」 checkboxes, 「全选本页训练集」/「取消本页」, and
+  「合并导出所选（N）」 (disabled until one is chosen). Selection persists across pages.
 - Export captions may carry an optional user prefix (UI preset for Animagine
   XL 4.0: `masterpiece, high score, great score, absurdres`): order is trigger,
   prefix tags, then content tags, de-duplicated. Empty prefix keeps the
