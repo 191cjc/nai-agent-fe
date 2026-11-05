@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Ban, Dices, Maximize2, RefreshCw, X } from 'lucide-react'
-import { ApiFailure, errorText, type GenerationView, type WorkspaceApi } from './api'
+import { ApiFailure, errorText, type GenerationView, type RerunEdits, type WorkspaceApi } from './api'
 import { DATASET_CATEGORIES } from './dataset-prompts'
 import { CHARACTER_CATEGORIES } from './character-prompts'
+import { translatePrompt } from './prompt-zh'
 
 /** Tiles per page: bounds preview requests and Blob memory (~60 × 30 KB). */
 const PAGE_SIZE = 60
@@ -38,15 +39,22 @@ function ordinalLabel(job: GenerationView): string {
   return `第 ${context?.ordinal ?? '?'} 条${context?.rerun_of ? '（重跑）' : ''}`
 }
 
-/** Remaining replacements: discarded images and failed groups not yet re-run. */
-export function pendingReruns(groups: readonly GenerationView[]): GenerationView[] {
+export type RerunKind = 'discarded' | 'failed'
+
+/**
+ * Remaining replacements of one kind, never double-counted: discarded images of
+ * succeeded groups, or failed groups, each minus the re-runs already made from it.
+ */
+export function pendingReruns(groups: readonly GenerationView[], kind: RerunKind): GenerationView[] {
   const reruns = new Map<string, number>()
   for (const group of groups) {
     const source = group.parameters.experiment?.rerun_of
     if (source) reruns.set(source, (reruns.get(source) ?? 0) + 1)
   }
   return groups.flatMap(group => {
-    const wanted = group.status === 'failed' ? 1 : group.status === 'succeeded' ? group.discarded_images?.length ?? 0 : 0
+    const wanted = kind === 'failed'
+      ? group.status === 'failed' ? 1 : 0
+      : group.status === 'succeeded' ? group.discarded_images?.length ?? 0 : 0
     return Array.from({ length: Math.max(0, wanted - (reruns.get(group.id) ?? 0)) }, () => group)
   })
 }
@@ -76,6 +84,8 @@ export function ReviewGrid({ api, experimentId, onOpen, onClose }: {
   const [actionError, setActionError] = useState('')
   const [rerun, setRerun] = useState<{ done: number; total: number; waiting: boolean } | null>(null)
   const [rerunMessage, setRerunMessage] = useState('')
+  // Batch editor: one optional new style for all, and an editable prompt per pending image.
+  const [batch, setBatch] = useState<{ kind: RerunKind; sources: GenerationView[]; prompts: string[]; style: string } | null>(null)
   const rerunController = useRef<AbortController | null>(null)
   const scrollRef = useRef<HTMLElement | null>(null)
 
@@ -113,7 +123,8 @@ export function ReviewGrid({ api, experimentId, onOpen, onClose }: {
   const pathKey = shownPaths.map(item => item.key).join('|')
   const discardedCount = tiles.filter(tile => tile.index !== null && tile.job.discarded_images?.includes(tile.index)).length
   const failedCount = (groups ?? []).filter(group => group.status === 'failed').length
-  const pending = useMemo(() => pendingReruns(groups ?? []), [groups])
+  const pendingDiscarded = useMemo(() => pendingReruns(groups ?? [], 'discarded'), [groups])
+  const pendingFailed = useMemo(() => pendingReruns(groups ?? [], 'failed'), [groups])
 
   // Previews for the shown page only; every Blob URL is revoked when the page changes.
   useEffect(() => {
@@ -177,22 +188,37 @@ export function ReviewGrid({ api, experimentId, onOpen, onClose }: {
     }
   }, [api, busyKeys])
 
-  async function rerunAll() {
-    const sources = pending
+  function openBatch(kind: RerunKind) {
+    const sources = kind === 'failed' ? pendingFailed : pendingDiscarded
     if (!sources.length || rerun) return
-    if (!window.confirm(`为 ${sources.length} 张已弃置的图片或失败的条目各重跑 1 张（同提示词、新随机种子）？这是 ${sources.length} 次付费生成。已重跑过的不会重复。`)) return
+    setRerunMessage('')
+    setBatch({ kind, sources, prompts: sources.map(source => source.parameters.experiment?.item?.prompt ?? ''), style: '' })
+  }
+
+  async function rerunAll() {
+    if (!batch || rerun) return
+    const { sources, prompts, style } = batch
+    if (prompts.some(prompt => !prompt.trim())) { setActionError('训练词不能为空。'); return }
+    const label = batch.kind === 'failed' ? '失败的条目' : '已弃置的图片'
+    if (!window.confirm(`为 ${sources.length} 个${label}各重跑 1 张（新随机种子${style.trim() ? '，使用新画风' : ''}）？这是 ${sources.length} 次付费生成。已重跑过的不会重复。`)) return
     const controller = new AbortController()
     rerunController.current = controller
     setRerunMessage('')
     setActionError('')
+    setBatch(null)
     let done = 0
     setRerun({ done, total: sources.length, waiting: false })
     try {
-      for (const source of sources) {
+      for (const [index, source] of sources.entries()) {
+        const original = source.parameters.experiment?.item?.prompt
+        const edits: RerunEdits = {
+          ...(prompts[index] !== original ? { prompt: prompts[index] } : {}),
+          ...(style.trim() ? { style_prompt: style } : {}),
+        }
         for (let waits = 0; ; waits += 1) {
           if (controller.signal.aborted) throw new DOMException('Cancelled', 'AbortError')
           try {
-            await api.rerunGeneration(source.id, null)
+            await api.rerunGeneration(source.id, null, edits)
             break
           } catch (error) {
             // Only a definite "queue full" refusal is safe to resubmit.
@@ -210,7 +236,7 @@ export function ReviewGrid({ api, experimentId, onOpen, onClose }: {
       setRerunMessage(`已提交 ${done} 张重跑。新图会出现在原条目之后，生成完成后点「刷新」查看。`)
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
-        setRerunMessage(`已停止：提交了 ${done} / ${sources.length} 张，剩余的可稍后再点「重跑全部」。`)
+        setRerunMessage(`已停止：提交了 ${done} / ${sources.length} 张，剩余的可稍后再重跑。`)
       } else if (error instanceof ApiFailure) {
         setActionError(`重跑在第 ${done + 1} 张停止（已提交 ${done} 张）：${errorText(error)}`)
       } else {
@@ -236,14 +262,34 @@ export function ReviewGrid({ api, experimentId, onOpen, onClose }: {
       <button className="text-action" type="button" disabled={!groups || rerun !== null} onClick={() => setReload(value => value + 1)}><RefreshCw size={14} aria-hidden="true" /> 刷新</button>
       {rerun
         ? <button className="text-action" type="button" onClick={() => rerunController.current?.abort()}><X size={14} aria-hidden="true" /> 停止提交（{rerun.done} / {rerun.total}{rerun.waiting ? '，队列已满，等待中' : ''}）</button>
-        : <button className="text-action" type="button" disabled={!pending.length} title="已弃置的图片和失败的条目各重跑 1 张；已重跑过的不会重复"
-          onClick={() => void rerunAll()}><Dices size={14} aria-hidden="true" /> 重跑全部待替换（{pending.length}）</button>}
+        : <>
+          <button className="text-action" type="button" disabled={!pendingDiscarded.length || batch !== null} title="已弃置且还没重跑过的图片各重跑 1 张；可先改画风和训练词"
+            onClick={() => openBatch('discarded')}><Dices size={14} aria-hidden="true" /> 重跑已弃置（{pendingDiscarded.length}）</button>
+          <button className="text-action" type="button" disabled={!pendingFailed.length || batch !== null} title="生成失败且还没重跑过的条目各补跑 1 张；可先改画风和训练词"
+            onClick={() => openBatch('failed')}><Dices size={14} aria-hidden="true" /> 补跑失败（{pendingFailed.length}）</button>
+        </>}
       <button className="icon-button" type="button" title="返回单张查看" aria-label="返回单张查看" onClick={onClose}><X size={18} /></button>
     </div>
     <p className="prompt-hint">点图片标记弃置或恢复（导出时跳过已弃置）；点右上角放大按钮查看原图。每页 {PAGE_SIZE} 张，只加载小尺寸预览，不占用原图缓存。</p>
     {loadError && <p className="alert" role="alert">记录读取失败：{loadError}</p>}
     {actionError && <p className="alert" role="alert">{actionError}</p>}
     {rerunMessage && <p className="subtle" role="status">{rerunMessage}</p>}
+    {batch && <div className="rerun-batch" role="group" aria-label="批量重跑设置">
+      <p><strong>{batch.kind === 'failed' ? `补跑 ${batch.sources.length} 个失败条目` : `重跑 ${batch.sources.length} 张已弃置图片`}</strong>：每张 1 次付费生成，新随机种子。改过的训练词会成为新图的 caption。</p>
+      <label className="field"><span>新画风（留空则每张保持原来的画风）</span>
+        <textarea rows={2} value={batch.style} maxLength={3000} spellCheck={false}
+          onChange={event => setBatch({ ...batch, style: event.target.value })} /></label>
+      <ol className="rerun-batch-items">{batch.sources.map((source, index) => <li key={`${source.id}:${index}`}>
+        <span>{ordinalLabel(source)}{source.parameters.experiment?.item?.characters?.length ? '（多人：只改共享场景）' : ''}</span>
+        <textarea rows={2} value={batch.prompts[index]} maxLength={1000} spellCheck={false} aria-label={`${ordinalLabel(source)}的训练词`}
+          onChange={event => setBatch({ ...batch, prompts: batch.prompts.map((value, at) => at === index ? event.target.value : value) })} />
+        <span className="dataset-item-zh">{translatePrompt(batch.prompts[index])}</span>
+      </li>)}</ol>
+      <div className="rerun-batch-actions">
+        <button type="button" onClick={() => void rerunAll()}><Dices size={14} aria-hidden="true" /> 提交 {batch.sources.length} 张</button>
+        <button className="secondary" type="button" onClick={() => setBatch(null)}>取消</button>
+      </div>
+    </div>}
     {!groups && !loadError && <p className="subtle" role="status">正在读取训练集记录…</p>}
     {groups && <ul className="review-grid-tiles">{shown.map(tile => {
       const discarded = tile.index !== null && tile.job.discarded_images?.includes(tile.index) === true

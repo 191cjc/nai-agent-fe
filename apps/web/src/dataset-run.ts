@@ -46,7 +46,31 @@ export function hasCommentLine(prompt: string): boolean {
  * With a style pool, the longest effective style bounds every rotated combination;
  * character traits prefix every item.
  */
-export function datasetItems(entries: readonly DatasetEntry[], styles: readonly string[], traits = '', nativeCharacters = true): DatasetItem[] {
+export type ItemShape = 'portrait' | 'square' | 'landscape'
+export interface ItemSize { width: number; height: number }
+
+/** NovelAI canvases of about one megapixel per shape (same Anlas tier as 1024×1024). */
+export const NAI_SHAPE_SIZES: Record<ItemShape, ItemSize> = {
+  portrait: { width: 832, height: 1216 },
+  square: { width: 1024, height: 1024 },
+  landscape: { width: 1216, height: 832 },
+}
+
+export const SHAPE_LABELS: Record<ItemShape, string> = { portrait: '竖图', square: '方图', landscape: '横图' }
+
+/**
+ * Canvas shape from an item's framing tags: wide shots, scenery and full-body groups are
+ * landscape; full-body and cowboy-shot items are portrait; everything else is square.
+ */
+export function itemShape(prompt: string, characters: readonly string[] = []): ItemShape {
+  const tags = new Set([prompt, ...characters].join(',').split(',').map(tag => tag.trim().toLowerCase()).filter(Boolean))
+  const group = ['2girls', '3girls', '2boys', 'multiple girls'].some(tag => tags.has(tag)) || characters.length > 1
+  if (tags.has('wide shot') || tags.has('scenery') || (group && tags.has('full body'))) return 'landscape'
+  if (tags.has('full body') || tags.has('cowboy shot')) return 'portrait'
+  return 'square'
+}
+
+export function datasetItems(entries: readonly DatasetEntry[], styles: readonly string[], traits = '', nativeCharacters = true, sizes?: Record<ItemShape, ItemSize>): DatasetItem[] {
   const selected = entries.filter(entry => entry.selected)
   if (!selected.length) throw new Error('请至少选择一条训练集提示词。')
   if (selected.length > MAX_DATASET_ITEMS) throw new Error(`一次最多运行 ${MAX_DATASET_ITEMS} 条提示词。`)
@@ -66,7 +90,10 @@ export function datasetItems(entries: readonly DatasetEntry[], styles: readonly 
     if (hasCommentLine(entry.prompt)) throw new Error(`${label}不能包含以 // 开头的注释行。`)
     if (longest + 2 + prefix + entry.prompt.trim().length > 3000) throw new Error(`${label}与画风${prefix ? '、角色特征' : ''}合计超过 3000 字符。`)
     const characters = entry.characters ?? []
-    if (!characters.length) return { id: entry.id, prompt: entry.prompt }
+    // Optional per-item canvas; absent keeps the run size (and the stored item unchanged).
+    const size = sizes ? sizes[itemShape(entry.prompt, characters)] : null
+    const canvas = size ? { width: size.width, height: size.height } : {}
+    if (!characters.length) return { id: entry.id, prompt: entry.prompt, ...canvas }
     if (traits.trim()) throw new Error(`${label}是多人条目，角色训练集不支持，请取消选择。`)
     if (!nativeCharacters) throw new Error(`${label}是多人条目，需要支持多角色提示词的 V4 / V4.5 / V5 模型；请切换模型或取消「多人互动」。`)
     if (characters.length > MAX_ITEM_CHARACTERS) throw new Error(`${label}最多 ${MAX_ITEM_CHARACTERS} 个人物。`)
@@ -76,7 +103,7 @@ export function datasetItems(entries: readonly DatasetEntry[], styles: readonly 
       if (character.length > MAX_DATASET_PROMPT_LENGTH) throw new Error(`${name}超过 ${MAX_DATASET_PROMPT_LENGTH} 字符。`)
       if (hasCommentLine(character)) throw new Error(`${name}不能包含以 // 开头的注释行。`)
     })
-    return { id: entry.id, prompt: entry.prompt, characters: characterPositions(characters) }
+    return { id: entry.id, prompt: entry.prompt, characters: characterPositions(characters), ...canvas }
   })
 }
 

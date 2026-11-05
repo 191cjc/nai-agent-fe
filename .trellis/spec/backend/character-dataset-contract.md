@@ -157,3 +157,5 @@ needs one operator-approved probe.
   operator's ornate splash-art characters. Default selection 88 → 114 items (126 with the optional outfit set).
 - Same rules as every character prompt: no gender, count, appearance, outfit or
   props (traits supply them; a named staff/weapon would fight the character's own).
+- 2026-11-05: six large `setting` items start with `wide shot` so automatic canvases
+  give character sets a few landscape images (default 58 portrait / 50 square / 6 landscape).

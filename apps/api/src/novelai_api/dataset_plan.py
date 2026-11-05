@@ -26,7 +26,7 @@ def item_seed(base: int, ordinal: int) -> int:
     return (base - 1 + ordinal - 1) % MAX_SEED + 1
 
 
-def _has_comment_line(text: str) -> bool:
+def has_comment_line(text: str) -> bool:
     return any(hidden for _start, _end, hidden in prompt_lines(text))
 
 
@@ -53,7 +53,7 @@ class CharacterRequest(BaseModel):
     @field_validator("traits")
     @classmethod
     def nonblank_traits(cls, value: str) -> str:
-        if not value.strip() or _has_comment_line(value):
+        if not value.strip() or has_comment_line(value):
             raise ValueError("Character traits must be visible, non-blank tags")
         return value
 
@@ -129,6 +129,8 @@ def dataset_parameters(
     styles: list[str] | None = None, character: CharacterPlan | None = None,
 ) -> GenerationRequest:
     update: dict = {"positive_prompt": item.prompt, "seed": seed, "experiment": context}
+    if item.width is not None:
+        update["width"], update["height"] = item.width, item.height
     if item.characters:
         # Explicit per-person positions; the request validator rejects non-native models
         # and reference (character-run) groups for items that carry characters.
@@ -177,6 +179,11 @@ class DatasetRunCreate(BaseModel):
                     raise ValueError("Each pooled style must be a non-blank prompt")
         if len({item.id for item in self.items}) != len(self.items):
             raise ValueError("Duplicate dataset item id")
+        if self.character is not None and self.character.mode == "img2img" and any(
+            item.width is not None for item in self.items
+        ):
+            # The source image is sent at the run size; per-item canvases would distort it.
+            raise ValueError("Image-to-image runs keep one size for every item")
         if self.gpt_concurrency is not None and (
             self.character is None or self.character.mode != "gpt"
         ):
@@ -205,7 +212,7 @@ class DatasetRunCreate(BaseModel):
         for item in self.items:
             # A comment line would silently drop content the caption still claims.
             if parameters.prompt_comments and any(
-                _has_comment_line(text)
+                has_comment_line(text)
                 for text in (item.prompt, *(character.prompt for character in item.characters))
             ):
                 raise ValueError("Dataset prompts cannot contain comment lines")

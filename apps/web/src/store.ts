@@ -15,7 +15,7 @@ import {
   type StyleExperimentRange,
 } from './style-experiment'
 import { SavedResultsStore } from './saved-results'
-import { GPT_SIZES, characterRequest, datasetItems, type CharacterSettings, type DatasetEntry } from './dataset-run'
+import { GPT_SIZES, NAI_SHAPE_SIZES, characterRequest, datasetItems, type CharacterSettings, type DatasetEntry } from './dataset-run'
 import { StyleRunStore } from './style-run-store'
 import { PromptSnapshotStore } from './prompt-snapshots'
 import { BalanceStore } from './balance-store'
@@ -506,7 +506,7 @@ export class GenerationStore {
    * Freeze the draft's settings; each dataset item supplies all content. An optional
    * style pool (first entry becomes the frozen style) and character block are frozen too.
    */
-  async startDatasetRun(entries: readonly DatasetEntry[], options: { styles?: string[]; character?: CharacterSettings; gptModel?: string; gptConcurrencyMax?: number; name?: string } = {}): Promise<void> {
+  async startDatasetRun(entries: readonly DatasetEntry[], options: { styles?: string[]; character?: CharacterSettings; gptModel?: string; gptConcurrencyMax?: number; name?: string; autoShape?: boolean } = {}): Promise<void> {
     if (this.operationLocked || this.busy || this.activeId || this.submitUncertain) return
     this.error = ''
     let parameters: GenerationRequest
@@ -515,7 +515,10 @@ export class GenerationStore {
     let gptConcurrency: number | undefined
     try {
       const styles = options.styles ?? [this.draft.style_prompt]
-      items = datasetItems(entries, styles, options.character?.traits, supportsNativeCharacters(this.draft.model))
+      // Per-item canvases by framing; image-to-image keeps one size so its source is not distorted.
+      const mode = options.character?.mode
+      const sizes = !options.autoShape || mode === 'img2img' ? undefined : mode === 'gpt' ? GPT_SIZES : NAI_SHAPE_SIZES
+      items = datasetItems(entries, styles, options.character?.traits, supportsNativeCharacters(this.draft.model), sizes)
       if (options.character?.mode === 'gpt') {
         // GPT image runs are independent of NovelAI: no NAI draft settings are used.
         const size = GPT_SIZES[options.character.gptSize]

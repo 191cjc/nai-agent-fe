@@ -1,5 +1,5 @@
 import { makeAutoObservable, runInAction } from 'mobx'
-import { ApiFailure, errorText, type ExperimentSummary, type GenerationView, WorkspaceApi } from './api'
+import { ApiFailure, errorText, type ExperimentSummary, type GenerationView, type RerunEdits, WorkspaceApi } from './api'
 
 type SavedSelection = { kind: 'generation' | 'experiment'; id: string }
 type PreloadStatus = 'idle' | 'reading' | 'loading' | 'completed' | 'cancelled' | 'capacity' | 'error'
@@ -332,7 +332,7 @@ export class SavedResultsStore {
    * One paid generation: same frozen prompt/settings/references, one sample, new random
    * seed. The shown image is marked discarded so the export keeps only the replacement.
    */
-  async rerunCurrent(): Promise<void> {
+  async rerunCurrent(edits: RerunEdits = {}): Promise<void> {
     const job = this.job
     if (!job || !this.canRerun || this.rerunBusy) return
     const index = job.status === 'succeeded' && this.imageIndex < job.image_urls.length
@@ -342,12 +342,13 @@ export class SavedResultsStore {
     this.rerunError = ''
     this.rerunMessage = ''
     try {
-      await this.api.rerunGeneration(job.id, index)
+      await this.api.rerunGeneration(job.id, index, edits)
       if (epoch !== this.viewerEpoch || this.job?.id !== job.id) return
       // Reload this group so the discard mark and the new following entry are visible.
       await this.loadGroup(this.groupOffset, this.imageIndex)
       runInAction(() => {
-        this.rerunMessage = `已提交重跑（同提示词、新随机种子）${index !== null ? '，原图已标记弃置（可恢复）' : ''}。新图会排在本条之后，按 → 查看。`
+        const changed = [edits.prompt !== undefined && '新训练词', edits.style_prompt !== undefined && '新画风'].filter(Boolean).join('、')
+        this.rerunMessage = `已提交重跑（${changed || '同提示词'}、新随机种子）${index !== null ? '，原图已标记弃置（可恢复）' : ''}。新图会排在本条之后，按 → 查看。`
       })
     } catch (error) {
       runInAction(() => { this.rerunError = errorText(error) })

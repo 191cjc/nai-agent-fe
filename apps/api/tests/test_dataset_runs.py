@@ -258,3 +258,49 @@ def test_character_runs_reject_multi_person_items() -> None:
 
     with pytest.raises(ValidationError):
         character_run([uuid4()], items=[MULTI_ITEM])
+
+
+def test_item_sizes_override_the_run_canvas_and_legacy_items_keep_it(
+    database: Database,  # noqa: F811
+) -> None:
+    user = owner(database)
+    provider = ScriptedProvider()
+    manager = GenerationManager(database, provider, cache=ResultCache())
+    service = StyleExperimentService(database, manager)
+    manager.start()
+    try:
+        tall = {"id": "tall", "prompt": "full body, standing", "width": 832, "height": 1216}
+        run = service.store.create(user, dataset(items=[ITEMS[0], tall]))
+        assert pump(service, user, run.id).status == "completed"
+        plain, sized = provider.calls
+        assert (plain.width, plain.height) == (512, 512)
+        assert "width" not in plain.experiment.item.model_dump()
+        assert (sized.width, sized.height) == (832, 1216)
+        assert sized.experiment.item.model_dump() == tall
+    finally:
+        service.stop()
+        manager.stop()
+
+
+@pytest.mark.parametrize("item", [
+    {"id": "a", "prompt": "x", "width": 832},
+    {"id": "a", "prompt": "x", "width": 830, "height": 1216},
+    {"id": "a", "prompt": "x", "width": 4096, "height": 1024},
+])
+def test_invalid_item_sizes_are_rejected(item) -> None:
+    with pytest.raises(ValidationError):
+        dataset(items=[item])
+
+
+def test_item_sizes_follow_run_rules_for_gpt_and_img2img() -> None:
+    from test_character_runs import character_run
+
+    sized = [{"id": "a", "prompt": "full body", "width": 832, "height": 1216}]
+    with pytest.raises(ValidationError):
+        character_run([uuid4()], mode="img2img", items=sized)
+    gpt = {"width": 1024, "height": 1024, "sampler": "gpt-image", "steps": 1, "cfg_scale": 0,
+           "quality": False, "negative_prompt": ""}
+    with pytest.raises(ValidationError):  # not a GPT size
+        character_run([uuid4()], mode="gpt", items=sized, **gpt)
+    character_run([uuid4()], mode="gpt", **gpt,
+                  items=[{"id": "a", "prompt": "full body", "width": 1024, "height": 1536}])

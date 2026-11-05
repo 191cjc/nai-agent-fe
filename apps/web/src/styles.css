@@ -356,6 +356,9 @@ h1, h2, h3 { letter-spacing: 0; }
 .dataset-items li.muted input[type="text"] { color: var(--muted); }
 .dataset-item-fields { display: grid; gap: 3px; min-width: 0; }
 .dataset-item-person { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 6px; padding-left: 12px; color: var(--muted); font-size: 11px; }
+.dataset-item-person .dataset-item-zh { grid-column: 2; }
+.dataset-item-zh { padding: 0 7px; color: var(--muted); font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
+.dataset-item-zh b { margin-right: 6px; color: var(--gold); font-weight: 600; }
 .dataset-items input[type="text"], .dataset-custom input { min-width: 0; padding: 5px 7px; font-size: 12px; }
 .dataset-custom { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
 .dataset-custom input { flex: 1 1 220px; }
@@ -616,3 +619,13 @@ h1, h2, h3 { letter-spacing: 0; }
 .run-lane { padding: 0 6px; border-radius: 4px; background: #3a3a31; color: #d8d4c6; font-size: 11px; }
 .run-parallelism { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0 0; font-size: 12px; color: var(--muted); }
 .run-parallelism input { width: 64px; padding: 4px 6px; }
+
+.dataset-shape-toggle { display: grid; grid-template-columns: 15px minmax(0, 1fr); align-items: start; gap: 7px; font-size: 12px; color: var(--muted); }
+.dataset-shape-toggle input { width: 15px; height: 15px; margin: 2px 0 0; accent-color: var(--gold); }
+.rerun-batch { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 6px; }
+.rerun-batch p { margin: 0; font-size: 12px; }
+.rerun-batch textarea { width: 100%; min-width: 0; font-size: 12px; }
+.rerun-batch-items { display: grid; gap: 8px; max-height: 320px; margin: 0; padding: 0 0 0 4px; overflow-y: auto; list-style: none; }
+.rerun-batch-items li { display: grid; gap: 3px; }
+.rerun-batch-items li > span:first-child { font-size: 12px; color: var(--muted); }
+.rerun-batch-actions { display: flex; gap: 8px; }

@@ -4,7 +4,8 @@ import { Download, FileUp, Layers, Plus, RotateCcw, Trash2, Upload, UserRound, X
 import { ApiFailure, errorText, MAX_EXPERIMENT_NAME, type GenerationView, type WorkspaceApi } from './api'
 import { DATASET_CATEGORIES, type DatasetCategory } from './dataset-prompts'
 import { CHARACTER_CATEGORIES } from './character-prompts'
-import { CUSTOM_CATEGORY, MAX_DATASET_ITEMS, MAX_DATASET_PROMPT_LENGTH, datasetItemText, datasetItems, nextCustomId, type DatasetEntry } from './dataset-run'
+import { CUSTOM_CATEGORY, MAX_DATASET_ITEMS, MAX_DATASET_PROMPT_LENGTH, SHAPE_LABELS, datasetItemText, datasetItems, itemShape, nextCustomId, type DatasetEntry, type ItemShape } from './dataset-run'
+import { translatePrompt } from './prompt-zh'
 import { supportsNativeCharacters } from './store'
 import { defaultCharacterEntries, defaultDatasetEntries } from './dataset-defaults'
 import { ANIMAGINE_QUALITY_PREFIX, NOOBAI_QUALITY_PREFIX, buildDatasetZip, downloadZip, experimentJobs, selectedJobs, type DatasetExportProgress } from './dataset-export'
@@ -39,7 +40,7 @@ function validationError(entries: readonly DatasetEntry[], styles: readonly stri
 }
 
 /** Category/item picker shared by the style and character libraries. */
-export function PromptLibrary({ entries, setEntries, categories, defaults, placeholder, name, allowCharacters }: {
+export function PromptLibrary({ entries, setEntries, categories, defaults, placeholder, name, allowCharacters, showShape = false }: {
   entries: DatasetEntry[]
   setEntries: Dispatch<SetStateAction<DatasetEntry[]>>
   categories: readonly DatasetCategory[]
@@ -49,6 +50,8 @@ export function PromptLibrary({ entries, setEntries, categories, defaults, place
   name: string
   /** Style libraries accept multi-person 「人物：」 lines; character libraries do not. */
   allowCharacters: boolean
+  /** Show each item's automatic canvas shape (竖图 / 方图 / 横图) beside its translation. */
+  showShape?: boolean
 }) {
   const [custom, setCustom] = useState('')
   const [importing, setImporting] = useState(false)
@@ -125,9 +128,11 @@ export function PromptLibrary({ entries, setEntries, categories, defaults, place
               <input type="text" value={entry.prompt} maxLength={MAX_DATASET_PROMPT_LENGTH} spellCheck={false} aria-label={`编辑提示词 ${entry.id}`}
                 title={entry.characters?.length ? '共享场景：人数、构图、动作与背景' : undefined}
                 onChange={event => update(entry.id, { prompt: event.target.value })} />
+              <span className="dataset-item-zh">{showShape && <b>{SHAPE_LABELS[itemShape(entry.prompt, entry.characters)]}</b>}{translatePrompt(entry.prompt)}</span>
               {entry.characters?.map((character, person) => <label key={person} className="dataset-item-person"><span>人物 {person + 1}</span>
                 <input type="text" value={character} maxLength={MAX_DATASET_PROMPT_LENGTH} spellCheck={false} aria-label={`编辑提示词 ${entry.id} 的人物 ${person + 1}`}
-                  onChange={event => update(entry.id, { characters: entry.characters?.map((value, index) => index === person ? event.target.value : value) })} /></label>)}
+                  onChange={event => update(entry.id, { characters: entry.characters?.map((value, index) => index === person ? event.target.value : value) })} />
+                <span className="dataset-item-zh">{translatePrompt(character)}</span></label>)}
             </div>
             <button className="icon-button" type="button" title="移除这条提示词" aria-label={`移除提示词 ${entry.id}`}
               onClick={() => setEntries(current => current.filter(item => item.id !== entry.id))}><Trash2 size={14} /></button>
@@ -174,6 +179,7 @@ export const DatasetRunConfig = observer(({ generation, api, hidden }: { generat
   const [runName, setRunName] = useState('')
   const [entries, setEntries] = useState<DatasetEntry[]>(defaultDatasetEntries)
   const [characterEntries, setCharacterEntries] = useState<DatasetEntry[]>(defaultCharacterEntries)
+  const [autoShape, setAutoShape] = useState(true)
   const character = useCharacterSettings(generation.draft.style_prompt)
   const runs = generation.runs
   const snapshot = runs.kind === 'dataset' ? runs.snapshot : null
@@ -181,6 +187,13 @@ export const DatasetRunConfig = observer(({ generation, api, hidden }: { generat
   const active = mode === 'style' ? entries : characterEntries
   const selected = active.filter(entry => entry.selected)
   const gptMode = mode === 'character' && character.settings.mode === 'gpt'
+  // Image-to-image sends its source at the run size, so it keeps one canvas.
+  const shapeAllowed = !(mode === 'character' && character.settings.mode === 'img2img')
+  const shapes = autoShape && shapeAllowed
+  const shapeCounts = shapes ? selected.reduce<Record<ItemShape, number>>((counts, entry) => {
+    counts[itemShape(entry.prompt, entry.characters)] += 1
+    return counts
+  }, { portrait: 0, square: 0, landscape: 0 }) : null
   const sampleText = gptMode ? character.settings.gptSamples : generation.draft.sample_count
   const samples = /^\d+$/.test(sampleText) ? Number(sampleText) : null
   const error = !selected.length ? '' : mode === 'style'
@@ -191,10 +204,10 @@ export const DatasetRunConfig = observer(({ generation, api, hidden }: { generat
   function start() {
     if (locked || error || !selected.length) return
     const started = mode === 'style'
-      ? generation.startDatasetRun(entries, { name: runName })
+      ? generation.startDatasetRun(entries, { name: runName, autoShape: shapes })
       : generation.startDatasetRun(characterEntries, {
         styles: character.styles, character: character.settings, gptModel: character.gpt?.gpt_image_model ?? undefined,
-        gptConcurrencyMax: character.gpt?.gpt_concurrency_max ?? undefined, name: runName,
+        gptConcurrencyMax: character.gpt?.gpt_concurrency_max ?? undefined, name: runName, autoShape: shapes,
       })
     // A queued run keeps its name; clear the field so the next set gets its own.
     void started.then(() => { if (!runs.createError && !runs.pendingId && !generation.error) setRunName('') })
@@ -210,9 +223,9 @@ export const DatasetRunConfig = observer(({ generation, api, hidden }: { generat
       <button type="button" className={mode === 'character' ? 'active' : ''} aria-pressed={mode === 'character'} onClick={() => setMode('character')}><UserRound size={14} aria-hidden="true" /> 角色训练集</button>
     </div>}
     {mode === 'style'
-      ? <p className="prompt-hint">用当前「画风」固定风格，逐条运行下面的内容提示词，生成用于训练画风 LoRA 的图片。提示词只描述内容，不含画风与质量词；导出时作为 caption。默认全选 156 条：成年女性 111 条（含「视角与透视」16 条、「异世界奇幻」亚人与冒险者 25 条）、成年男性 2 条、年幼男孩 14 条、年幼女孩 6 条、无人物 23 条（含龙、魔物与奇幻场景 8 条）；约四分之一人物条目为仰视、俯视、侧背面等非平视角度；角、尖耳、尾巴、翅膀都写明颜色并写进 caption；人物条目都写明发色、瞳色、带颜色的上下装，全身和远景还写明鞋袜，让成图与 caption 对应；「多人互动」条目把每个人写成独立的人物提示词，避免颜色串到别人身上，需要 V4 / V4.5 / V5 模型。「男孩（年幼）」「女孩（年幼）」条目只含健全内容，不能与身体描写类画风同时使用。</p>
+      ? <p className="prompt-hint">用当前「画风」固定风格，逐条运行下面的内容提示词，生成用于训练画风 LoRA 的图片。提示词只描述内容，不含画风与质量词；导出时作为 caption。默认全选 298 条，覆盖特写、半身、全身、视角、场景、光照、多人、异世界奇幻、「华丽立绘」（金饰华服、极长飘发、飘带披帛、头冠光环与发光的神祇立绘）、年幼男孩女孩和无人物；约四成人物条目写明刘海类型（中分最多，另有齐刘海、斜刘海、露额头等）；人物条目都写明发色、瞳色、带颜色的上下装，全身和远景还写明鞋袜，装饰与发光也写进 caption，让成图与 caption 对应；「多人互动」条目把每个人写成独立的人物提示词，需要 V4 / V4.5 / V5 模型。「男孩（年幼）」「女孩（年幼）」条目只含健全内容，不能与身体描写类画风同时使用。每条下方的中文只用于阅读，不会发送。</p>
       : <p className="prompt-hint">用参考图和固定的角色特征，逐条运行景别、表情、姿势、场景等内容提示词，生成用于训练角色 LoRA 的图片。导出的 caption 包含每张图使用的画风和内容提示词，不含角色特征（让画法不会被学成角色的一部分）。</p>}
-    <p className="prompt-hint">公共分区和人物卡片不参与批跑；负面提示词、模型、尺寸、步数、CFG、采样器和每条张数取自当前生成设置。</p>
+    <p className="prompt-hint">公共分区和人物卡片不参与批跑；负面提示词、模型、尺寸（关闭自动比例时）、步数、CFG、采样器和每条张数取自当前生成设置。</p>
     {snapshot ? <div className="experiment-note" role="status">
       <p>这里展示本次训练集批跑固定的配置与 {snapshot.items?.length ?? 0} 条提示词。编辑草稿不会改变服务器批跑。</p>
       <p>画风：{snapshot.styles?.length ? snapshot.styles.join(' ｜ ') : snapshot.parameters.style_prompt}</p>
@@ -221,16 +234,21 @@ export const DatasetRunConfig = observer(({ generation, api, hidden }: { generat
       <div className="dataset-style-preview"><span>将应用的画风</span>
         <p>{style.trim() ? style : '（未填写画风）'}</p></div>
       <PromptLibrary entries={entries} setEntries={setEntries} categories={DATASET_CATEGORIES} defaults={defaultDatasetEntries}
-        placeholder="添加自定义内容提示词，例如 1girl, solo, sitting, library" name="画风训练集" allowCharacters />
+        placeholder="添加自定义内容提示词，例如 1girl, solo, sitting, library" name="画风训练集" allowCharacters showShape={shapes} />
     </> : <>
       <CharacterRunSettings api={api} state={character} model={generation.draft.model} draftStyle={style} />
       <PromptLibrary entries={characterEntries} setEntries={setCharacterEntries} categories={CHARACTER_CATEGORIES} defaults={defaultCharacterEntries}
-        placeholder="添加自定义内容提示词（不写性别、人数和外貌），例如 sitting, library, reading" name="角色训练集" allowCharacters={false} />
+        placeholder="添加自定义内容提示词（不写性别、人数和外貌），例如 sitting, library, reading" name="角色训练集" allowCharacters={false} showShape={shapes} />
     </>}
+    {!snapshot && <label className="dataset-shape-toggle">
+      <input type="checkbox" checked={shapes} disabled={!shapeAllowed} onChange={event => setAutoShape(event.target.checked)} />
+      <span>按构图自动选比例：全身、七分身用竖图，远景、风景和多人全身用横图，其余用方图（{gptMode ? 'GPT 1024×1536 / 1024×1024 / 1536×1024' : '832×1216 / 1024×1024 / 1216×832'}）。{shapeAllowed ? '关闭后整套使用生成设置的尺寸。' : '图生图会按整套尺寸发送参考图，固定使用生成设置的尺寸。'}</span>
+    </label>}
     {!snapshot && error && <p className="alert" role="alert">{error}</p>}
     {!snapshot && <div className="experiment-preview" aria-live="polite" aria-atomic="true">
       <p><strong>{selected.length} 条</strong>{samples !== null && samples >= 1 && samples <= 8 && <> × 每条 {samples} 张 = <strong>{selected.length * samples} 张图像</strong></>}
-        {selected.length > MAX_DATASET_ITEMS && `（上限 ${MAX_DATASET_ITEMS} 条）`}</p>
+        {selected.length > MAX_DATASET_ITEMS && `（上限 ${MAX_DATASET_ITEMS} 条）`}
+        {shapeCounts && <>：竖图 {shapeCounts.portrait}、方图 {shapeCounts.square}、横图 {shapeCounts.landscape}</>}</p>
       <p className="prompt-hint">{mode === 'style'
         ? '每条提示词是一次付费生成。画风 LoRA 一般 30–150 张精选图即可。'
         : '每条提示词是一次付费生成，Vibe Transfer / 图生图可能额外消耗 Anlas。角色 LoRA 一般 15–40 张一致的精选图即可，跑完请人工筛掉不像的图。'}</p>

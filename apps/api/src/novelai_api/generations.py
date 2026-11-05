@@ -168,6 +168,20 @@ class DatasetItem(BaseModel):
     characters: list[CharacterPrompt] = Field(
         default_factory=list, max_length=6, exclude_if=lambda value: not value,
     )
+    # Optional per-item canvas (both or neither), e.g. portrait for full-body items and
+    # landscape for wide scenery. Absent keeps the run's size, so stored items are unchanged.
+    width: int | None = Field(
+        default=None, ge=64, le=2048, multiple_of=64, exclude_if=lambda value: value is None,
+    )
+    height: int | None = Field(
+        default=None, ge=64, le=2048, multiple_of=64, exclude_if=lambda value: value is None,
+    )
+
+    @model_validator(mode="after")
+    def paired_size(self) -> Self:
+        if (self.width is None) != (self.height is None):
+            raise ValueError("Dataset item width and height go together")
+        return self
 
     @field_validator("prompt")
     @classmethod

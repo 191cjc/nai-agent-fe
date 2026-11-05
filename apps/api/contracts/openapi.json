@@ -562,6 +562,20 @@
             "title": "Characters",
             "type": "array"
           },
+          "height": {
+            "anyOf": [
+              {
+                "maximum": 2048.0,
+                "minimum": 64.0,
+                "multipleOf": 64.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
           "id": {
             "maxLength": 64,
             "minLength": 1,
@@ -574,6 +588,20 @@
             "minLength": 1,
             "title": "Prompt",
             "type": "string"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "maximum": 2048.0,
+                "minimum": 64.0,
+                "multipleOf": 64.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width"
           }
         },
         "required": [
@@ -1810,6 +1838,32 @@
               }
             ],
             "title": "Discard Index"
+          },
+          "prompt": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt"
+          },
+          "style_prompt": {
+            "anyOf": [
+              {
+                "maxLength": 3000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Style Prompt"
           }
         },
         "title": "RerunRequest",

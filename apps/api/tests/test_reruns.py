@@ -109,3 +109,66 @@ def test_rerun_refuses_ordinary_and_forged_groups(database: Database) -> None:  
                                (source["id"],))
         busy = client.post(f"/api/generations/{source['id']}/rerun", json={}, headers=ORIGIN)
         assert busy.status_code == 409 and busy.json()["code"] == "job_active"
+
+
+def test_rerun_can_edit_prompt_and_style_and_the_caption_follows(
+    database: Database,  # noqa: F811
+) -> None:
+    provider = ReferenceProvider()
+    app = create_app(
+        Settings(database.path, "https://testserver"), database,
+        image_provider=provider, result_cache=ResultCache(),
+    )
+    app.state.experiments._interval = 0.01
+    with TestClient(app, base_url="https://testserver") as client:
+        login(client, database, "alice")
+        run = finished_run(client, seed=5)
+        page = client.get(f"/api/style-experiments/{run['id']}", params={"limit": 10}).json()
+        source = page["items"][0]
+        url = f"/api/generations/{source['id']}/rerun"
+        for bad in ({"style_prompt": ""}, {"prompt": ""}, {"prompt": "x" * 1001}):
+            assert client.post(url, json=bad, headers=ORIGIN).status_code == 422
+        accepted = client.post(url, json={"prompt": "1girl, parted bangs", "style_prompt": "ink"},
+                               headers=ORIGIN)
+        assert accepted.status_code == 202
+        rerun = wait(client, f"/api/generations/{accepted.json()['id']}",
+                     lambda job: job["status"] == "succeeded")
+        parameters = rerun["parameters"]
+        assert parameters["positive_prompt"] == "1girl, parted bangs"
+        assert parameters["style_prompt"] == "ink"
+        assert parameters["experiment"]["item"] == {
+            **source["parameters"]["experiment"]["item"], "prompt": "1girl, parted bangs"}
+        assert parameters["experiment"]["rerun_of"] == source["id"]
+        # The source group keeps its frozen prompt and style.
+        kept = client.get(f"/api/generations/{source['id']}").json()["parameters"]
+        assert kept == source["parameters"]
+
+
+
+def test_rerun_prompt_edit_keeps_character_traits(database: Database) -> None:  # noqa: F811
+    from test_character_runs import character_run, png
+
+    provider = ReferenceProvider()
+    app = create_app(
+        Settings(database.path, "https://testserver"), database,
+        image_provider=provider, result_cache=ResultCache(),
+    )
+    app.state.experiments._interval = 0.01
+    with TestClient(app, base_url="https://testserver") as client:
+        login(client, database, "alice")
+        image = client.post("/api/reference-images", content=png(),
+                            headers={"Content-Type": "image/png", **ORIGIN}).json()
+        run = client.post("/api/dataset-runs", headers=ORIGIN, json=character_run(
+            [image["id"]]).model_dump(mode="json")).json()
+        wait(client, f"/api/style-experiment-runs/{run['id']}",
+             lambda state: state["status"] == "completed")
+        page = client.get(f"/api/style-experiments/{run['id']}", params={"limit": 10}).json()
+        source = page["items"][0]
+        accepted = client.post(f"/api/generations/{source['id']}/rerun",
+                               json={"prompt": "full body, floating"}, headers=ORIGIN)
+        assert accepted.status_code == 202
+        rerun = client.get(f"/api/generations/{accepted.json()['id']}").json()
+        assert rerun["parameters"]["positive_prompt"] == (
+            "1girl, solo, silver hair, red eyes, full body, floating")
+        assert rerun["parameters"]["experiment"]["item"]["prompt"] == "full body, floating"
+        assert rerun["parameters"]["reference"] == source["parameters"]["reference"]

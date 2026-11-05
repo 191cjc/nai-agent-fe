@@ -253,3 +253,33 @@ review only (operator restriction); no paid probes.
 - Operator: `novelai-admin continue-run RUN_ID` does the same server-side and
   prints only ids/counts. Web: 「继续剩余 N 条」 on stopped training sets in the
   queue's finished list.
+
+## Item canvases, editable re-runs, bangs and glosses (2026-11-05)
+
+- `DatasetItem.width/height` (optional, both or neither, 64–2048, multiple of 64,
+  excluded when absent so stored items stay byte-identical) override the run size
+  for that ordinal. Every item still validates as a full `GenerationRequest`, so
+  GPT runs accept only GPT sizes. Image-to-image character runs reject item sizes
+  (422): the source image is sent at the run size.
+- Web 「按构图自动选比例」 (default on, off for img2img): `itemShape()` in
+  `dataset-run.ts` — `wide shot`/`scenery`/full-body groups → landscape, `full body`
+  /`cowboy shot` → portrait, else square; NovelAI 832×1216 / 1024×1024 / 1216×832,
+  GPT 1024×1536 / 1024×1024 / 1536×1024. Style library default: 114 / 127 / 57.
+- `POST /api/generations/{job_id}/rerun` accepts optional `prompt` (1–1000) and
+  `style_prompt` (1–3000). An edited prompt replaces `experiment.item.prompt` (the
+  caption) and the sent prompt; character groups keep `<traits>, ` and swap only the
+  item part. Edits are re-validated as a full request (422 `rerun_invalid` for blank,
+  comment-line or over-budget input); a re-run without edits keeps the old
+  `model_copy` path and is never re-validated against newer rules. The source group
+  is never changed.
+- Review grid counts are split: 「重跑已弃置（X）」 counts discarded images of
+  succeeded groups and 「补跑失败（Y）」 failed groups, each minus re-runs already made
+  from that job. Both open an editor (one optional new style, editable prompt per
+  image) before the confirm; the single-image 「重跑（新种子）」 opens the same editor.
+- Bangs: about 40% of style person descriptions carry one bangs tag (`parted bangs`
+  ~15%, `blunt bangs`, `swept bangs`, `forehead, hair pulled back`, `sidelocks`,
+  `hime cut`, `hair over one eye`); the rest leave bangs to the model.
+- `apps/web/src/prompt-zh.ts`: display-only tag→Chinese glosses (every built-in
+  tag) shown under each library item and in the re-run editor; never sent or
+  captioned. Loaded only with the lazy dataset chunk. Keep it complete when adding
+  library tags.

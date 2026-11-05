@@ -13,7 +13,7 @@ from uuid import UUID
 from fastapi import Cookie, Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from .account_balance import AccountBalance, BalanceFailure, BalanceProvider, BalanceService
 from .advice import (
@@ -28,7 +28,7 @@ from .advice import (
 from .auth import current_user, issue_session, revoke_session
 from .codex_advice import CodexAdviceRunner
 from .config import Settings
-from .dataset_plan import DatasetRunCreate
+from .dataset_plan import DatasetRunCreate, has_comment_line
 from .db import Database
 from .generations import (
     ExperimentConflict,
@@ -49,6 +49,7 @@ from .generations import (
 from .gpt_images import GptImageProvider
 from .mcp_account import NovelAiMcpBalanceProvider
 from .mcp_images import NovelAiMcpProvider
+from .prompt_comments import compile_prompt_comments
 from .prompt_snapshots import (
     PromptSnapshot,
     PromptSnapshotConflict,
@@ -105,6 +106,10 @@ class GenerationAccepted(BaseModel):
 class RerunRequest(BaseModel):
     # Image of the source job to mark discarded once the re-run is accepted.
     discard_index: int | None = Field(default=None, ge=0, le=7)
+    # Optional owner edits for this one re-run: the item's content prompt (it also becomes
+    # the re-run's caption) and the style. Absent keeps the source group's frozen values.
+    prompt: str | None = Field(default=None, min_length=1, max_length=1000)
+    style_prompt: str | None = Field(default=None, min_length=1, max_length=3000)
 
 
 def error(status: int, code: str, message: str, *, retryable: bool = False) -> JSONResponse:
@@ -910,10 +915,43 @@ def create_app(
         reference = job.parameters.reference
         if reference is not None and reference.mode == "gpt" and manager.gpt_provider is None:
             return error(503, "gpt_image_unavailable", "GPT image generation is not configured")
-        parameters = job.parameters.model_copy(update={
-            "seed": None, "sample_count": 1,
-            "experiment": context.model_copy(update={"rerun_of": job.id}),
-        })
+        source = job.parameters
+        update: dict = {"seed": None, "sample_count": 1}
+        item = context.item
+        if payload.prompt is not None and item is not None and payload.prompt != item.prompt:
+            if source.prompt_comments and has_comment_line(payload.prompt):
+                return error(422, "rerun_invalid", "Training prompts cannot contain comment lines")
+            old_item = item.prompt.strip()
+            if source.reference is None:
+                positive = payload.prompt
+            elif source.positive_prompt.endswith(old_item):
+                # Character groups send "<traits>, <item prompt>"; keep the traits.
+                positive = source.positive_prompt[: len(source.positive_prompt) - len(old_item)] \
+                    + payload.prompt.strip()
+            else:
+                return error(422, "rerun_invalid", "This group's prompt cannot be edited")
+            update["positive_prompt"] = positive
+            item = item.model_copy(update={"prompt": payload.prompt})
+        if payload.style_prompt is not None and payload.style_prompt != source.style_prompt:
+            effective = (
+                compile_prompt_comments(payload.style_prompt) if source.prompt_comments
+                else payload.style_prompt
+            )
+            if not effective.strip():
+                return error(422, "rerun_invalid", "Style prompt cannot be blank")
+            update["style_prompt"] = payload.style_prompt
+        experiment = context.model_copy(update={"rerun_of": job.id, "item": item})
+        if len(update) == 2:
+            # No edits: the frozen source as before (never re-validated against newer rules).
+            parameters = source.model_copy(update={**update, "experiment": experiment})
+        else:
+            try:
+                parameters = GenerationRequest.model_validate({
+                    **source.model_dump(mode="json"), **update,
+                    "experiment": experiment.model_dump(mode="json"),
+                })
+            except ValidationError:
+                return error(422, "rerun_invalid", "Edited prompt or style is not a valid request")
         try:
             new_id = manager.submit(user.id, parameters, create=manager.store.create_rerun)
         except GenerationNotConfigured:

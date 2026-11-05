@@ -30,6 +30,14 @@ export interface DatasetItem {
   /** Shared scene; on multi-person items each person lives in `characters`. */
   prompt: string
   characters?: CharacterPrompt[]
+  /** Optional per-item canvas (both or neither); absent uses the run size. */
+  width?: number
+  height?: number
+}
+
+export interface RerunEdits {
+  prompt?: string
+  style_prompt?: string
 }
 
 export interface ReferenceImageUse {
@@ -359,6 +367,7 @@ export function errorText(error: unknown): string {
       experiment_run_unknown: '实验提交结果未知，请重新连接核对，不要重复开始。',
       experiment_run_missing: '尚未找到这次实验，提交结果仍待确认；请检查历史后再次连接。',
       rerun_unsupported: '只有训练集里的图片可以重跑。',
+      rerun_invalid: '修改后的训练词或画风无效（不能为空，不能含 // 注释行，合计不超过 3000 字符）。',
       experiment_active: '这条记录属于进行中的画风实验，请先停止实验或等待完成后删除。',
       provider_auth_error: '图像服务认证失败，请联系管理员。',
       provider_rate_limited: '图像服务限流，请稍后重试。',
@@ -594,9 +603,14 @@ export class WorkspaceApi {
   }
 
   /** One paid generation: the same training-set group, one sample, a new random seed. */
-  rerunGeneration(jobId: string, discardIndex: number | null): Promise<GenerationAccepted> {
+  /** One paid re-run; optional edits replace this re-run's content prompt (and caption) or style. */
+  rerunGeneration(jobId: string, discardIndex: number | null, edits: RerunEdits = {}): Promise<GenerationAccepted> {
     return this.request(`/api/generations/${encodeURIComponent(jobId)}/rerun`, {
-      method: 'POST', body: JSON.stringify(discardIndex === null ? {} : { discard_index: discardIndex }),
+      method: 'POST', body: JSON.stringify({
+        ...(discardIndex === null ? {} : { discard_index: discardIndex }),
+        ...(edits.prompt === undefined ? {} : { prompt: edits.prompt }),
+        ...(edits.style_prompt === undefined ? {} : { style_prompt: edits.style_prompt }),
+      }),
     })
   }
 
