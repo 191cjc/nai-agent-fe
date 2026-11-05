@@ -219,7 +219,7 @@ def test_legacy_same_definition_keeps_version_and_restart_never_repeats_ordinal(
                 "SELECT definition_json FROM style_experiment_runs WHERE user_id = ? AND id = ?",
                 (user, run.id),
             ).fetchone()[0] == frozen
-            assert connection.execute("PRAGMA user_version").fetchone()[0] == 9
+            assert connection.execute("PRAGMA user_version").fetchone()[0] == 10
         assert store.create(user, original).model_dump() == ended.model_dump()
         payload["parameters"]["width"] = 1024
         with pytest.raises(RunConflict, match="experiment_run_conflict"):
@@ -491,6 +491,9 @@ def test_queue_slots_rotate_between_continuously_active_owners(database: Databas
 
         def is_inflight(self, job_id):
             return job_id in self.pending
+
+        def parallelism(self, lane):
+            return 1
 
         def finish_all(self):
             for job_id, parameters in self.pending.items():
@@ -913,7 +916,7 @@ def test_v2_migration_and_backup_preserve_auth_jobs_and_private_run_state(tmp_pa
     database.migrate()
     assert database.check_ready()
     with database.connect() as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 9
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 10
         assert connection.execute("SELECT COUNT(*) FROM browser_sessions").fetchone()[0] == 1
         assert connection.execute("SELECT COUNT(*) FROM generation_jobs").fetchone()[0] == 1
     run = RunStore(database).create(owner_id, request(seed=77))

@@ -54,7 +54,13 @@ Lane = Literal["novelai", "gpt"]
 ACTIVE_STATUSES = "('running', 'stopping')"
 # Unfinished (running, stopping or queued) runs one owner may hold at once.
 MAX_ACTIVE_RUNS = 10
-_ROW = "SELECT rowid AS seq, * FROM style_experiment_runs "
+_INFLIGHT_COUNT = (
+    "(SELECT COUNT(*) FROM style_experiment_inflight AS i "
+    "WHERE i.user_id = style_experiment_runs.user_id "
+    "AND i.run_id = style_experiment_runs.id) AS in_flight_count"
+)
+_ROW = f"SELECT rowid AS seq, *, {_INFLIGHT_COUNT} FROM style_experiment_runs "
+_INFLIGHT_ORDER = "ORDER BY length(ordinal), ordinal"
 
 
 def run_lane(request: "RunCreate | DatasetRunCreate") -> Lane:
@@ -77,8 +83,11 @@ class RunState(BaseModel):
     processed_count: str
     succeeded_count: str
     failed_count: str
+    # Lowest in-flight ordinal and its job (a run on the GPT lane may hold several).
     current_ordinal: str | None
     current_job_id: str | None
+    # Accepted groups of this run not yet counted (0..lane parallelism).
+    in_flight_count: int = 0
     seed: int
     sample_count: int
     parameters: GenerationRequest
@@ -142,7 +151,7 @@ class RunStore:
             **{key: row[key] for key in (
                 "id", "lane", "status", "total", "next_ordinal", "processed_count",
                 "succeeded_count", "failed_count", "current_ordinal", "current_job_id", "seed",
-                "created_at", "updated_at", "error_code",
+                "created_at", "updated_at", "error_code", "in_flight_count",
             )},
             parameters=definition["parameters"], ranges=definition.get("ranges", []),
             sample_count=definition["parameters"]["sample_count"],
@@ -232,7 +241,9 @@ class RunStore:
         """The owner's unfinished runs, oldest first, with lane positions and names."""
         with self.database.connect() as connection:
             rows = connection.execute(
-                "SELECT r.rowid AS seq, r.*, n.name AS display_name "
+                "SELECT r.rowid AS seq, r.*, n.name AS display_name, "
+                "(SELECT COUNT(*) FROM style_experiment_inflight AS i "
+                "WHERE i.user_id = r.user_id AND i.run_id = r.id) AS in_flight_count "
                 "FROM style_experiment_runs r LEFT JOIN experiment_names n "
                 "ON n.user_id = r.user_id AND n.run_id = r.id "
                 f"WHERE r.user_id = ? AND r.status IN {ACTIVE_STATUSES} "
@@ -282,35 +293,56 @@ class RunStore:
     def stop(self, user_id: str, run_id: str) -> RunState | None:
         with self.database.connect(write=True) as connection:
             connection.execute(
-                "UPDATE style_experiment_runs SET status = CASE "
-                "WHEN current_job_id IS NULL THEN 'stopped' ELSE 'stopping' END, updated_at = ? "
+                "UPDATE style_experiment_runs SET status = CASE WHEN EXISTS ("
+                "SELECT 1 FROM style_experiment_inflight WHERE user_id = ? AND run_id = ?) "
+                "THEN 'stopping' ELSE 'stopped' END, updated_at = ? "
                 "WHERE user_id = ? AND id = ? AND status = 'running'",
-                (int(time.time()), user_id, run_id),
+                (user_id, run_id, int(time.time()), user_id, run_id),
             )
             row = connection.execute(
                 _ROW + "WHERE user_id = ? AND id = ?", (user_id, run_id),
             ).fetchone()
             return self._located(connection, row) if row else None
 
+    @staticmethod
+    def _sync_current(connection: sqlite3.Connection, user_id: str, run_id: str) -> None:
+        """Mirror the lowest in-flight group into the run's legacy current_* columns."""
+        lowest = connection.execute(
+            "SELECT job_id, ordinal FROM style_experiment_inflight "
+            f"WHERE user_id = ? AND run_id = ? {_INFLIGHT_ORDER} LIMIT 1", (user_id, run_id),
+        ).fetchone()
+        connection.execute(
+            "UPDATE style_experiment_runs SET current_job_id = ?, current_ordinal = ? "
+            "WHERE user_id = ? AND id = ?",
+            (lowest["job_id"] if lowest else None, lowest["ordinal"] if lowest else None,
+             user_id, run_id),
+        )
+
+    def in_flight_jobs(self, user_id: str, run_id: str) -> list[str]:
+        with self.database.connect() as connection:
+            return [row["job_id"] for row in connection.execute(
+                "SELECT job_id FROM style_experiment_inflight "
+                f"WHERE user_id = ? AND run_id = ? {_INFLIGHT_ORDER}", (user_id, run_id),
+            ).fetchall()]
+
     def claim(
         self, user_id: str, run_id: str, ordinal: str, parameters: GenerationRequest,
-        *, refusal: str | None = None,
+        *, refusal: str | None = None, limit: int = 1,
     ) -> str | None:
         """Persist job and cursor together before any executor can invoke the provider."""
         with self.database.connect(write=True) as connection:
             row = connection.execute(
-                "SELECT * FROM style_experiment_runs WHERE user_id = ? AND id = ?",
-                (user_id, run_id),
+                _ROW + "WHERE user_id = ? AND id = ?", (user_id, run_id),
             ).fetchone()
             if (
-                row is None or row["status"] != "running" or row["current_job_id"] is not None
+                row is None or row["status"] != "running" or row["in_flight_count"] >= limit
                 or row["next_ordinal"] != ordinal or int(ordinal) > int(row["total"])
             ):
                 return None
             _experiment_connection(connection)
             existing = connection.execute(
                 EXPERIMENT_ROWS + "SELECT id FROM experiment_rows "
-                "WHERE experiment_id = ? AND ordinal = ? LIMIT 1",
+                "WHERE experiment_id = ? AND ordinal = ? AND rerun_of IS NULL LIMIT 1",
                 (user_id, run_id, ordinal),
             ).fetchone()
             job_id = existing["id"] if existing else JobStore.create_in_transaction(
@@ -323,22 +355,33 @@ class RunStore:
                     "WHERE id = ? AND status = 'queued'", (refusal, now, job_id),
                 )
             connection.execute(
-                "UPDATE style_experiment_runs SET current_job_id = ?, current_ordinal = ?, "
-                "next_ordinal = ?, updated_at = ? WHERE user_id = ? AND id = ?",
-                (job_id, ordinal, str(int(ordinal) + 1), now, user_id, run_id),
+                "INSERT OR IGNORE INTO style_experiment_inflight "
+                "(user_id, run_id, job_id, ordinal) VALUES (?, ?, ?, ?)",
+                (user_id, run_id, job_id, ordinal),
             )
+            connection.execute(
+                "UPDATE style_experiment_runs SET next_ordinal = ?, updated_at = ? "
+                "WHERE user_id = ? AND id = ?",
+                (str(int(ordinal) + 1), now, user_id, run_id),
+            )
+            self._sync_current(connection, user_id, run_id)
         return job_id if existing is None and refusal is None else None
 
-    def fail_unowned_current(self, user_id: str, run_id: str) -> None:
-        # Call only after the manager's admission is no longer live. A worker that
-        # lost terminal persistence must not strand the run or repeat paid work.
+    def fail_unowned(self, user_id: str, run_id: str, job_ids: list[str]) -> None:
+        # Call only after the manager's admission for these jobs is no longer live. A worker
+        # that lost terminal persistence must not strand the run or repeat paid work.
+        if not job_ids:
+            return
         with self.database.connect(write=True) as connection:
-            connection.execute(
-                "UPDATE generation_jobs SET status = 'failed', error_code = 'outcome_unknown', "
-                "updated_at = ? WHERE status IN ('queued', 'running') AND user_id = ? AND id = "
-                "(SELECT current_job_id FROM style_experiment_runs WHERE user_id = ? AND id = ?)",
-                (int(time.time()), user_id, user_id, run_id),
-            )
+            for job_id in job_ids:
+                connection.execute(
+                    "UPDATE generation_jobs SET status = 'failed', "
+                    "error_code = 'outcome_unknown', updated_at = ? "
+                    "WHERE status IN ('queued', 'running') AND user_id = ? AND id = ? "
+                    "AND EXISTS (SELECT 1 FROM style_experiment_inflight "
+                    "WHERE user_id = ? AND run_id = ? AND job_id = ?)",
+                    (int(time.time()), user_id, job_id, user_id, run_id, job_id),
+                )
 
     def reconcile(self, user_id: str, run_id: str) -> RunState | None:
         with self.database.connect(write=True) as connection:
@@ -347,33 +390,51 @@ class RunStore:
             ).fetchone()
             if row is None:
                 return None
-            if row["current_job_id"] is None:
+            if row["in_flight_count"] == 0:
                 return self._located(connection, row)
-            job = connection.execute(
-                "SELECT status, error_code FROM generation_jobs WHERE user_id = ? AND id = ?",
-                (user_id, row["current_job_id"]),
-            ).fetchone()
-            if job is not None and job["status"] in ("queued", "running"):
+            pending = connection.execute(
+                "SELECT f.job_id, j.status, j.error_code FROM style_experiment_inflight AS f "
+                "LEFT JOIN generation_jobs AS j ON j.user_id = f.user_id AND j.id = f.job_id "
+                "WHERE f.user_id = ? AND f.run_id = ? ORDER BY length(f.ordinal), f.ordinal",
+                (user_id, run_id),
+            ).fetchall()
+            settled = [job for job in pending if job["status"] not in ("queued", "running")]
+            if not settled:
                 return self._located(connection, row)
-            # Missing private state is never grounds to repeat a possibly paid group.
-            succeeded = job is not None and job["status"] == "succeeded"
-            processed = int(row["processed_count"]) + 1
+            processed = int(row["processed_count"])
+            succeeded_count = int(row["succeeded_count"])
+            failed_count = int(row["failed_count"])
+            error_code = row["error_code"]
+            for job in settled:
+                # Missing private state is never grounds to repeat a possibly paid group.
+                succeeded = job["status"] == "succeeded"
+                processed += 1
+                succeeded_count += int(succeeded)
+                failed_count += int(not succeeded)
+                error_code = (
+                    None if succeeded else job["error_code"] if job["status"] is not None
+                    else "outcome_unknown"
+                )
+                connection.execute(
+                    "DELETE FROM style_experiment_inflight "
+                    "WHERE user_id = ? AND run_id = ? AND job_id = ?",
+                    (user_id, run_id, job["job_id"]),
+                )
+            remaining = len(pending) - len(settled)
             status = (
-                "stopped" if row["status"] == "stopping" else
-                "completed" if processed >= int(row["total"]) else "running"
+                ("stopping" if remaining else "stopped") if row["status"] == "stopping" else
+                "completed" if processed >= int(row["total"]) and not remaining else "running"
             )
             connection.execute(
                 "UPDATE style_experiment_runs SET processed_count = ?, succeeded_count = ?, "
-                "failed_count = ?, current_job_id = NULL, current_ordinal = NULL, status = ?, "
-                "error_code = ?, updated_at = ? WHERE user_id = ? AND id = ?",
+                "failed_count = ?, status = ?, error_code = ?, updated_at = ? "
+                "WHERE user_id = ? AND id = ?",
                 (
-                    str(processed), str(int(row["succeeded_count"]) + int(succeeded)),
-                    str(int(row["failed_count"]) + int(not succeeded)), status,
-                    (None if succeeded else
-                     job["error_code"] if job is not None else "outcome_unknown"),
-                    int(time.time()), user_id, run_id,
+                    str(processed), str(succeeded_count), str(failed_count), status,
+                    error_code, int(time.time()), user_id, run_id,
                 ),
             )
+            self._sync_current(connection, user_id, run_id)
             row = connection.execute(
                 _ROW + "WHERE user_id = ? AND id = ?", (user_id, run_id),
             ).fetchone()
@@ -447,38 +508,52 @@ class StyleExperimentService:
                 # Keep one owner's damaged/transient state from starving other owners.
                 continue
 
+    def _release_orphans(self, user_id: str, run_id: str) -> None:
+        dead = [
+            job_id for job_id in self.store.in_flight_jobs(user_id, run_id)
+            if not self.manager.is_inflight(job_id)
+        ]
+        self.store.fail_unowned(user_id, run_id, dead)
+
     def _advance(self, user_id: str, run_id: str) -> None:
         previous = self.store.get(user_id, run_id)
-        if (
-            previous is not None and previous.current_job_id is not None
-            and not self.manager.is_inflight(previous.current_job_id)
-        ):
-            self.store.fail_unowned_current(user_id, run_id)
+        if previous is not None and previous.in_flight_count:
+            self._release_orphans(user_id, run_id)
         run = self.store.reconcile(user_id, run_id)
-        if run is None or run.status != "running" or run.current_job_id is not None:
+        if run is None or run.status != "running":
             return
         if run.queue_position != 0:
             # Queued behind an earlier run of this owner's lane; waits without a claim.
             return
+        # NovelAI runs keep one group in flight; GPT runs fill up to the lane's parallelism.
+        limit = self.manager.parallelism(run.lane)
+        while (
+            run is not None and run.status == "running" and run.in_flight_count < limit
+            and int(run.next_ordinal) <= int(run.total) and not self._stop.is_set()
+        ):
+            if not self._submit_next(user_id, run, limit):
+                return
+            run = self.store.get(user_id, run_id)
+
+    def _submit_next(self, user_id: str, run: RunState, limit: int) -> bool:
+        """Claim and submit the run's next ordinal; False when nothing more can start now."""
         parameters = group_parameters(run)
+        ordinal = run.next_ordinal
 
         def create(owner: str, request: GenerationRequest) -> str | None:
-            return self.store.claim(owner, run_id, run.next_ordinal, request)
+            return self.store.claim(owner, run.id, ordinal, request, limit=limit)
 
         try:
-            self.manager.submit(user_id, parameters, create=create)
+            return self.manager.submit(user_id, parameters, create=create) is not None
         except (GenerationNotConfigured, ResultStorageUnavailable) as exception:
             refusal = (
                 "provider_unavailable" if isinstance(exception, GenerationNotConfigured)
                 else "result_storage_unavailable"
             )
-            self.store.claim(user_id, run_id, run.next_ordinal, parameters, refusal=refusal)
-            self.store.reconcile(user_id, run_id)
+            self.store.claim(user_id, run.id, ordinal, parameters, refusal=refusal, limit=limit)
+            self.store.reconcile(user_id, run.id)
         except Exception:
-            current = self.store.get(user_id, run_id)
-            if (
-                current and current.current_job_id
-                and not self.manager.is_inflight(current.current_job_id)
-            ):
-                self.store.fail_unowned_current(user_id, run_id)
-            self.store.reconcile(user_id, run_id)
+            self._release_orphans(user_id, run.id)
+            self.store.reconcile(user_id, run.id)
+        # Refusal-only progression keeps the bounded per-tick cadence.
+        return False

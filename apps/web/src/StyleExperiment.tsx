@@ -161,14 +161,16 @@ const RunRow = observer(({ runs, run, saved }: { runs: StyleRunStore; run: Exper
       <span className="run-lane">{LANES[run.lane ?? 'novelai']}</span>
       <span>已处理 {run.processed_count} / {run.total} {unit}</span>
       <span>成功 {run.succeeded_count} · 失败 {run.failed_count}</span>
-      {run.current_ordinal !== null && <span>当前第 {run.current_ordinal} {unit}</span>}
+      {(run.in_flight_count ?? 0) > 1
+        ? <span>并发生成 {run.in_flight_count} {unit}（最早第 {run.current_ordinal} {unit}）</span>
+        : run.current_ordinal !== null && <span>当前第 {run.current_ordinal} {unit}</span>}
     </div>
     <div className="server-run-actions">
       {!queued && <button className="secondary" type="button" onClick={() => void saved.openExperiment(run.id)}>
         <FlaskConical size={14} aria-hidden="true" /> 查看已保存结果
       </button>}
       {unfinished ? <button className="secondary" type="button" disabled={stopping || run.status === 'stopping'} onClick={() => {
-        if (queued || window.confirm(`停止「${run.name || fallback}」？当前${unit}会完成，后续${unit}不再生成。`)) void runs.stop(run.id)
+        if (queued || window.confirm(`停止「${run.name || fallback}」？进行中的${unit}会完成，后续${unit}不再生成。`)) void runs.stop(run.id)
       }}>
         <Square size={13} aria-hidden="true" />{stopping ? '正在请求停止...' : run.status === 'stopping' ? `等待当前${unit}结束` : queued ? '取消排队' : '停止'}
       </button> : <button className="icon-button" type="button" title="从列表移除" aria-label={`从列表移除 ${run.name || fallback}`}

@@ -471,3 +471,15 @@ no active jobs/runs before the restart (a restart marks an in-flight group
 before the web release — the new web reads `GET /api/style-experiment-runs/queue`.
 Rolling the API back below schema 9 requires restoring the pre-upgrade backup,
 because older code cannot hold several unfinished runs per owner.
+
+## Concurrent GPT image groups (schema 10)
+
+This release migrates schema 9 → 10 at `ExecStartPre`: it adds
+`style_experiment_inflight` and moves any current group of an unfinished run
+into it. A GPT image run now keeps up to `NAI_GPT_IMAGE_CONCURRENCY` groups in
+flight (default 8, allowed 1..16; set privately in `/etc/novelai/api.env`).
+NovelAI work stays one call at a time. Take the verified private online backup
+and confirm no active jobs/runs before the restart. Deploy the API before the
+web release (the web shows `in_flight_count` when present and ignores its
+absence). Rolling the API back below schema 10 requires restoring the
+pre-upgrade backup.

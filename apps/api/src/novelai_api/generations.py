@@ -64,6 +64,8 @@ PRECISE_MODELS = frozenset({"nai-diffusion-4-5-full", "nai-diffusion-4-5-curated
 # GPT image groups are independent of NovelAI: these neutral values fill the NAI-only fields.
 GPT_IMAGE_SIZES = frozenset({(1024, 1024), (1024, 1536), (1536, 1024)})
 GPT_SAMPLER = "gpt-image"
+# Upper bound for concurrent GPT image calls (15 concurrent calls verified on the relay).
+MAX_GPT_PARALLELISM = 16
 
 
 class ReferenceImageUse(BaseModel):
@@ -953,6 +955,7 @@ class GenerationManager:
         references: Callable[[str, str, str], bytes | None] | None = None,
         vibe_tokens: Callable[[str], VibeTokens] | None = None,
         gpt_provider: ImageProvider | None = None,
+        gpt_parallelism: int = 1,
     ):
         from .image_results import DiskResultStore
         from .reference_images import ReferenceImageStore
@@ -973,9 +976,17 @@ class GenerationManager:
         self.cache = cache if cache is not None else DiskResultStore(
             database.path.parent / "generation-images",
         )
-        # One worker per provider lane: GPT image groups never wait behind NovelAI
-        # groups (or the reverse), while each provider still sees one call at a time.
-        self._capacity = {lane: threading.BoundedSemaphore(3) for lane in ("novelai", "gpt")}
+        # Separate provider lanes: GPT image groups never wait behind NovelAI groups (or
+        # the reverse). NovelAI sees one call at a time; the GPT relay accepts several
+        # concurrent calls, so its lane runs `gpt_parallelism` workers. Each lane keeps
+        # two admission slots beyond its workers for ordinary submissions and re-runs.
+        if not 1 <= gpt_parallelism <= MAX_GPT_PARALLELISM:
+            raise ValueError(f"gpt_parallelism must be 1..{MAX_GPT_PARALLELISM}")
+        self._workers = {"novelai": 1, "gpt": gpt_parallelism}
+        self._capacity = {
+            lane: threading.BoundedSemaphore(workers + 2)
+            for lane, workers in self._workers.items()
+        }
         self._executors: dict[str, ThreadPoolExecutor] = {}
         self._work_lock = threading.Lock()
         self._working: dict[str, _Admission] = {}
@@ -990,7 +1001,7 @@ class GenerationManager:
         if self.provider is not None or self.gpt_provider is not None:
             # Without a GPT provider its groups still finish as gpt_image_unavailable.
             self._executors["gpt"] = ThreadPoolExecutor(
-                max_workers=1, thread_name_prefix="gpt-gen",
+                max_workers=self._workers["gpt"], thread_name_prefix="gpt-gen",
             )
 
     def stop(self) -> None:
@@ -998,6 +1009,10 @@ class GenerationManager:
         for executor in executors.values():
             executor.shutdown(wait=True, cancel_futures=True)
         self.cache.stop()
+
+    def parallelism(self, lane: str) -> int:
+        """Groups of one run that may be in flight at once on this lane."""
+        return self._workers[lane]
 
     @staticmethod
     def lane(request: GenerationRequest) -> str:

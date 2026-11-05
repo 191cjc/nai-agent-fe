@@ -113,6 +113,7 @@ def test_migration_to_schema7_preserves_rows(tmp_path) -> None:
     upgraded.migrate()
     user = owner(upgraded)
     with upgraded.connect(write=True) as connection:
+        connection.execute("DROP TABLE style_experiment_inflight")
         connection.execute("DROP TABLE experiment_names")
         connection.execute("DROP INDEX style_experiment_active_queue")
         connection.execute("ALTER TABLE style_experiment_runs DROP COLUMN lane")
@@ -129,7 +130,7 @@ def test_migration_to_schema7_preserves_rows(tmp_path) -> None:
         )
     upgraded.migrate()
     with sqlite3.connect(upgraded.path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 9
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 10
         assert connection.execute("SELECT COUNT(*) FROM generation_jobs").fetchone()[0] == 1
         assert connection.execute("SELECT COUNT(*) FROM discarded_images").fetchone()[0] == 0
     assert upgraded.check_ready()

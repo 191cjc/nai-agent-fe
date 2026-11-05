@@ -71,9 +71,20 @@ absent/false preserves the legacy contracts below.
   still conflicts even if effective prompts match. See prompt-sections-contract.md.
 - Single lifecycle scheduler on GenerationManager's per-lane executors: lane
   `novelai` (NovelAI provider, ordinary generation, style and non-GPT dataset
-  runs) and lane `gpt` (GPT image character groups), each one worker with its
-  own 3-slot bounded admission, so one provider never waits behind the other.
+  runs) and lane `gpt` (GPT image character groups), so one provider never
+  waits behind the other. NovelAI: one worker, 3-slot admission. GPT:
+  `NAI_GPT_IMAGE_CONCURRENCY` workers (default 8, 1..16; 15 concurrent relay
+  calls verified 2026-11-05) with workers+2 admission slots.
   A run's lane is frozen at create (`style_experiment_runs.lane`, schema 9).
+- In-flight groups (schema 10): `style_experiment_inflight(user_id, run_id,
+  job_id, ordinal)` holds every claimed, not-yet-counted group. A run on lane L
+  keeps up to `GenerationManager.parallelism(L)` groups in flight (NovelAI 1,
+  GPT = concurrency); claims stay strictly sequential by ordinal. Reconcile
+  counts each terminal row once (ordinal order) and deletes it. Stop with
+  groups in flight → `stopping` until all settle, then `stopped`.
+  `current_ordinal/current_job_id` mirror the lowest in-flight group;
+  `RunState.in_flight_count` (additive) reports the count. Orphans (admission
+  ended, job still queued/running) fail as `outcome_unknown`, never resubmit.
 - Run queue (schema 9): an owner may hold up to 10 unfinished runs
   (`MAX_ACTIVE_RUNS`, else 409 `experiment_run_queue_full`). Within one
   owner's lane only the oldest unfinished run (ORDER BY created_at, rowid)
@@ -81,7 +92,7 @@ absent/false preserves the legacy contracts below.
   `queue_position` (0 executing, N waiting behind N) is reported by run reads
   and `GET /api/style-experiment-runs/queue` (oldest first, with names).
   Stopping a waiting run settles it immediately as stopped. `GET .../active`
-  remains and returns the oldest unfinished run. At most one group per run in flight. Queue
+  remains and returns the oldest unfinished run. At most `parallelism(lane)` groups per run in flight. Queue
   contention waits without consuming a group. Rotate the starting owner across
   bounded scheduler ticks so earlier continuously active owners cannot starve
   later runs. Definite admission failures may

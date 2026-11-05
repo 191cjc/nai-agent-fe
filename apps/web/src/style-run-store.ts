@@ -81,6 +81,7 @@ export class StyleRunStore {
 
   private static changed(previous: ExperimentRunState, next: ExperimentRunState): boolean {
     return previous.processed_count !== next.processed_count || previous.current_job_id !== next.current_job_id
+      || previous.in_flight_count !== next.in_flight_count
       || previous.status !== next.status
   }
 

@@ -74,12 +74,16 @@ class Settings:
     gpt_image_api_key: str | None = field(default=None, repr=False)
     gpt_image_base_url: str | None = field(default=None, repr=False)
     gpt_image_model: str = field(default="gpt-image-2.5-flare", repr=False)
+    # Concurrent GPT image calls (and in-flight groups of one GPT run).
+    gpt_image_concurrency: int = 8
 
     def __post_init__(self) -> None:
         validate_codex_base_url(self.codex_base_url)
         validate_codex_model(self.codex_model)
         validate_codex_base_url(self.gpt_image_base_url)
         validate_codex_model(self.gpt_image_model)
+        if not 1 <= self.gpt_image_concurrency <= 16:
+            raise ValueError("NAI_GPT_IMAGE_CONCURRENCY must be an integer from 1 to 16")
 
     @property
     def gpt_image_endpoint(self) -> str | None:
@@ -145,4 +149,13 @@ class Settings:
             gpt_image_api_key=os.environ.get("NAI_GPT_IMAGE_API_KEY") or None,
             gpt_image_base_url=os.environ.get("NAI_GPT_IMAGE_BASE_URL") or None,
             gpt_image_model=os.environ.get("NAI_GPT_IMAGE_MODEL") or "gpt-image-2.5-flare",
+            gpt_image_concurrency=_concurrency(os.environ.get("NAI_GPT_IMAGE_CONCURRENCY")),
         )
+
+
+def _concurrency(value: str | None) -> int:
+    if not value:
+        return 8
+    if not value.strip().isdigit():
+        raise ValueError("NAI_GPT_IMAGE_CONCURRENCY must be an integer from 1 to 16")
+    return int(value)

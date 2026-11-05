@@ -223,6 +223,8 @@ export interface ExperimentRunState extends ExperimentRunDefinition {
   failed_count: string
   current_ordinal: string | null
   current_job_id: string | null
+  /** Accepted groups not yet counted; GPT runs may hold several at once. */
+  in_flight_count?: number
   seed: number
   sample_count: number
   created_at: number
@@ -276,6 +278,7 @@ function checkedRun(value: ExperimentRunState): ExperimentRunState {
     && decimal(value.processed_count) && decimal(value.succeeded_count) && decimal(value.failed_count)
     && (value.current_ordinal === null || decimal(value.current_ordinal, true))
     && (value.current_job_id === null || typeof value.current_job_id === 'string')
+    && (value.in_flight_count === undefined || (Number.isInteger(value.in_flight_count) && value.in_flight_count >= 0))
     && Number.isInteger(value.seed) && value.seed >= 1 && value.seed <= 4294967295
     && Number.isInteger(value.sample_count) && value.sample_count >= 1 && value.sample_count <= 8
     && Number.isFinite(value.created_at) && Number.isFinite(value.updated_at)

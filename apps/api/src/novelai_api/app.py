@@ -161,6 +161,7 @@ def create_app(
         )
     manager = GenerationManager(
         database, image_provider, cache=result_cache, gpt_provider=gpt_image_provider,
+        gpt_parallelism=settings.gpt_image_concurrency,
     )
     experiments = StyleExperimentService(database, manager)
     thumbnails = ThumbnailCache()

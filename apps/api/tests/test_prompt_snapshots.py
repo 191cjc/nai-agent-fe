@@ -366,7 +366,7 @@ def test_schema3_upgrade_preserves_all_rows_raw_definitions_auth_and_private_bac
     assert database.check_ready()
     assert current_user(database, session) == user
     with database.connect() as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 9
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 10
         for table in tables:
             assert [
                 # Later schemas only append columns to the preserved rows.

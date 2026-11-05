@@ -1876,6 +1876,11 @@
             "title": "Id",
             "type": "string"
           },
+          "in_flight_count": {
+            "default": 0,
+            "title": "In Flight Count",
+            "type": "integer"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/DatasetItem"
