@@ -148,3 +148,12 @@ needs one operator-approved probe.
 - Web: the reference picker and the saved-result 「本条使用的参考图」 show only
   thumbnails (`ReferenceThumb`); the full image loads only inside the click-to-
   enlarge dialog. Selection uses the checkbox label, not the image.
+
+## Character library v2 (2026-11-05)
+
+- `apps/web/src/character-prompts.ts`: new default-selected category `splash`
+  「立绘与动态」(18: floating, midair, wind/floating hair, glow, dark or white
+  backgrounds, rim lighting) and `setting` +8 fantasy/east-asian scenes, for the
+  operator's ornate splash-art characters. Default selection 88 → 114 items (126 with the optional outfit set).
+- Same rules as every character prompt: no gender, count, appearance, outfit or
+  props (traits supply them; a named staff/weapon would fight the character's own).

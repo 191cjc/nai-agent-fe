@@ -191,6 +191,23 @@ review only (operator restriction); no paid probes.
 - Fantasy share is about a fifth of the set so ordinary scenes are not
   pulled towards fantasy; keep that balance when extending.
 
+## Library composition v4 (2026-11-05)
+
+- 298 items (server/web cap is 300 per run; default selects all, so keep the
+  library ≤300). Added 142: new category `ornate`「华丽立绘」(40) plus
+  portrait/upper/full +12 each, angle +14, scene +12, light +10, multi +6,
+  fantasy +12, nohuman +12. `boy`/`girl` and the 2 adult male items unchanged.
+- `ornate` matches the operator's character references (adult splash-art
+  goddesses): ornate gold-trimmed costumes, very long floating hair, ribbons,
+  shawls and wide sleeves, crowns/tiaras/halos/mechanical halos, ornate staffs,
+  orbs and weapons, hanfu with tassels and beads, glow on dark or white
+  backgrounds; 34 solo, 2 multi (native characters), 4 no-human ornament props.
+  Every ornament and effect (`gold trim`, `glowing`, `dark background`, `aura`)
+  is captioned so the style learns to draw it instead of adding it.
+- Fantasy + ornate is now about 29% (was ~21%), chosen by the operator so the
+  style LoRA can render ornate character LoRAs; everyday, scene, angle and
+  light categories grew by the same proportion to keep generalisation.
+
 ## Names and type badge (schema 8)
 
 - `experiment_names(user_id, run_id, name, named_at)` holds an optional owner
