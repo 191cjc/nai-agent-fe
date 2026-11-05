@@ -350,6 +350,8 @@ export function errorText(error: unknown): string {
       experiment_run_active: '已有进行中的画风实验或训练集批跑，请查看其进度或手动停止。',
       gpt_concurrency_too_high: 'GPT 并发数超过了服务器上限（NAI_GPT_IMAGE_CONCURRENCY）。',
       parallelism_unsupported: '只有 GPT 角色训练集可以调整并发数。',
+      nothing_to_continue: '这个训练集没有未开始的条目了。',
+      continuation_unsupported: '只有训练集可以继续剩余条目。',
       experiment_run_finished: '这个任务已经结束，无法再调整。',
       experiment_run_queue_full: '排队中的实验与训练集已达 10 个上限，请等待完成或停止其中一些后再加入。',
       experiment_run_conflict: '实验编号已被其他定义使用，请检查已保存的实验。',
@@ -560,6 +562,14 @@ export class WorkspaceApi {
   async stopExperimentRun(id: string, signal?: AbortSignal): Promise<ExperimentRunState> {
     const run = checkedRun(await this.request<ExperimentRunState>(`/api/style-experiment-runs/${encodeURIComponent(id)}/stop`, { method: 'POST', signal }))
     if (run.id !== id) throw new ApiFailure(0, 'invalid_response', '实验编号不匹配，请重新连接核对。')
+    return run
+  }
+
+  async continueRun(id: string, newId: string, signal?: AbortSignal): Promise<ExperimentRunState> {
+    const run = checkedRun(await this.request<ExperimentRunState>(`/api/style-experiment-runs/${encodeURIComponent(id)}/continue`, {
+      method: 'POST', body: JSON.stringify({ id: newId }), signal,
+    }))
+    if (run.id !== newId) throw new ApiFailure(0, 'invalid_response', '实验编号不匹配，请重新连接核对。')
     return run
   }
 

@@ -34,7 +34,7 @@ from novelai_api.reference_images import ReferenceImageStore
 from novelai_api.style_experiments import StyleExperimentService
 
 GPT_INPUT = {
-    **INPUT, "model": "gpt-image-2.6-flare", "sampler": "gpt-image", "steps": 1,
+    **INPUT, "model": "gpt-image-2.5-flare", "sampler": "gpt-image", "steps": 1,
     "cfg_scale": 0, "quality": False, "negative_prompt": "", "width": 1024,
     "height": 1536, "sample_count": 1, "positive_prompt": "",
 }
@@ -255,7 +255,7 @@ def test_settings_default_gpt_endpoint_to_relay_and_hide_key(tmp_path) -> None:
     settings = Settings(tmp_path / "x.sqlite3", "https://o.example",
                         codex_base_url="https://relay.example/v1", gpt_image_api_key="k-secret")
     assert settings.gpt_image_endpoint == "https://relay.example/v1"
-    assert settings.gpt_image_model == "gpt-image-2.6-flare"
+    assert settings.gpt_image_model == "gpt-image-2.5-flare"
     assert "k-secret" not in repr(settings)
     with pytest.raises(ValueError):
         Settings(tmp_path / "x.sqlite3", "https://o.example", gpt_image_base_url="http://plain")

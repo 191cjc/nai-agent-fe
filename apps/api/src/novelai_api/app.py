@@ -67,6 +67,7 @@ from .security import SESSION_COOKIE, SESSION_LIFETIME_SECONDS
 from .style_experiments import (
     ActiveRun,
     ActiveRuns,
+    ContinuationRefused,
     ReferenceMissing,
     RunConflict,
     RunCreate,
@@ -615,6 +616,50 @@ def create_app(
     ) -> RunState:
         run = experiments.store.stop(user.id, str(run_id))
         return run if run is not None else own_run(user, str(run_id))
+
+    class RunContinuation(BaseModel):
+        id: UUID
+
+    def reference_digest(user_id: str, reference_id: str) -> str | None:
+        item = references.get(user_id, reference_id)
+        return item.sha256 if item is not None else None
+
+    @app.post(
+        "/api/style-experiment-runs/{run_id}/continue",
+        status_code=202,
+        response_model=RunState,
+        responses={
+            401: {"model": ApiError}, 403: {"model": ApiError}, 404: {"model": ApiError},
+            409: {"model": ApiError}, 422: {"model": ApiError}, 503: {"model": ApiError},
+        },
+    )
+    def continue_style_run(
+        run_id: UUID, payload: RunContinuation,
+        user: Annotated[UserInfo, Depends(require_user)],
+    ) -> RunState | JSONResponse:
+        # A new run for the never-claimed items of a stopped dataset run; retries with the
+        # same new id return the same run.
+        source = own_run(user, str(run_id))
+        if source.lane == "gpt" and manager.gpt_provider is None:
+            return error(503, "gpt_image_unavailable", "GPT image generation is not configured")
+        try:
+            created = experiments.store.continue_run(
+                user.id, str(run_id), payload.id, reference_digest,
+                gpt_model=settings.gpt_image_model,
+            )
+        except ContinuationRefused as exception:
+            status = 409 if exception.code == "experiment_run_active" else 422
+            return error(status, exception.code, "The run cannot be continued")
+        except ReferenceMissing:
+            return error(422, "reference_not_found", "Reference image not found")
+        except RunConflict as exception:
+            return error(409, exception.code, "Experiment run conflicts with existing work")
+        if created is None:
+            raise HTTPException(
+                status_code=404,
+                detail=ApiError(code="not_found", message="Experiment run not found").model_dump(),
+            )
+        return created
 
     class RunParallelism(BaseModel):
         parallelism: int = Field(ge=1, le=16)

@@ -171,6 +171,22 @@ function ParallelismControl({ runs, run }: { runs: StyleRunStore; run: Experimen
   </form>
 }
 
+/** Stopped training sets: queue their never-started items as a new run. */
+function ContinueButton({ runs, run }: { runs: StyleRunStore; run: ExperimentRunState }) {
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState('')
+  const remaining = BigInt(run.total) - BigInt(run.next_ordinal) + 1n
+  if (remaining <= 0n) return null
+  return <>
+    <button className="secondary" type="button" disabled={saving} onClick={() => {
+      setSaving(true)
+      setMessage('')
+      void runs.continueRun(run.id).then(failure => { setSaving(false); setMessage(failure) })
+    }}>{saving ? '正在加入队列...' : `继续剩余 ${remaining} 条`}</button>
+    {message && <span className="alert" role="alert">{message}</span>}
+  </>
+}
+
 const RunRow = observer(({ runs, run, saved }: { runs: StyleRunStore; run: ExperimentRunState; saved: SavedResultsStore }) => {
   const dataset = run.kind === 'dataset'
   const character = dataset && !!run.character
@@ -198,8 +214,11 @@ const RunRow = observer(({ runs, run, saved }: { runs: StyleRunStore; run: Exper
         if (queued || window.confirm(`停止「${run.name || fallback}」？进行中的${unit}会完成，后续${unit}不再生成。`)) void runs.stop(run.id)
       }}>
         <Square size={13} aria-hidden="true" />{stopping ? '正在请求停止...' : run.status === 'stopping' ? `等待当前${unit}结束` : queued ? '取消排队' : '停止'}
-      </button> : <button className="icon-button" type="button" title="从列表移除" aria-label={`从列表移除 ${run.name || fallback}`}
-        onClick={() => runs.dismissFinished(run.id)}><X size={14} aria-hidden="true" /></button>}
+      </button> : <>
+        {dataset && run.status === 'stopped' && <ContinueButton runs={runs} run={run} />}
+        <button className="icon-button" type="button" title="从列表移除" aria-label={`从列表移除 ${run.name || fallback}`}
+          onClick={() => runs.dismissFinished(run.id)}><X size={14} aria-hidden="true" /></button>
+      </>}
     </div>
     {unfinished && run.lane === 'gpt' && <ParallelismControl runs={runs} run={run} />}
     {run.error_code && <p className="experiment-note">最近一{unit}诊断：{errorText(new ApiFailure(0, run.error_code, `本${unit}处理失败。`))}

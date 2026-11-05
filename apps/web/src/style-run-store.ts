@@ -276,6 +276,24 @@ export class StyleRunStore {
     }
   }
 
+  /** Queue a new run for a stopped training set's never-started items (same seeds and styles). */
+  async continueRun(id: string): Promise<string> {
+    if (!this.observing) return ''
+    const newId = this.newRunId()
+    if (!newId) return this.error
+    const epoch = this.epoch
+    try {
+      const run = await this.api.continueRun(id, newId)
+      if (epoch === this.epoch && this.observing) runInAction(() => {
+        this.acceptRun(run)
+        this.finished = this.finished.filter(item => item.id !== id)
+      })
+      return ''
+    } catch (error) {
+      return errorText(error)
+    }
+  }
+
   /** Change an unfinished GPT run's concurrency; in-flight items are never cancelled. */
   async setParallelism(id: string, parallelism: number): Promise<string> {
     if (!this.observing) return ''

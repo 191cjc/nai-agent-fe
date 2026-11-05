@@ -73,7 +73,7 @@ class Settings:
     codex_model: str | None = field(default=None, repr=False)
     gpt_image_api_key: str | None = field(default=None, repr=False)
     gpt_image_base_url: str | None = field(default=None, repr=False)
-    gpt_image_model: str = field(default="gpt-image-2.6-flare", repr=False)
+    gpt_image_model: str = field(default="gpt-image-2.5-flare", repr=False)
     # Concurrent GPT image calls (and in-flight groups of one GPT run).
     gpt_image_concurrency: int = 8
 
@@ -148,7 +148,7 @@ class Settings:
             codex_model=os.environ.get("NAI_CODEX_MODEL") or None,
             gpt_image_api_key=os.environ.get("NAI_GPT_IMAGE_API_KEY") or None,
             gpt_image_base_url=os.environ.get("NAI_GPT_IMAGE_BASE_URL") or None,
-            gpt_image_model=os.environ.get("NAI_GPT_IMAGE_MODEL") or "gpt-image-2.6-flare",
+            gpt_image_model=os.environ.get("NAI_GPT_IMAGE_MODEL") or "gpt-image-2.5-flare",
             gpt_image_concurrency=_concurrency(os.environ.get("NAI_GPT_IMAGE_CONCURRENCY")),
         )
 

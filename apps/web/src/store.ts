@@ -530,7 +530,7 @@ export class GenerationStore {
         }
         parameters = {
           prompt_comments: true, positive_prompt: '', style_prompt: styles[0], character_prompts: [],
-          auto_character_position: false, negative_prompt: '', model: options.gptModel ?? 'gpt-image-2.6-flare',
+          auto_character_position: false, negative_prompt: '', model: options.gptModel ?? 'gpt-image-2.5-flare',
           width: size.width, height: size.height, steps: 1, cfg_scale: 0, sampler: 'gpt-image',
           seed: null, sample_count: samples, quality: false,
         }

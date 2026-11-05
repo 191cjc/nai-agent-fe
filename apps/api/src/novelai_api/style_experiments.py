@@ -5,12 +5,18 @@ import secrets
 import sqlite3
 import threading
 import time
+from collections.abc import Callable
 from typing import Literal, Self
 from uuid import UUID
 
 from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
-from .dataset_plan import CharacterPlan, DatasetRunCreate, dataset_parameters, item_seed
+from .dataset_plan import (
+    CharacterPlan,
+    DatasetRunCreate,
+    dataset_parameters,
+    item_seed,
+)
 from .db import Database
 from .generations import (
     EXPERIMENT_ROWS,
@@ -118,6 +124,68 @@ class RunConflict(Exception):
 
 class ReferenceMissing(Exception):
     """A pinned reference image disappeared before the run could be created."""
+
+
+class ContinuationRefused(Exception):
+    def __init__(self, code: Literal[
+        "experiment_run_active", "continuation_unsupported", "nothing_to_continue",
+        "reference_not_found",
+    ]):
+        self.code = code
+        super().__init__(code)
+
+
+CONTINUATION_SUFFIX = "（续）"
+
+
+def continuation_request(
+    run: RunState, new_id: UUID, *, name: str | None, gpt_model: str | None = None,
+) -> tuple[DatasetRunCreate, list[ReferenceImageUse] | None]:
+    """A new dataset run for the stopped run's never-claimed items, rendered exactly as the
+    original would have: same seed per item, same style rotation and reference rotation."""
+    if run.kind != "dataset":
+        raise ContinuationRefused("continuation_unsupported")
+    if run.status in ("running", "stopping"):
+        raise ContinuationRefused("experiment_run_active")
+    offset = int(run.next_ordinal) - 1
+    if offset >= len(run.items):
+        raise ContinuationRefused("nothing_to_continue")
+    styles = None
+    if run.styles:
+        shift = offset % len(run.styles)
+        styles = run.styles[shift:] + run.styles[:shift]
+    parameters = run.parameters.model_copy(update={
+        "seed": item_seed(run.seed, offset + 1),
+        **({"style_prompt": styles[0]} if styles else {}),
+        # GPT groups render with the server's current model; record that, not the old one.
+        **({"model": gpt_model} if gpt_model and run.lane == "gpt" else {}),
+    })
+    character = None
+    pinned = None
+    if run.character is not None:
+        plan = run.character
+        pinned = list(plan.references)
+        if plan.mode in ("img2img", "precise"):
+            # These modes use one reference per item in turn; keep each item's image.
+            shift = offset % len(pinned)
+            pinned = pinned[shift:] + pinned[:shift]
+        character = {
+            **plan.model_dump(mode="json", exclude_none=True, exclude={"references"}),
+            "reference_ids": [reference.id for reference in pinned],
+        }
+    label = (name or "").strip()
+    if label:
+        label = label[:80 - len(CONTINUATION_SUFFIX)].rstrip() + CONTINUATION_SUFFIX
+    request = DatasetRunCreate.model_validate({
+        "id": str(new_id),
+        "parameters": parameters.model_dump(mode="json"),
+        "items": [item.model_dump(mode="json") for item in run.items[offset:]],
+        **({"styles": styles} if styles else {}),
+        **({"character": character} if character else {}),
+        **({"name": label} if label else {}),
+        **({"gpt_concurrency": run.parallelism} if run.parallelism else {}),
+    })
+    return request, pinned
 
 
 class RunStore:
@@ -292,6 +360,32 @@ class RunStore:
                         (*after, 128 - len(rows)),
                     ).fetchall())
         return [(row["user_id"], row["id"]) for row in rows]
+
+    def name(self, user_id: str, run_id: str) -> str | None:
+        with self.database.connect() as connection:
+            row = connection.execute(
+                "SELECT name FROM experiment_names WHERE user_id = ? AND run_id = ?",
+                (user_id, run_id),
+            ).fetchone()
+        return row["name"] if row else None
+
+    def continue_run(
+        self, user_id: str, run_id: str, new_id: UUID,
+        reference_digest: Callable[[str, str], str | None], *, gpt_model: str | None = None,
+    ) -> RunState | None:
+        """Create (idempotently, by new_id) the continuation of a stopped dataset run."""
+        run = self.get(user_id, run_id)
+        if run is None:
+            return None
+        request, pinned = continuation_request(
+            run, new_id, name=self.name(user_id, run_id), gpt_model=gpt_model,
+        )
+        if pinned is not None and any(
+            reference_digest(user_id, reference.id) != reference.sha256 for reference in pinned
+        ):
+            # The owner deleted or replaced a reference; never render with different bytes.
+            raise ContinuationRefused("reference_not_found")
+        return self.create(user_id, request, references=pinned)
 
     def set_parallelism(
         self, user_id: str, run_id: str, parallelism: int,

@@ -219,3 +219,20 @@ review only (operator restriction); no paid probes.
   SQLite backups still contain the deleted prompts until those backups age out.
 - Web: per-item delete in the saved list (disabled for the active run) and
   「删除所选（N）」 in the selection bar; a plain confirm names every set.
+
+## Continuing a stopped training set (2026-11-05)
+
+- `POST /api/style-experiment-runs/{id}/continue {id: UUID}` → 202 new
+  `RunState` (idempotent by the new id). Only stopped dataset runs (409
+  `experiment_run_active` while running/stopping, 422 `continuation_unsupported`
+  for style runs, 422 `nothing_to_continue` when every item was claimed).
+- The new run holds items `next_ordinal..total` and renders each exactly as the
+  original would have: base seed `item_seed(seed, next_ordinal)`, the style pool
+  rotated by the offset, and img2img/precise reference order rotated by the
+  offset (vibe/GPT keep all references). References must still exist with the
+  pinned digest (else 422 `reference_not_found`). GPT continuations record the
+  server's current model and keep the run's `parallelism`. Name gets 「（续）」.
+- Already-processed failures are not included; use per-image re-run for those.
+- Operator: `novelai-admin continue-run RUN_ID` does the same server-side and
+  prints only ids/counts. Web: 「继续剩余 N 条」 on stopped training sets in the
+  queue's finished list.
