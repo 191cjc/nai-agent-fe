@@ -522,7 +522,7 @@ export class GenerationStore {
         if (!Number.isInteger(samples) || samples < 1 || samples > 4) throw new Error('GPT 每条张数须为 1–4。')
         parameters = {
           prompt_comments: true, positive_prompt: '', style_prompt: styles[0], character_prompts: [],
-          auto_character_position: false, negative_prompt: '', model: options.gptModel ?? 'gpt-image-2.5-flare',
+          auto_character_position: false, negative_prompt: '', model: options.gptModel ?? 'gpt-image-2.6-flare',
           width: size.width, height: size.height, steps: 1, cfg_scale: 0, sampler: 'gpt-image',
           seed: null, sample_count: samples, quality: false,
         }

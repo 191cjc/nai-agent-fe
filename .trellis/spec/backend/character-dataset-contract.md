@@ -64,7 +64,7 @@ runs are dataset runs (`kind: "dataset"`) and inherit every rule in
   independent of NovelAI: enabled only with `NAI_GPT_IMAGE_API_KEY`
   (`GET /api/capabilities`; create → 503 `gpt_image_unavailable` otherwise),
   base URL `NAI_GPT_IMAGE_BASE_URL` or the advice relay, model
-  `NAI_GPT_IMAGE_MODEL` (default `gpt-image-2.5-flare`). Each group is one
+  `NAI_GPT_IMAGE_MODEL` (default `gpt-image-2.6-flare`). Each group is one
   multipart `POST {base}/images/edits` with every pinned reference as
   `image[]`, the deterministic prompt from `gpt_images.gpt_prompt` (traits,
   item, style), `size` ∈ 1024×1024 / 1024×1536 / 1536×1024, `n` 1–4. GPT groups
