@@ -77,6 +77,7 @@ export function ReviewGrid({ api, experimentId, onOpen, onClose }: {
   const [rerun, setRerun] = useState<{ done: number; total: number; waiting: boolean } | null>(null)
   const [rerunMessage, setRerunMessage] = useState('')
   const rerunController = useRef<AbortController | null>(null)
+  const scrollRef = useRef<HTMLElement | null>(null)
 
   // Metadata only (no image bytes): bounded pages in server order.
   useEffect(() => {
@@ -106,6 +107,7 @@ export function ReviewGrid({ api, experimentId, onOpen, onClose }: {
     && !(hideDiscarded && tile.index !== null && tile.job.discarded_images?.includes(tile.index))), [tiles, category, hideDiscarded])
   const pages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE))
   const current = Math.min(page, pages - 1)
+  useEffect(() => { scrollRef.current?.scrollTo({ top: 0 }) }, [current])
   const shown = useMemo(() => visible.slice(current * PAGE_SIZE, (current + 1) * PAGE_SIZE), [visible, current])
   const shownPaths = shown.flatMap(tile => tile.index === null ? [] : [{ key: tile.key, path: tile.job.image_urls[tile.index] }])
   const pathKey = shownPaths.map(item => item.key).join('|')
@@ -222,7 +224,7 @@ export function ReviewGrid({ api, experimentId, onOpen, onClose }: {
     }
   }
 
-  return <section className="review-grid" aria-label="网格检查">
+  return <section ref={scrollRef} className="review-grid" aria-label="网格检查">
     <div className="review-grid-toolbar">
       <label className="field review-grid-filter"><span>分类</span>
         <select value={category} onChange={event => { setCategory(event.target.value); setPage(0) }}>

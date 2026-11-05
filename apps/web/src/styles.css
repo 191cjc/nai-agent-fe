@@ -568,7 +568,7 @@ h1, h2, h3 { letter-spacing: 0; }
   .submit-row { min-height: 50px; padding-top: 6px; padding-bottom: 6px; }
 }
 @media (prefers-reduced-motion: reduce) { .progress-track span { animation: none; } }
-.review-grid { display: grid; gap: 8px; min-width: 0; padding: 4px 0; }
+.review-grid { display: grid; align-content: start; gap: 8px; flex: 1 1 0; min-width: 0; min-height: 0; padding: 4px 0; overflow-y: auto; overscroll-behavior: contain; }
 .review-grid-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .review-grid-filter { display: flex; align-items: center; gap: 6px; margin: 0; }
 .review-grid-filter select { width: auto; min-width: 140px; padding: 5px 8px; }
@@ -584,7 +584,7 @@ h1, h2, h3 { letter-spacing: 0; }
 .review-grid-empty { padding: 8px; color: var(--muted); font-size: 12px; text-align: center; }
 .review-grid-label { overflow: hidden; color: var(--muted); font-size: 11px; white-space: nowrap; text-overflow: ellipsis; }
 .review-grid-open { position: absolute; top: 4px; right: 4px; background: rgba(20, 20, 26, 0.75); }
-.review-grid-pages { display: flex; align-items: center; justify-content: center; gap: 12px; font-size: 12px; }
+.review-grid-pages { position: sticky; bottom: 0; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 12px; padding: 6px 0; background: #11131a; font-size: 12px; }
 .experiment-title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-bottom: 4px; }
 .experiment-title strong { font-size: 14px; overflow-wrap: anywhere; }
 .experiment-title .icon-button { width: 26px; height: 26px; }
