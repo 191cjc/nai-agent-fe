@@ -8,6 +8,7 @@ import { GenerationParameters } from './GenerationParameters'
 import type { SavedResultsStore } from './saved-results'
 import { ImageSaveButton, ImageSeedButton } from './ImageActions'
 import { preciseLabel } from './character-summary'
+import { ReferenceThumb } from './ReferencePreview'
 
 /** Name shown in confirmations; unnamed sets fall back to kind and creation time. */
 function experimentLabel(experiment: ExperimentSummary): string {
@@ -152,30 +153,12 @@ function jobStatus(status: string): string {
   return { queued: '排队中', running: '生成中', succeeded: '已完成', failed: '失败' }[status] ?? status
 }
 
-/** Thumbnails of the references a character group used; deleted references are omitted. */
+/** Thumbnails of the references a character group used; click one to view it full size. */
 function ReferenceThumbnails({ api, ids }: { api: WorkspaceApi; ids: string[] }) {
-  const [urls, setUrls] = useState<string[]>([])
-  const key = ids.join(',')
-  useEffect(() => {
-    const controller = new AbortController()
-    const created: string[] = []
-    void Promise.all(ids.map(id => api.referenceImage(id, controller.signal).then(blob => {
-      const url = URL.createObjectURL(blob)
-      created.push(url)
-      return url
-    }).catch(() => null))).then(loaded => {
-      if (!controller.signal.aborted) setUrls(loaded.filter((url): url is string => url !== null))
-    })
-    return () => {
-      controller.abort()
-      created.forEach(url => URL.revokeObjectURL(url))
-      setUrls([])
-    }
-    // ids are compared by value through key.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [api, key])
-  if (!urls.length) return null
-  return <div className="reference-thumbnails" aria-label="本条使用的参考图">{urls.map(url => <img key={url} src={url} alt="参考图" />)}</div>
+  if (!ids.length) return null
+  return <div className="reference-thumbnails" aria-label="本条使用的参考图">
+    {ids.map((id, index) => <ReferenceThumb key={id} api={api} id={id} label={`参考图 ${index + 1}`} />)}
+  </div>
 }
 
 /** Copies the shown retained image into the owner's private reference images. */

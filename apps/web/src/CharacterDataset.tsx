@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Palette, Plus, Sparkles, Trash2, Upload, X } from 'lucide-react'
+import { ReferenceThumb } from './ReferencePreview'
 import { ApiFailure, errorText, type Capabilities, type ReferenceImage, type WorkspaceApi } from './api'
 import { GPT_SIZES, MAX_REFERENCES, MAX_STYLE_POOL, MAX_TRAITS_LENGTH, characterRequest, type CharacterSettings, type GptSize } from './dataset-run'
 import { PRECISE_MODELS, VIBE_MODELS } from './store'
@@ -66,16 +67,12 @@ function ReferencePicker({ api, selected, onChange }: {
   api: WorkspaceApi; selected: string[]; onChange: (update: (current: string[]) => string[]) => void
 }) {
   const [items, setItems] = useState<ReferenceImage[]>([])
-  const [urls, setUrls] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [reload, setReload] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const owned = useRef<Record<string, string>>({})
   const uploaded = useRef<ReferenceImage[]>([])
   const input = useRef<HTMLInputElement>(null)
-
-  useEffect(() => () => { Object.values(owned.current).forEach(url => URL.revokeObjectURL(url)) }, [])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -89,9 +86,6 @@ function ReferencePicker({ api, selected, onChange }: {
         setItems([...kept, ...loaded])
         const present = new Set([...known, ...kept.map(item => item.id)])
         onChange(current => current.filter(id => present.has(id)))
-        for (const [id, url] of Object.entries(owned.current)) {
-          if (!present.has(id)) { URL.revokeObjectURL(url); delete owned.current[id] }
-        }
       } catch (exception) {
         if (!controller.signal.aborted) setError(failureText(exception))
       } finally {
@@ -102,20 +96,6 @@ function ReferencePicker({ api, selected, onChange }: {
     // Reload on explicit refresh only; local actions update the list directly.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api, reload])
-
-  useEffect(() => {
-    const controller = new AbortController()
-    for (const item of items) {
-      if (owned.current[item.id]) continue
-      void api.referenceImage(item.id, controller.signal).then(blob => {
-        if (controller.signal.aborted || owned.current[item.id]) return
-        const url = URL.createObjectURL(blob)
-        owned.current[item.id] = url
-        setUrls(current => ({ ...current, [item.id]: url }))
-      }).catch(() => undefined)
-    }
-    return () => controller.abort()
-  }, [api, items])
 
   async function upload(files: FileList | null) {
     const file = files?.[0]
@@ -146,9 +126,6 @@ function ReferencePicker({ api, selected, onChange }: {
       setItems(current => current.filter(other => other.id !== item.id))
       uploaded.current = uploaded.current.filter(other => other.id !== item.id)
       onChange(current => current.filter(id => id !== item.id))
-      const url = owned.current[item.id]
-      if (url) URL.revokeObjectURL(url)
-      delete owned.current[item.id]
     } catch (exception) {
       setError(failureText(exception))
     } finally {
@@ -166,15 +143,17 @@ function ReferencePicker({ api, selected, onChange }: {
     <legend>参考图（已选 {selected.length} / {MAX_REFERENCES}）</legend>
     <p className="prompt-hint">上传 PNG / JPEG（≤ 8 MB，边长 64–2048），或在历史图片查看器中点「设为参考图」。参考图私有保存，直到你删除。</p>
     <div className="reference-grid">
-      {items.map(item => <label key={item.id} className={`reference-tile${selected.includes(item.id) ? ' selected' : ''}`}>
-        {urls[item.id] ? <img src={urls[item.id]} alt={`参考图 ${item.width}×${item.height}`} /> : <span className="reference-placeholder">加载中</span>}
+      {items.map(item => <div key={item.id} className={`reference-tile${selected.includes(item.id) ? ' selected' : ''}`}>
+        <ReferenceThumb api={api} id={item.id} label={`参考图 ${item.width}×${item.height}`} />
         <span className="reference-meta">
-          <input type="checkbox" checked={selected.includes(item.id)} aria-label="选为本次参考图" onChange={event => toggle(item.id, event.target.checked)} />
-          {item.width}×{item.height}{item.source === 'result' ? ' · 历史' : ''}
+          <label className="reference-select">
+            <input type="checkbox" checked={selected.includes(item.id)} aria-label="选为本次参考图" onChange={event => toggle(item.id, event.target.checked)} />
+            {item.width}×{item.height}{item.source === 'result' ? ' · 历史' : ''}
+          </label>
           <button className="icon-button" type="button" title="删除参考图" aria-label="删除参考图"
             onClick={event => { event.preventDefault(); void remove(item) }}><Trash2 size={13} /></button>
         </span>
-      </label>)}
+      </div>)}
       <button className="reference-tile reference-upload" type="button" onClick={() => input.current?.click()}>
         <Upload size={18} aria-hidden="true" /><span>{busy ? '处理中...' : '上传参考图'}</span>
       </button>

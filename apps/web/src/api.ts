@@ -607,6 +607,22 @@ export class WorkspaceApi {
     return this.request(`/api/reference-images/${encodeURIComponent(id)}`, { method: 'DELETE' })
   }
 
+  /** Small WebP preview of an owner reference image; the full image loads only on demand. */
+  async referenceThumbnail(id: string, signal?: AbortSignal): Promise<Blob> {
+    if (!/^[0-9a-f-]{36}$/.test(id)) throw new ApiFailure(0, 'invalid_reference', 'Invalid reference image id.')
+    const version = this.sessionVersion
+    const response = await this.fetcher.call(globalThis, `${this.webBasePath}/api/reference-images/${id}/thumbnail`, { credentials: 'include', cache: 'no-store', signal })
+    if (response.status === 401) {
+      if (version === this.sessionVersion) this.onUnauthorized()
+      throw new ApiFailure(401, 'session_expired', 'Session expired.')
+    }
+    if (response.status === 503) throw new ApiFailure(503, 'thumbnail_busy', '预览生成繁忙。', true)
+    if (!response.ok) throw new ApiFailure(response.status, 'image_unavailable', '参考图预览不可用。')
+    const blob = await response.blob()
+    if (blob.type !== 'image/webp') throw new ApiFailure(0, 'invalid_image', 'Unexpected image format.')
+    return blob
+  }
+
   async referenceImage(id: string, signal?: AbortSignal): Promise<Blob> {
     if (!/^[0-9a-f-]{36}$/.test(id)) throw new ApiFailure(0, 'invalid_image_path', 'Invalid reference image.')
     const version = this.sessionVersion

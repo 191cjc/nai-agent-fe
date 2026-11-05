@@ -137,3 +137,14 @@ needs one operator-approved probe.
     records `director_reference_images` as digests.
 - If `generate_image` advertises neither complete set:
   `unsupported_reference_mode` before any paid call.
+
+## Reference thumbnails (2026-11-05)
+
+- `GET /api/reference-images/{id}/thumbnail` → owner-only WebP, long side 384,
+  no source metadata (EXIF orientation applied), `no-store`; 404 for foreign,
+  missing or undecodable images, 503 `thumbnail_busy` (retryable). Rendered via
+  the shared `ThumbnailCache` keyed `reference:<id>:<sha256>`; deleting the
+  reference discards its cached preview.
+- Web: the reference picker and the saved-result 「本条使用的参考图」 show only
+  thumbnails (`ReferenceThumb`); the full image loads only inside the click-to-
+  enlarge dialog. Selection uses the checkbox label, not the image.

@@ -72,6 +72,7 @@ def test_openapi_contract_matches_snapshot_without_database_or_provider_calls(
         ("/api/reference-images", "post"): {401, 403, 409, 413, 415, 422, 503},
         ("/api/reference-images/from-result", "post"): {401, 403, 404, 409, 422, 503},
         ("/api/reference-images/{image_id}/image", "get"): {401, 404, 422, 503},
+        ("/api/reference-images/{image_id}/thumbnail", "get"): {401, 404, 422, 503},
         ("/api/reference-images/{image_id}", "delete"): {401, 403, 404, 409, 422, 503},
         ("/api/reference-images/trait-advice", "post"): {401, 403, 422, 429, 502, 503, 504},
         ("/api/style-experiment-runs/active", "get"): {401, 422, 503},

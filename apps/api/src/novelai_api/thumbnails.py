@@ -4,7 +4,7 @@ import io
 import threading
 from collections import OrderedDict
 
-from PIL import Image
+from PIL import Image, ImageOps
 
 THUMBNAIL_EDGE = 384
 THUMBNAIL_QUALITY = 80
@@ -20,14 +20,15 @@ class ThumbnailBusy(Exception):
     """Every render slot stayed busy; the client may simply request again later."""
 
 
-def render_thumbnail(png: bytes) -> bytes:
+def render_thumbnail(png: bytes, *, formats: tuple[str, ...] = ("PNG",)) -> bytes:
     """Downscale to THUMBNAIL_EDGE on the long side. The output carries no source metadata."""
     with Image.open(io.BytesIO(png)) as source:
-        if source.format != "PNG" or source.width * source.height > MAX_SOURCE_PIXELS:
+        if source.format not in formats or source.width * source.height > MAX_SOURCE_PIXELS:
             raise ValueError("Unsupported thumbnail source")
         alpha = source.mode in ("RGBA", "LA", "PA") or "transparency" in source.info
         mode = "RGBA" if alpha else "RGB"
-        pixels = source.convert(mode)
+        # JPEG uploads may rely on EXIF orientation; browsers apply it to the full image.
+        pixels = ImageOps.exif_transpose(source).convert(mode)
     pixels.thumbnail((THUMBNAIL_EDGE, THUMBNAIL_EDGE), Image.Resampling.LANCZOS)
     # A fresh image drops every info/text/ICC/EXIF entry the source PNG carried.
     clean = Image.new(mode, pixels.size)
@@ -58,14 +59,20 @@ class ThumbnailCache:
             self._entries.move_to_end((job_id, index))
             return entry[1]
 
-    def render(self, job_id: str, user_id: str, index: int, png: bytes) -> bytes:
+    def render(
+        self, job_id: str, user_id: str, index: int, png: bytes,
+        *, formats: tuple[str, ...] = ("PNG",),
+    ) -> bytes:
         if not self._slots.acquire(timeout=self._wait):
             raise ThumbnailBusy
         try:
             cached = self.get(job_id, user_id, index)
             if cached is not None:
                 return cached
-            data = render_thumbnail(png)
+            data = (
+                render_thumbnail(png) if formats == ("PNG",)
+                else render_thumbnail(png, formats=formats)
+            )
         finally:
             self._slots.release()
         with self._lock:
@@ -84,6 +91,11 @@ class ThumbnailCache:
     def discard(self, job_id: str) -> None:
         with self._lock:
             for key in [key for key in self._entries if key[0] == job_id]:
+                self._size -= len(self._entries.pop(key)[1])
+
+    def discard_prefix(self, prefix: str) -> None:
+        with self._lock:
+            for key in [key for key in self._entries if key[0].startswith(prefix)]:
                 self._size -= len(self._entries.pop(key)[1])
 
     def clear(self) -> None:

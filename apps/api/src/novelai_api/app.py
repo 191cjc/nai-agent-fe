@@ -201,6 +201,7 @@ def create_app(
     app.state.database = database
     app.state.generations = manager
     app.state.experiments = experiments
+    app.state.thumbnails = thumbnails
     app.state.balance = balance_service
 
     @app.exception_handler(RequestValidationError)
@@ -1032,6 +1033,45 @@ def create_app(
             headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "no-store"},
         )
 
+    @app.get(
+        "/api/reference-images/{image_id}/thumbnail",
+        response_class=Response,
+        responses={
+            200: {"content": {"image/webp": {}}},
+            401: {"model": ApiError}, 404: {"model": ApiError},
+            422: {"model": ApiError}, 503: {"model": ApiError},
+        },
+    )
+    def get_reference_thumbnail(
+        image_id: UUID, user: Annotated[UserInfo, Depends(require_user)],
+    ) -> Response:
+        # Reference bytes never change under one id, so a cached preview stays valid until
+        # deletion; ownership is re-checked against the stored image on every request.
+        found = references.read(user.id, str(image_id))
+        if found is None:
+            raise HTTPException(
+                status_code=404,
+                detail=ApiError(code="not_found", message="Reference image not found").model_dump(),
+            )
+        item, original = found
+        key = f"reference:{item.id}:{item.sha256}"
+        data = thumbnails.get(key, user.id, 0)
+        if data is None:
+            try:
+                data = thumbnails.render(key, user.id, 0, original, formats=("PNG", "JPEG"))
+            except ThumbnailBusy:
+                return error(503, "thumbnail_busy", "Previews are busy", retryable=True)
+            except (OSError, ValueError) as exception:
+                raise HTTPException(
+                    status_code=404,
+                    detail=ApiError(code="not_found", message="Reference image not found")
+                    .model_dump(),
+                ) from exception
+        return Response(
+            content=data, media_type="image/webp",
+            headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "no-store"},
+        )
+
     @app.delete(
         "/api/reference-images/{image_id}",
         status_code=204,
@@ -1055,6 +1095,7 @@ def create_app(
                 status_code=404,
                 detail=ApiError(code="not_found", message="Reference image not found").model_dump(),
             )
+        thumbnails.discard_prefix(f"reference:{image_id}:")
 
     class TraitAdviceRequest(BaseModel):
         reference_ids: list[UUID] = Field(min_length=1, max_length=4)
