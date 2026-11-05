@@ -130,6 +130,17 @@
       },
       "Capabilities": {
         "properties": {
+          "gpt_concurrency_max": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpt Concurrency Max"
+          },
           "gpt_image": {
             "title": "Gpt Image",
             "type": "boolean"
@@ -583,6 +594,19 @@
                 "type": "null"
               }
             ]
+          },
+          "gpt_concurrency": {
+            "anyOf": [
+              {
+                "maximum": 16.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpt Concurrency"
           },
           "id": {
             "format": "uuid",
@@ -1819,6 +1843,21 @@
         "title": "RunCreate",
         "type": "object"
       },
+      "RunParallelism": {
+        "properties": {
+          "parallelism": {
+            "maximum": 16.0,
+            "minimum": 1.0,
+            "title": "Parallelism",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "parallelism"
+        ],
+        "title": "RunParallelism",
+        "type": "object"
+      },
       "RunState": {
         "properties": {
           "character": {
@@ -1920,6 +1959,17 @@
           "next_ordinal": {
             "title": "Next Ordinal",
             "type": "string"
+          },
+          "parallelism": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parallelism"
           },
           "parameters": {
             "$ref": "#/components/schemas/GenerationRequest"
@@ -5132,6 +5182,122 @@
           }
         },
         "summary": "Get Style Run"
+      }
+    },
+    "/api/style-experiment-runs/{run_id}/parallelism": {
+      "put": {
+        "operationId": "set_run_parallelism_api_style_experiment_runs__run_id__parallelism_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "__Host-nai_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "  Host-Nai Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunParallelism"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Set Run Parallelism"
       }
     },
     "/api/style-experiment-runs/{run_id}/stop": {

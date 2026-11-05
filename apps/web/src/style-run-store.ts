@@ -81,7 +81,7 @@ export class StyleRunStore {
 
   private static changed(previous: ExperimentRunState, next: ExperimentRunState): boolean {
     return previous.processed_count !== next.processed_count || previous.current_job_id !== next.current_job_id
-      || previous.in_flight_count !== next.in_flight_count
+      || previous.in_flight_count !== next.in_flight_count || previous.parallelism !== next.parallelism
       || previous.status !== next.status
   }
 
@@ -150,7 +150,7 @@ export class StyleRunStore {
   }
 
   /** Fixed-style dataset run: same single POST, reconciliation and Stop safeguards. */
-  async startDataset(parameters: GenerationRequest, items: DatasetItem[], extra: { styles?: string[]; character?: CharacterRunRequest; name?: string } = {}): Promise<void> {
+  async startDataset(parameters: GenerationRequest, items: DatasetItem[], extra: { styles?: string[]; character?: CharacterRunRequest; name?: string; gptConcurrency?: number } = {}): Promise<void> {
     if (this.locked || !this.observing) return
     const id = this.newRunId()
     if (!id) return
@@ -160,6 +160,7 @@ export class StyleRunStore {
       ...(extra.styles ? { styles: [...extra.styles] } : {}),
       ...(extra.character ? { character: { ...extra.character, reference_ids: [...extra.character.reference_ids] } } : {}),
       ...(extra.name?.trim() ? { name: extra.name.trim() } : {}),
+      ...(extra.gptConcurrency ? { gpt_concurrency: extra.gptConcurrency } : {}),
     })
   }
 
@@ -272,6 +273,19 @@ export class StyleRunStore {
         this.stoppingIds = this.stoppingIds.filter(item => item !== id)
         this.schedule()
       })
+    }
+  }
+
+  /** Change an unfinished GPT run's concurrency; in-flight items are never cancelled. */
+  async setParallelism(id: string, parallelism: number): Promise<string> {
+    if (!this.observing) return ''
+    const epoch = this.epoch
+    try {
+      const run = await this.api.setRunParallelism(id, parallelism)
+      if (epoch === this.epoch && this.observing) runInAction(() => { this.acceptRun(run) })
+      return ''
+    } catch (error) {
+      return errorText(error)
     }
   }
 

@@ -151,6 +151,9 @@ class DatasetRunCreate(BaseModel):
     character: CharacterRequest | None = None
     # Display name only; never part of the frozen definition or its retry comparison.
     name: ExperimentName = Field(default=None, max_length=400)
+    # GPT image runs only: groups in flight at once (absent = server maximum). Mutable
+    # while the run is unfinished, so it is stored beside, not inside, the definition.
+    gpt_concurrency: int | None = Field(default=None, ge=1, le=16)
 
     @model_validator(mode="after")
     def valid_plan(self) -> Self:
@@ -174,6 +177,10 @@ class DatasetRunCreate(BaseModel):
                     raise ValueError("Each pooled style must be a non-blank prompt")
         if len({item.id for item in self.items}) != len(self.items):
             raise ValueError("Duplicate dataset item id")
+        if self.gpt_concurrency is not None and (
+            self.character is None or self.character.mode != "gpt"
+        ):
+            raise ValueError("Only GPT image character runs have gpt_concurrency")
         character = None
         if self.character is not None:
             character = CharacterPlan(

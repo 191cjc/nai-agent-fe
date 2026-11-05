@@ -158,6 +158,7 @@ def test_schema9_current_group_moves_into_in_flight_table(tmp_path) -> None:
     user = owner(upgraded)
     with upgraded.connect(write=True) as connection:
         connection.execute("DROP TABLE style_experiment_inflight")
+        connection.execute("ALTER TABLE style_experiment_runs DROP COLUMN parallelism")
         connection.execute("PRAGMA user_version = 9")
         connection.execute(
             "INSERT INTO style_experiment_runs (user_id, id, definition_json, total, seed, "
@@ -166,7 +167,7 @@ def test_schema9_current_group_moves_into_in_flight_table(tmp_path) -> None:
         )
     upgraded.migrate()
     with sqlite3.connect(upgraded.path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 10
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 11
         assert connection.execute(
             "SELECT run_id, job_id, ordinal FROM style_experiment_inflight",
         ).fetchall() == [("r", "job-2", "2")]
@@ -181,3 +182,93 @@ def test_concurrency_setting_bounds(tmp_path) -> None:
                      gpt_image_concurrency=_concurrency(bad))
     with pytest.raises(ValueError):
         GenerationManager(Database(tmp_path / "m.sqlite3"), None, gpt_parallelism=17)
+
+
+def test_owner_concurrency_caps_and_changes_while_running(database: Database) -> None:  # noqa: F811
+    user = owner(database)
+    image = ReferenceImageStore(database).add(user, png(), source="upload")
+    gpt = GatedGpt()
+    manager = GenerationManager(
+        database, None, cache=ResultCache(), gpt_provider=gpt, gpt_parallelism=4,
+    )
+    service = StyleExperimentService(database, manager)
+    request = DatasetRunCreate.model_validate({
+        **gpt_items(str(image.id), 8).model_dump(mode="json"), "gpt_concurrency": 2,
+    })
+    run = service.store.create(
+        user, request, references=[ReferenceImageUse(id=image.id, sha256=image.sha256)],
+    )
+    assert run.parallelism == 2
+    manager.start()
+    try:
+        service.tick()
+        wait_for(lambda: gpt.active == 2)
+        service.tick()
+        assert gpt.active == 2
+        raised = service.store.set_parallelism(user, run.id, 3)
+        assert raised.parallelism == 3
+        service.tick()
+        wait_for(lambda: gpt.active == 3)
+        # Above the server's lane parallelism the scheduler still uses the server cap.
+        service.store.set_parallelism(user, run.id, 16)
+        service.tick()
+        wait_for(lambda: gpt.active == 4)
+        service.tick()
+        assert gpt.active == 4
+        gpt.gate.set()
+        ended = pump(service, user, run.id)
+    finally:
+        gpt.gate.set()
+        service.stop()
+        manager.stop()
+    assert ended.status == "completed" and gpt.peak == 4
+    assert service.store.set_parallelism(user, run.id, 2) == "finished"
+    assert service.store.set_parallelism(user, str(uuid4()), 2) is None
+
+
+def test_gpt_concurrency_validation_and_api(database: Database) -> None:  # noqa: F811
+    from fastapi.testclient import TestClient
+    from test_character_runs import character_run
+    from test_generations import ORIGIN, login
+    from test_style_runs import request as style_request
+
+    from novelai_api.app import create_app
+
+    with pytest.raises(ValueError):
+        DatasetRunCreate.model_validate({
+            **character_run([str(uuid4())]).model_dump(mode="json"), "gpt_concurrency": 2,
+        })
+    gpt = GatedGpt()
+    app = create_app(
+        Settings(database.path, "https://testserver", gpt_image_concurrency=3), database,
+        image_provider=None, result_cache=ResultCache(), gpt_image_provider=gpt,
+    )
+    with TestClient(app, base_url="https://testserver") as client:
+        login(client, database, "alice")
+        assert client.get("/api/capabilities").json()["gpt_concurrency_max"] == 3
+        uploaded = client.post("/api/reference-images", content=png(),
+                               headers={"Content-Type": "image/png", **ORIGIN}).json()
+        body = gpt_items(uploaded["id"], 3).model_dump(mode="json")
+        too_high = client.post("/api/dataset-runs", json={**body, "gpt_concurrency": 4},
+                               headers=ORIGIN)
+        assert too_high.status_code == 422
+        assert too_high.json()["code"] == "gpt_concurrency_too_high"
+        created = client.post("/api/dataset-runs", json={**body, "gpt_concurrency": 1},
+                              headers=ORIGIN)
+        assert created.status_code == 202 and created.json()["parallelism"] == 1
+        path = f"/api/style-experiment-runs/{created.json()['id']}/parallelism"
+        assert client.put(path, json={"parallelism": 2}).status_code == 403
+        assert client.put(path, json={"parallelism": 4}, headers=ORIGIN).json()["code"] == (
+            "gpt_concurrency_too_high"
+        )
+        changed = client.put(path, json={"parallelism": 2}, headers=ORIGIN)
+        assert changed.status_code == 200 and changed.json()["parallelism"] == 2
+        style = client.post("/api/style-experiment-runs",
+                            json=style_request().model_dump(mode="json"), headers=ORIGIN)
+        assert client.put(
+            f"/api/style-experiment-runs/{style.json()['id']}/parallelism",
+            json={"parallelism": 2}, headers=ORIGIN,
+        ).json()["code"] == "parallelism_unsupported"
+        login(client, database, "bob")
+        assert client.put(path, json={"parallelism": 2}, headers=ORIGIN).status_code == 404
+        gpt.gate.set()

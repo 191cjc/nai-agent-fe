@@ -546,6 +546,13 @@ def create_app(
             manager.gpt_provider is None
         ):
             return error(503, "gpt_image_unavailable", "GPT image generation is not configured")
+        if (
+            payload.gpt_concurrency is not None
+            and payload.gpt_concurrency > manager.parallelism("gpt")
+        ):
+            return error(
+                422, "gpt_concurrency_too_high", "GPT concurrency exceeds the server limit",
+            )
         if payload.character is not None:
             # Pin each owner reference to its current digest; later edits cannot change a run.
             resolved = []
@@ -608,6 +615,36 @@ def create_app(
     ) -> RunState:
         run = experiments.store.stop(user.id, str(run_id))
         return run if run is not None else own_run(user, str(run_id))
+
+    class RunParallelism(BaseModel):
+        parallelism: int = Field(ge=1, le=16)
+
+    @app.put(
+        "/api/style-experiment-runs/{run_id}/parallelism",
+        response_model=RunState,
+        responses={
+            401: {"model": ApiError}, 403: {"model": ApiError}, 404: {"model": ApiError},
+            409: {"model": ApiError}, 422: {"model": ApiError}, 503: {"model": ApiError},
+        },
+    )
+    def set_run_parallelism(
+        run_id: UUID, payload: RunParallelism, user: Annotated[UserInfo, Depends(require_user)],
+    ) -> RunState | JSONResponse:
+        if payload.parallelism > manager.parallelism("gpt"):
+            return error(
+                422, "gpt_concurrency_too_high", "GPT concurrency exceeds the server limit",
+            )
+        result = experiments.store.set_parallelism(user.id, str(run_id), payload.parallelism)
+        if result is None:
+            raise HTTPException(
+                status_code=404,
+                detail=ApiError(code="not_found", message="Experiment run not found").model_dump(),
+            )
+        if result == "not_gpt":
+            return error(422, "parallelism_unsupported", "Only GPT image runs are concurrent")
+        if result == "finished":
+            return error(409, "experiment_run_finished", "The run has already finished")
+        return result
 
     @app.get(
         "/api/style-experiments/{experiment_id}",
@@ -924,6 +961,8 @@ def create_app(
     class Capabilities(BaseModel):
         gpt_image: bool
         gpt_image_model: str | None
+        # Server cap for one GPT run's concurrency (NAI_GPT_IMAGE_CONCURRENCY).
+        gpt_concurrency_max: int | None = None
 
     @app.get(
         "/api/capabilities",
@@ -935,6 +974,7 @@ def create_app(
         return Capabilities(
             gpt_image=available,
             gpt_image_model=settings.gpt_image_model if available else None,
+            gpt_concurrency_max=manager.parallelism("gpt") if available else None,
         )
 
     def reference_error(exception: ReferenceFailure) -> JSONResponse:

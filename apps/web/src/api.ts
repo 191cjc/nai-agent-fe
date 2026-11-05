@@ -57,6 +57,8 @@ export type PreciseType = 'character' | 'style' | 'character&style'
 export interface Capabilities {
   gpt_image: boolean
   gpt_image_model: string | null
+  /** Server cap for one GPT run's concurrency (absent on older servers). */
+  gpt_concurrency_max?: number | null
 }
 
 export interface ReferenceImage {
@@ -206,6 +208,8 @@ export interface ExperimentRunDefinition {
   character?: CharacterRunRequest | CharacterRunPlan | null
   /** Display name: sent on create, echoed by the queue listing; never frozen. */
   name?: string | null
+  /** GPT runs: items generated at once (sent on create; mutable while unfinished). */
+  gpt_concurrency?: number
 }
 
 export type ExperimentLane = 'novelai' | 'gpt'
@@ -225,6 +229,8 @@ export interface ExperimentRunState extends ExperimentRunDefinition {
   current_job_id: string | null
   /** Accepted groups not yet counted; GPT runs may hold several at once. */
   in_flight_count?: number
+  /** GPT runs: owner-chosen concurrency, null = server maximum. */
+  parallelism?: number | null
   seed: number
   sample_count: number
   created_at: number
@@ -279,6 +285,7 @@ function checkedRun(value: ExperimentRunState): ExperimentRunState {
     && (value.current_ordinal === null || decimal(value.current_ordinal, true))
     && (value.current_job_id === null || typeof value.current_job_id === 'string')
     && (value.in_flight_count === undefined || (Number.isInteger(value.in_flight_count) && value.in_flight_count >= 0))
+    && (value.parallelism === undefined || value.parallelism === null || (Number.isInteger(value.parallelism) && value.parallelism >= 1))
     && Number.isInteger(value.seed) && value.seed >= 1 && value.seed <= 4294967295
     && Number.isInteger(value.sample_count) && value.sample_count >= 1 && value.sample_count <= 8
     && Number.isFinite(value.created_at) && Number.isFinite(value.updated_at)
@@ -341,6 +348,9 @@ export function errorText(error: unknown): string {
       result_storage_error: '图片保存失败，请检查历史记录；请勿自动重新生成。',
       experiment_conflict: '这组画风实验已经提交或实验信息不一致，请先检查历史记录。',
       experiment_run_active: '已有进行中的画风实验或训练集批跑，请查看其进度或手动停止。',
+      gpt_concurrency_too_high: 'GPT 并发数超过了服务器上限（NAI_GPT_IMAGE_CONCURRENCY）。',
+      parallelism_unsupported: '只有 GPT 角色训练集可以调整并发数。',
+      experiment_run_finished: '这个任务已经结束，无法再调整。',
       experiment_run_queue_full: '排队中的实验与训练集已达 10 个上限，请等待完成或停止其中一些后再加入。',
       experiment_run_conflict: '实验编号已被其他定义使用，请检查已保存的实验。',
       prompt_snapshot_conflict: '此快照编号已用于其他内容，请关闭后重新保存。',
@@ -522,6 +532,7 @@ export class WorkspaceApi {
       ...(definition.styles ? { styles: definition.styles } : {}),
       ...(definition.character ? { character: definition.character } : {}),
       ...(definition.name ? { name: definition.name } : {}),
+      ...(definition.gpt_concurrency ? { gpt_concurrency: definition.gpt_concurrency } : {}),
     }
     const run = checkedRun(await this.request<ExperimentRunState>('/api/dataset-runs', { method: 'POST', body: JSON.stringify(body), signal }))
     if (run.id !== definition.id || run.kind !== 'dataset') throw new ApiFailure(0, 'invalid_response', '实验编号不匹配，请重新连接核对。')
@@ -548,6 +559,14 @@ export class WorkspaceApi {
 
   async stopExperimentRun(id: string, signal?: AbortSignal): Promise<ExperimentRunState> {
     const run = checkedRun(await this.request<ExperimentRunState>(`/api/style-experiment-runs/${encodeURIComponent(id)}/stop`, { method: 'POST', signal }))
+    if (run.id !== id) throw new ApiFailure(0, 'invalid_response', '实验编号不匹配，请重新连接核对。')
+    return run
+  }
+
+  async setRunParallelism(id: string, parallelism: number, signal?: AbortSignal): Promise<ExperimentRunState> {
+    const run = checkedRun(await this.request<ExperimentRunState>(`/api/style-experiment-runs/${encodeURIComponent(id)}/parallelism`, {
+      method: 'PUT', body: JSON.stringify({ parallelism }), signal,
+    }))
     if (run.id !== id) throw new ApiFailure(0, 'invalid_response', '实验编号不匹配，请重新连接核对。')
     return run
   }

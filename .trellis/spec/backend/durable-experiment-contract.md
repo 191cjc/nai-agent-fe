@@ -161,3 +161,19 @@ and idempotency. Do not regenerate OpenAPI for this internal-only change.
   an automatic paid retry.
 - Correct: the server persists run/cursor and the browser only observes GET
   state; failures advance to a new ordinal, never repeat the uncertain one.
+
+## Owner-adjustable GPT concurrency (schema 11)
+
+- `style_experiment_runs.parallelism` (1..16 or NULL = server maximum) is
+  stored beside, never inside, the frozen definition, so a create retry with a
+  different value returns the original run unchanged.
+- `POST /api/dataset-runs` accepts optional `gpt_concurrency` (GPT character
+  runs only, else 422; above `NAI_GPT_IMAGE_CONCURRENCY` → 422
+  `gpt_concurrency_too_high`). `PUT /api/style-experiment-runs/{id}/parallelism`
+  `{parallelism}` changes it while running/stopping (404 foreign/missing, 422
+  `parallelism_unsupported` on NovelAI runs, 409 `experiment_run_finished`).
+- Scheduler limit = `min(run.parallelism ?? lane max, lane max)`; lowering it
+  never cancels in-flight groups, it only delays new claims.
+- `RunState.parallelism` and `Capabilities.gpt_concurrency_max` are additive.
+  Web: 「同时生成条数」 in GPT settings and an 「调整」 control on unfinished GPT
+  runs in the queue.

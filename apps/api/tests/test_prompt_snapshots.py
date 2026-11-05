@@ -366,12 +366,12 @@ def test_schema3_upgrade_preserves_all_rows_raw_definitions_auth_and_private_bac
     assert database.check_ready()
     assert current_user(database, session) == user
     with database.connect() as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 10
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 11
         for table in tables:
             assert [
                 # Later schemas only append columns to the preserved rows.
                 tuple(value for key, value in dict(row).items()
-                      if key not in ("provider_request_json", "lane"))
+                      if key not in ("provider_request_json", "lane", "parallelism"))
                 for row in connection.execute(f"SELECT * FROM {table}")
             ] == before[table]
         assert connection.execute("SELECT COUNT(*) FROM prompt_snapshots").fetchone()[0] == 0
@@ -389,7 +389,7 @@ def test_schema3_upgrade_preserves_all_rows_raw_definitions_auth_and_private_bac
             assert [
                 # Later schemas only append columns to the preserved rows.
                 tuple(value for key, value in dict(row).items()
-                      if key not in ("provider_request_json", "lane"))
+                      if key not in ("provider_request_json", "lane", "parallelism"))
                 for row in connection.execute(f"SELECT * FROM {table}")
             ] == before[table]
     if os.name == "posix":

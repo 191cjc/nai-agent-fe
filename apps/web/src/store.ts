@@ -506,12 +506,13 @@ export class GenerationStore {
    * Freeze the draft's settings; each dataset item supplies all content. An optional
    * style pool (first entry becomes the frozen style) and character block are frozen too.
    */
-  async startDatasetRun(entries: readonly DatasetEntry[], options: { styles?: string[]; character?: CharacterSettings; gptModel?: string; name?: string } = {}): Promise<void> {
+  async startDatasetRun(entries: readonly DatasetEntry[], options: { styles?: string[]; character?: CharacterSettings; gptModel?: string; gptConcurrencyMax?: number; name?: string } = {}): Promise<void> {
     if (this.operationLocked || this.busy || this.activeId || this.submitUncertain) return
     this.error = ''
     let parameters: GenerationRequest
     let items
     let character
+    let gptConcurrency: number | undefined
     try {
       const styles = options.styles ?? [this.draft.style_prompt]
       items = datasetItems(entries, styles, options.character?.traits, supportsNativeCharacters(this.draft.model))
@@ -520,6 +521,13 @@ export class GenerationStore {
         const size = GPT_SIZES[options.character.gptSize]
         const samples = Number(options.character.gptSamples)
         if (!Number.isInteger(samples) || samples < 1 || samples > 4) throw new Error('GPT 每条张数须为 1–4。')
+        const concurrencyText = options.character.gptConcurrency.trim()
+        if (concurrencyText) {
+          const concurrency = Number(concurrencyText)
+          const max = options.gptConcurrencyMax ?? 16
+          if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > max) throw new Error(`GPT 同时生成条数须为 1–${max}。`)
+          gptConcurrency = concurrency
+        }
         parameters = {
           prompt_comments: true, positive_prompt: '', style_prompt: styles[0], character_prompts: [],
           auto_character_position: false, negative_prompt: '', model: options.gptModel ?? 'gpt-image-2.6-flare',
@@ -538,7 +546,7 @@ export class GenerationStore {
     }
     this.clearActiveResult()
     this.operationVersion += 1
-    await this.runs.startDataset(parameters, items, { styles: options.styles, character, name: options.name })
+    await this.runs.startDataset(parameters, items, { styles: options.styles, character, name: options.name, gptConcurrency })
   }
 
   /** Ordinary generation only; server experiments never use this POST path. */

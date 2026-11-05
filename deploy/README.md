@@ -483,3 +483,11 @@ and confirm no active jobs/runs before the restart. Deploy the API before the
 web release (the web shows `in_flight_count` when present and ignores its
 absence). Rolling the API back below schema 10 requires restoring the
 pre-upgrade backup.
+
+## Adjustable GPT concurrency (schema 11)
+
+This release migrates schema 10 → 11 at `ExecStartPre` (adds the nullable
+`style_experiment_runs.parallelism` column only). Owners choose a GPT run's
+concurrency in the web and may change it while it runs; the server never
+exceeds `NAI_GPT_IMAGE_CONCURRENCY`. Same backup / idle-restart / API-before-web
+rules as above; rolling back below schema 11 requires the pre-upgrade backup.

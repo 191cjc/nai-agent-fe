@@ -88,6 +88,8 @@ class RunState(BaseModel):
     current_job_id: str | None
     # Accepted groups of this run not yet counted (0..lane parallelism).
     in_flight_count: int = 0
+    # GPT runs: owner-chosen concurrency (None = server maximum); always None on NovelAI.
+    parallelism: int | None = None
     seed: int
     sample_count: int
     parameters: GenerationRequest
@@ -151,7 +153,7 @@ class RunStore:
             **{key: row[key] for key in (
                 "id", "lane", "status", "total", "next_ordinal", "processed_count",
                 "succeeded_count", "failed_count", "current_ordinal", "current_job_id", "seed",
-                "created_at", "updated_at", "error_code", "in_flight_count",
+                "created_at", "updated_at", "error_code", "in_flight_count", "parallelism",
             )},
             parameters=definition["parameters"], ranges=definition.get("ranges", []),
             sample_count=definition["parameters"]["sample_count"],
@@ -213,9 +215,10 @@ class RunStore:
             now = int(time.time())
             connection.execute(
                 "INSERT INTO style_experiment_runs (user_id, id, definition_json, total, "
-                "seed, lane, status, created_at, updated_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, 'running', ?, ?)",
-                (user_id, run_id, definition, total, seed, run_lane(request), now, now),
+                "seed, lane, status, created_at, updated_at, parallelism) "
+                "VALUES (?, ?, ?, ?, ?, ?, 'running', ?, ?, ?)",
+                (user_id, run_id, definition, total, seed, run_lane(request), now, now,
+                 getattr(request, "gpt_concurrency", None)),
             )
             name = request.name if isinstance(request, DatasetRunCreate) else None
             if name is not None:
@@ -289,6 +292,30 @@ class RunStore:
                         (*after, 128 - len(rows)),
                     ).fetchall())
         return [(row["user_id"], row["id"]) for row in rows]
+
+    def set_parallelism(
+        self, user_id: str, run_id: str, parallelism: int,
+    ) -> RunState | Literal["not_gpt", "finished"] | None:
+        """Change an unfinished GPT run's concurrency; in-flight groups are never cancelled."""
+        with self.database.connect(write=True) as connection:
+            row = connection.execute(
+                _ROW + "WHERE user_id = ? AND id = ?", (user_id, run_id),
+            ).fetchone()
+            if row is None:
+                return None
+            if row["lane"] != "gpt":
+                return "not_gpt"
+            if row["status"] not in ("running", "stopping"):
+                return "finished"
+            connection.execute(
+                "UPDATE style_experiment_runs SET parallelism = ?, updated_at = ? "
+                "WHERE user_id = ? AND id = ?",
+                (parallelism, int(time.time()), user_id, run_id),
+            )
+            row = connection.execute(
+                _ROW + "WHERE user_id = ? AND id = ?", (user_id, run_id),
+            ).fetchone()
+            return self._located(connection, row)
 
     def stop(self, user_id: str, run_id: str) -> RunState | None:
         with self.database.connect(write=True) as connection:
@@ -525,8 +552,11 @@ class StyleExperimentService:
         if run.queue_position != 0:
             # Queued behind an earlier run of this owner's lane; waits without a claim.
             return
-        # NovelAI runs keep one group in flight; GPT runs fill up to the lane's parallelism.
+        # NovelAI runs keep one group in flight; GPT runs fill up to the owner's chosen
+        # concurrency, never beyond the lane's configured parallelism.
         limit = self.manager.parallelism(run.lane)
+        if run.parallelism is not None:
+            limit = max(1, min(limit, run.parallelism))
         while (
             run is not None and run.status == "running" and run.in_flight_count < limit
             and int(run.next_ordinal) <= int(run.total) and not self._stop.is_set()

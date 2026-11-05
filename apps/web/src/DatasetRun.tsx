@@ -193,7 +193,8 @@ export const DatasetRunConfig = observer(({ generation, api, hidden }: { generat
     const started = mode === 'style'
       ? generation.startDatasetRun(entries, { name: runName })
       : generation.startDatasetRun(characterEntries, {
-        styles: character.styles, character: character.settings, gptModel: character.gpt?.gpt_image_model ?? undefined, name: runName,
+        styles: character.styles, character: character.settings, gptModel: character.gpt?.gpt_image_model ?? undefined,
+        gptConcurrencyMax: character.gpt?.gpt_concurrency_max ?? undefined, name: runName,
       })
     // A queued run keeps its name; clear the field so the next set gets its own.
     void started.then(() => { if (!runs.createError && !runs.pendingId && !generation.error) setRunName('') })

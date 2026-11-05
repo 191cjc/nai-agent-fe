@@ -101,6 +101,8 @@ export interface CharacterSettings {
   gptSize: GptSize
   gptQuality: 'auto' | 'low' | 'medium' | 'high'
   gptSamples: string
+  /** GPT only: items generated at once, 1..server maximum. */
+  gptConcurrency: string
   /** Precise Reference only: what to copy, strength 0.01–1 and fidelity 0–1. */
   preciseType: PreciseType
   preciseStrength: string

@@ -25,7 +25,7 @@ export interface CharacterState {
 /** Character run settings live in the dataset panel so collapsing it keeps them. */
 export function useCharacterSettings(draftStyle: string): CharacterState {
   const [settings, setSettingsState] = useState<CharacterSettings>({ traits: '', mode: 'vibe', referenceIds: [], strength: '0.55', noise: '0', information: '1', vibeStrength: '1',
-    gptSize: 'portrait', gptQuality: 'auto', gptSamples: '1', preciseType: 'character', preciseStrength: '1', preciseFidelity: '1' })
+    gptSize: 'portrait', gptQuality: 'auto', gptSamples: '1', gptConcurrency: '', preciseType: 'character', preciseStrength: '1', preciseFidelity: '1' })
   // Until the user edits the pool it follows the live draft style, like style mode.
   const [edited, setEdited] = useState<string[] | null>(null)
   const styles = edited ?? [draftStyle]
@@ -290,6 +290,9 @@ export function CharacterRunSettings({ api, state, model, draftStyle }: {
             </select></label>
           <label className="field"><span>每条张数（1–4）</span>
             <input type="text" inputMode="numeric" value={settings.gptSamples} onChange={event => setSettings(current => ({ ...current, gptSamples: event.target.value }))} /></label>
+          <label className="field"><span>同时生成条数（1–{gpt?.gpt_concurrency_max ?? 16}；留空为最大，运行中可在队列里调整）</span>
+            <input type="text" inputMode="numeric" placeholder={String(gpt?.gpt_concurrency_max ?? '')} value={settings.gptConcurrency}
+              onChange={event => setSettings(current => ({ ...current, gptConcurrency: event.target.value }))} /></label>
         </div>
         <details className="dataset-category"><summary><strong>第 1 条的提示词预览</strong></summary>
           <pre className="request-snapshot-json">{gptPromptPreview(settings.traits, styles[0] ?? '')}</pre></details>

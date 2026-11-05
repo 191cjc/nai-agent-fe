@@ -146,6 +146,31 @@ function runStatus(run: ExperimentRunState): string {
 
 const LANES = { novelai: 'NovelAI', gpt: 'GPT' } as const
 
+/** Items a GPT run generates at once; lowering it lets in-flight items finish first. */
+function ParallelismControl({ runs, run }: { runs: StyleRunStore; run: ExperimentRunState }) {
+  const [draft, setDraft] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState('')
+  const current = run.parallelism ?? null
+  async function apply() {
+    const value = Number(draft.trim())
+    if (!Number.isInteger(value) || value < 1 || value > 16) { setMessage('请输入 1–16 的整数。'); return }
+    setSaving(true)
+    setMessage('')
+    const failure = await runs.setParallelism(run.id, value)
+    setSaving(false)
+    setMessage(failure)
+    if (!failure) setDraft('')
+  }
+  return <form className="run-parallelism" onSubmit={event => { event.preventDefault(); void apply() }}>
+    <span>同时生成：{current ?? '服务器上限'} 条</span>
+    <input type="text" inputMode="numeric" aria-label="新的同时生成条数" placeholder="1–16" value={draft} disabled={saving}
+      onChange={event => setDraft(event.target.value)} />
+    <button className="secondary" type="submit" disabled={saving || !draft.trim()}>{saving ? '保存中...' : '调整'}</button>
+    {message && <span className="alert" role="alert">{message}</span>}
+  </form>
+}
+
 const RunRow = observer(({ runs, run, saved }: { runs: StyleRunStore; run: ExperimentRunState; saved: SavedResultsStore }) => {
   const dataset = run.kind === 'dataset'
   const character = dataset && !!run.character
@@ -176,6 +201,7 @@ const RunRow = observer(({ runs, run, saved }: { runs: StyleRunStore; run: Exper
       </button> : <button className="icon-button" type="button" title="从列表移除" aria-label={`从列表移除 ${run.name || fallback}`}
         onClick={() => runs.dismissFinished(run.id)}><X size={14} aria-hidden="true" /></button>}
     </div>
+    {unfinished && run.lane === 'gpt' && <ParallelismControl runs={runs} run={run} />}
     {run.error_code && <p className="experiment-note">最近一{unit}诊断：{errorText(new ApiFailure(0, run.error_code, `本${unit}处理失败。`))}
       {run.status === 'running' && ` 服务器会继续处理后续${unit}，不会重试这一${unit}。`}</p>}
     <details className="result-parameters server-run-snapshot"><summary>{dataset ? '批跑信息与固定配置' : '实验信息与固定配置'}</summary>
