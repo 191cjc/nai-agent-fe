@@ -1,7 +1,7 @@
 import type { CharacterPrompt, CharacterRunRequest, DatasetItem, PreciseType } from './api'
 import { compilePromptComments } from './prompt-weights'
 
-export const MAX_DATASET_ITEMS = 300
+export const MAX_DATASET_ITEMS = 400
 export const MAX_DATASET_PROMPT_LENGTH = 1000
 export const MAX_STYLE_POOL = 12
 export const MAX_REFERENCES = 4

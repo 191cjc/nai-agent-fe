@@ -703,7 +703,7 @@
             "items": {
               "$ref": "#/components/schemas/DatasetItem"
             },
-            "maxItems": 300,
+            "maxItems": 400,
             "minItems": 1,
             "title": "Items",
             "type": "array"

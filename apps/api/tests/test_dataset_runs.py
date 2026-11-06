@@ -51,7 +51,7 @@ def test_item_seeds_vary_and_wrap_within_provider_range() -> None:
         ({}, [{"id": "a", "prompt": "x"}, {"id": "a", "prompt": "y"}]),
         ({}, [{"id": "Bad Id", "prompt": "x"}]),
         ({}, []),
-        ({}, [{"id": f"i{index}", "prompt": "x"} for index in range(301)]),
+        ({}, [{"id": f"i{index}", "prompt": "x"} for index in range(401)]),
         ({"style_prompt": "s" * 2500}, [{"id": "a", "prompt": "x" * 600}]),
         ({"model": "fixture-model", "character_prompts": [{"prompt": "c"}]}, ITEMS),
     ],

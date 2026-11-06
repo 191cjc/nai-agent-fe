@@ -147,7 +147,7 @@ def dataset_parameters(
 class DatasetRunCreate(BaseModel):
     id: UUID
     parameters: GenerationRequest
-    items: list[DatasetItem] = Field(min_length=1, max_length=300)
+    items: list[DatasetItem] = Field(min_length=1, max_length=400)
     # Optional rotation pool; absent keeps the single frozen style (stored runs unchanged).
     styles: list[str] | None = Field(default=None, min_length=1, max_length=12)
     character: CharacterRequest | None = None

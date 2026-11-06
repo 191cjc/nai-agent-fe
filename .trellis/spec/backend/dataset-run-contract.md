@@ -348,3 +348,14 @@ review only (operator restriction); no paid probes.
   verbatim (character traits are not filtered from it); trigger, shared prefix and
   character-set style are still prepended. `contentCaption()` is the editable text
   (override, else derived tags).
+
+## Style library v5 and 400-item cap (2026-11-06)
+
+- 322 items (unchanged order and ids). 192 single-person items and 16 character
+  prompts rewritten: expression on every visible-face item (212/266 solo; tiny
+  wide-shot faces and back views excluded), outerwear written open with a coloured
+  inner layer (66/87), coloured accessories on 95. Only what the framing shows is
+  tagged. New tags got `TAG_ZH` glosses (every library tag has one).
+- Per-run item cap raised 300 → 400 (`DatasetRunCreate.items`, web
+  `MAX_DATASET_ITEMS`): the default selection (all 322) exceeded 300 since the
+  `face` category was added.
