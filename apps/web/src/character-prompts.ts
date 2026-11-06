@@ -12,6 +12,8 @@ export interface CharacterCategory extends DatasetCategory {
 
 export const CHARACTER_CATEGORIES: readonly CharacterCategory[] = [
   { id: 'framing', label: '景别与角度', description: '特写到全身、正侧背与俯仰视角', defaultSelected: true },
+  { id: 'face', label: '脸部特写', description: '脸部占满画面的近景，多种角度与表情，帮助 LoRA 记住五官和眼睛细节', defaultSelected: true },
+  { id: 'angle', label: '侧面与背面', description: '正侧、背面、四分之三侧与回头，让 LoRA 学到发型和服装的侧面、背面', defaultSelected: true },
   { id: 'expression', label: '表情', description: '多种情绪与视线方向', defaultSelected: true },
   { id: 'pose', label: '姿势动作', description: '站坐卧跑跳与日常动作', defaultSelected: true },
   { id: 'setting', label: '场景', description: '室内外不同环境', defaultSelected: true },
@@ -40,6 +42,18 @@ const PROMPTS: Record<string, readonly string[]> = {
     'close-up, eye focus, looking at viewer',
     'cowboy shot, from above, looking up at viewer',
     'full body, three-quarter view, standing, grey background',
+  ],
+  face: [
+    'close-up, face focus, smile, looking at viewer',
+    'close-up, face focus, from side, profile',
+    'close-up, face focus, three-quarter view, looking at viewer',
+    'close-up, face focus, from below, looking down',
+    'close-up, face focus, from above, looking up',
+    'close-up, eye focus, half-closed eyes, light smile',
+    'close-up, face focus, wind, floating hair, looking at viewer',
+    'close-up, face focus, head tilt, gentle smile',
+  ],
+  angle: [
     'full body, from side, standing, profile, simple background',
     'full body, from behind, standing, white background',
     'cowboy shot, from behind, looking back, smile',
@@ -52,14 +66,6 @@ const PROMPTS: Record<string, readonly string[]> = {
     'full body, from below, three-quarter view, standing, sky',
     'portrait, from above, three-quarter view, looking up',
     'full body, from behind, sitting, looking back',
-    'close-up, face focus, smile, looking at viewer',
-    'close-up, face focus, from side, profile',
-    'close-up, face focus, three-quarter view, looking at viewer',
-    'close-up, face focus, from below, looking down',
-    'close-up, face focus, from above, looking up',
-    'close-up, eye focus, half-closed eyes, light smile',
-    'close-up, face focus, wind, floating hair, looking at viewer',
-    'close-up, face focus, head tilt, gentle smile',
   ],
   expression: [
     'portrait, smile, looking at viewer',

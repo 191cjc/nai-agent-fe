@@ -181,3 +181,6 @@ needs one operator-approved probe.
 - `style-presets.ts` defaults: 动画上色, 动画截图, 平涂, 厚涂, 90 年代, 游戏 CG (6).
   Watercolor, colored pencil, oil and gouache stay selectable but are off by default:
   traditional media soften eyes/outfit detail, which character LoRAs learn as blur.
+- Before first release the 20 appended framing items moved into their own
+  default-selected categories so they can be run alone: `face` 「脸部特写」 (8,
+  `char-face-N`) and `angle` 「侧面与背面」 (12, `char-angle-N`); `framing` is back to 18.
