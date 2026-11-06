@@ -606,7 +606,8 @@ const Workspace = observer(({ store }: { store: AppStore }) => {
             <Result store={store} hidden={store.savedResults.selection !== null} />
             <SavedResultViewer saved={store.savedResults} api={store.api} onClose={closeSavedResult}
               onUseSeed={seed => store.generation.setField('seed', String(seed))}
-              canSave={() => store.auth.status === 'ready' && !store.auth.loggingOut} />
+              canSave={() => store.auth.status === 'ready' && !store.auth.loggingOut}
+              onRerunQueued={run => store.generation.runs.track(run)} />
           </div>
           <section className="prompt-dock" aria-label="提示词抽屉">
             <button ref={promptToggleRef} className="prompt-drawer-toggle" id="prompt-drawer-toggle" type="button"

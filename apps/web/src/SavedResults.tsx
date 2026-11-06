@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useRef, useState } from 'react'
 import { observer } from 'mobx-react-lite'
 import { ArrowLeft, ArrowRight, Ban, CheckSquare, Dices, Download, FlaskConical, Images, LayoutGrid, Layers, Pencil, RefreshCw, RotateCcw, Trash2, UserRound, X } from 'lucide-react'
-import { ApiFailure, errorText, MAX_EXPERIMENT_NAME, type ExperimentSummary, type RerunEdits, type WorkspaceApi } from './api'
+import { ApiFailure, errorText, MAX_EXPERIMENT_NAME, type ExperimentRunState, type ExperimentSummary, type RerunEdits, type WorkspaceApi } from './api'
 import { datasetItemText } from './dataset-run'
 import { DatasetExportPanel, DatasetItemGloss, ReviewGrid } from './dataset-lazy'
 import { GenerationParameters } from './GenerationParameters'
@@ -227,12 +227,14 @@ function UseAsReferenceButton({ api, jobId, index }: { api: WorkspaceApi; jobId:
   </>
 }
 
-export const SavedResultViewer = observer(({ saved, api, onClose, onUseSeed, canSave }: {
+export const SavedResultViewer = observer(({ saved, api, onClose, onUseSeed, canSave, onRerunQueued }: {
   saved: SavedResultsStore
   api: WorkspaceApi
   onClose: () => void
   onUseSeed: (seed: number) => void
   canSave: () => boolean
+  /** A review-grid re-run batch joined the server queue. */
+  onRerunQueued?: (run: ExperimentRunState) => void
 }) => {
   const viewerRef = useRef<HTMLDivElement>(null)
   const selection = saved.selection
@@ -288,7 +290,7 @@ export const SavedResultViewer = observer(({ saved, api, onClose, onUseSeed, can
       </div>
     </div>
     {grid ? <Suspense fallback={<p className="subtle" role="status">正在打开网格检查…</p>}>
-      <ReviewGrid api={api} experimentId={selection.id} onClose={() => setGridFor(null)}
+      <ReviewGrid api={api} experimentId={selection.id} setName={saved.summary?.name} onQueued={onRerunQueued} onClose={() => setGridFor(null)}
         onOpen={(offset, image) => { setGridFor(null); void saved.showGroup(offset, image) }} />
     </Suspense> : <>
       <figure className="canvas-figure">

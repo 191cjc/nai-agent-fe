@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Ban, CheckSquare, Dices, Maximize2, RefreshCw, Square, Undo2, X } from 'lucide-react'
-import { ApiFailure, errorText, type GenerationView, type RerunEdits, type WorkspaceApi } from './api'
+import { ApiFailure, errorText, type ExperimentRunState, type GenerationView, type RerunBatchItem, type WorkspaceApi } from './api'
 import { DATASET_CATEGORIES } from './dataset-prompts'
 import { CHARACTER_CATEGORIES } from './character-prompts'
 import { translatePrompt } from './prompt-zh'
@@ -12,9 +12,6 @@ const METADATA_PAGE = 100
 const MAX_GROUPS = 3000
 const PREVIEW_CONCURRENCY = 4
 const BUSY_RETRIES = 3
-/** 429 queue_full means "not accepted", so waiting and resubmitting is safe and unpaid. */
-const QUEUE_WAIT_MS = 5000
-const QUEUE_WAIT_LIMIT = 120
 
 const CATEGORY_LABELS: Record<string, string> = Object.fromEntries([
   ...DATASET_CATEGORIES.map(category => [category.id, category.label]),
@@ -57,9 +54,23 @@ function wait(ms: number, signal: AbortSignal): Promise<void> {
   })
 }
 
-export function ReviewGrid({ api, experimentId, onOpen, onClose }: {
+/** Sources of this set's unfinished re-run batches the server has not submitted yet. */
+export function queuedRerunSources(runs: readonly ExperimentRunState[], experimentId: string): Map<string, number> {
+  const queued = new Map<string, number>()
+  for (const run of runs) {
+    if (run.kind !== 'rerun' || run.rerun_experiment_id !== experimentId || run.status !== 'running') continue
+    for (const item of (run.rerun_items ?? []).slice(Number(run.next_ordinal) - 1)) queued.set(item.job_id, (queued.get(item.job_id) ?? 0) + 1)
+  }
+  return queued
+}
+
+export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClose }: {
   api: WorkspaceApi
   experimentId: string
+  /** Training-set name, used to label its re-run batches in the queue. */
+  setName?: string | null
+  /** A re-run batch was accepted: show it in the run queue. */
+  onQueued?: (run: ExperimentRunState) => void
   /** Opens the full-size viewer at this group offset and image index. */
   onOpen: (offset: number, image: number) => void
   onClose: () => void
@@ -73,13 +84,15 @@ export function ReviewGrid({ api, experimentId, onOpen, onClose }: {
   const [previews, setPreviews] = useState<Record<string, string | 'error'>>({})
   const [busyKeys, setBusyKeys] = useState<ReadonlySet<string>>(new Set())
   const [actionError, setActionError] = useState('')
-  const [rerun, setRerun] = useState<{ done: number; total: number; waiting: boolean } | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  // Not-yet-submitted sources of this set's server-side re-run batches (by source job id).
+  const [queued, setQueued] = useState<ReadonlyMap<string, number>>(new Map())
   const [rerunMessage, setRerunMessage] = useState('')
   // Selected tiles by key; kept across pages, category and discard filters until submitted or cleared.
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
   // Batch editor over the selected tiles: one optional new style, an editable prompt per tile.
-  const [batch, setBatch] = useState<{ sources: Tile[]; prompts: string[]; style: string; discardReplaced: boolean } | null>(null)
-  const rerunController = useRef<AbortController | null>(null)
+  // `id` is reused after an unknown outcome so a resubmission cannot queue the batch twice.
+  const [batch, setBatch] = useState<{ id: string; sources: Tile[]; prompts: string[]; style: string; discardReplaced: boolean } | null>(null)
   const scrollRef = useRef<HTMLElement | null>(null)
 
   // Metadata only (no image bytes): bounded pages in server order.
@@ -97,6 +110,10 @@ export function ReviewGrid({ api, experimentId, onOpen, onClose }: {
       }
       if (!controller.signal.aborted) setGroups(loaded)
     })().catch(error => { if (!controller.signal.aborted) setLoadError(errorText(error)) })
+    // Best effort: without the queue, quick picks just cannot exclude batched sources.
+    void api.queuedExperimentRuns(controller.signal)
+      .then(runs => { if (!controller.signal.aborted) setQueued(queuedRerunSources(runs, experimentId)) })
+      .catch(() => undefined)
     return () => controller.abort()
   }, [api, experimentId, reload])
 
@@ -117,6 +134,13 @@ export function ReviewGrid({ api, experimentId, onOpen, onClose }: {
   const discardedCount = tiles.filter(tile => tile.index !== null && tile.job.discarded_images?.includes(tile.index)).length
   const failedCount = (groups ?? []).filter(group => group.status === 'failed').length
   const reruns = useMemo(() => rerunCounts(groups ?? []), [groups])
+  // Made plus still queued on the server: what quick picks treat as already replaced.
+  const replaced = useMemo(() => {
+    const counts = new Map(reruns)
+    queued.forEach((count, id) => counts.set(id, (counts.get(id) ?? 0) + count))
+    return counts
+  }, [reruns, queued])
+  const queuedCount = [...queued.values()].reduce((sum, count) => sum + count, 0)
   // A reload drops selections whose tile no longer exists (e.g. an image expired).
   useEffect(() => {
     if (!groups) return
@@ -126,13 +150,13 @@ export function ReviewGrid({ api, experimentId, onOpen, onClose }: {
   const selectedTiles = useMemo(() => tiles.filter(tile => selected.has(tile.key)), [tiles, selected])
   const hiddenSelected = selectedTiles.length - selectedTiles.filter(tile => visible.includes(tile)).length
   // Quick picks select only what still needs a replacement, so nothing is paid for twice.
-  const pendingFailedTiles = useMemo(() => tiles.filter(tile => tile.job.status === 'failed' && !(reruns.get(tile.job.id) ?? 0)), [tiles, reruns])
+  const pendingFailedTiles = useMemo(() => tiles.filter(tile => tile.job.status === 'failed' && !(replaced.get(tile.job.id) ?? 0)), [tiles, replaced])
   const pendingDiscardedTiles = useMemo(() => (groups ?? []).flatMap(group => {
     if (group.status !== 'succeeded') return []
     const marks = [...(group.discarded_images ?? [])].sort((left, right) => left - right)
-    const remaining = Math.max(0, marks.length - (reruns.get(group.id) ?? 0))
+    const remaining = Math.max(0, marks.length - (replaced.get(group.id) ?? 0))
     return marks.slice(0, remaining).map(index => `${group.id}:${index}`)
-  }), [groups, reruns])
+  }), [groups, replaced])
 
   // Previews for the shown page only; every Blob URL is revoked when the page changes.
   useEffect(() => {
@@ -172,8 +196,6 @@ export function ReviewGrid({ api, experimentId, onOpen, onClose }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api, pathKey])
 
-  useEffect(() => () => rerunController.current?.abort(), [])
-
   const toggle = useCallback(async (tile: Tile) => {
     if (tile.index === null || busyKeys.has(tile.key)) return
     const index = tile.index
@@ -204,68 +226,62 @@ export function ReviewGrid({ api, experimentId, onOpen, onClose }: {
     })
   }
 
+  function newBatchId(): string | null {
+    try { return crypto.randomUUID() } catch {
+      setActionError('浏览器无法创建批次编号，请通过 HTTPS 使用支持的浏览器。')
+      return null
+    }
+  }
+
   function openBatch() {
-    if (!selectedTiles.length || rerun) return
+    if (!selectedTiles.length || submitting) return
+    const id = newBatchId()
+    if (!id) return
     setRerunMessage('')
-    setBatch({ sources: selectedTiles, prompts: selectedTiles.map(tile => tile.job.parameters.experiment?.item?.prompt ?? ''), style: '', discardReplaced: true })
+    setBatch({ id, sources: selectedTiles, prompts: selectedTiles.map(tile => tile.job.parameters.experiment?.item?.prompt ?? ''), style: '', discardReplaced: true })
   }
 
   async function rerunAll() {
-    if (!batch || rerun) return
-    const { sources, prompts, style, discardReplaced } = batch
+    if (!batch || submitting) return
+    const { id, sources, prompts, style, discardReplaced } = batch
     if (prompts.some(prompt => !prompt.trim())) { setActionError('训练词不能为空。'); return }
-    const repeated = sources.filter(tile => reruns.get(tile.job.id)).length
-    if (!window.confirm(`为所选 ${sources.length} 张各重跑 1 张（新随机种子${style.trim() ? '，使用新画风' : '，保持原画风'}）？这是 ${sources.length} 次付费生成。${repeated ? `\n其中 ${repeated} 张所在条目以前已经重跑过。` : ''}`)) return
-    const controller = new AbortController()
-    rerunController.current = controller
+    const repeated = sources.filter(tile => replaced.get(tile.job.id)).length
+    if (!window.confirm(`为所选 ${sources.length} 张各重跑 1 张（新随机种子${style.trim() ? '，使用新画风' : '，保持原画风'}）？这是 ${sources.length} 次付费生成。\n会作为一个任务加入服务器队列，在后台按顺序生成，提交后可以关闭页面。${repeated ? `\n其中 ${repeated} 张所在条目以前已经重跑过或正在排队重跑。` : ''}`)) return
+    const items: RerunBatchItem[] = sources.map((tile, index) => {
+      const source = tile.job
+      // Replacing a kept image marks it discarded when the server submits its re-run.
+      const discard = discardReplaced && tile.index !== null && !source.discarded_images?.includes(tile.index)
+      return {
+        job_id: source.id,
+        ...(discard && tile.index !== null ? { discard_index: tile.index } : {}),
+        ...(prompts[index] !== source.parameters.experiment?.item?.prompt ? { prompt: prompts[index] } : {}),
+        ...(style.trim() ? { style_prompt: style } : {}),
+      }
+    })
+    const name = `${(setName || '训练集').slice(0, 72)} · 重跑`
+    setSubmitting(true)
     setRerunMessage('')
     setActionError('')
-    setBatch(null)
-    let done = 0
-    setRerun({ done, total: sources.length, waiting: false })
     try {
-      for (const [index, tile] of sources.entries()) {
-        const source = tile.job
-        const original = source.parameters.experiment?.item?.prompt
-        // Replacing a kept image marks it discarded once the re-run is accepted.
-        const discardIndex = discardReplaced && tile.index !== null && !source.discarded_images?.includes(tile.index) ? tile.index : null
-        const edits: RerunEdits = {
-          ...(prompts[index] !== original ? { prompt: prompts[index] } : {}),
-          ...(style.trim() ? { style_prompt: style } : {}),
-        }
-        for (let waits = 0; ; waits += 1) {
-          if (controller.signal.aborted) throw new DOMException('Cancelled', 'AbortError')
-          try {
-            await api.rerunGeneration(source.id, discardIndex, edits)
-            break
-          } catch (error) {
-            // Only a definite "queue full" refusal is safe to resubmit.
-            if (error instanceof ApiFailure && error.status === 429 && error.code === 'queue_full' && waits < QUEUE_WAIT_LIMIT) {
-              setRerun({ done, total: sources.length, waiting: true })
-              await wait(QUEUE_WAIT_MS, controller.signal)
-              continue
-            }
-            throw error
-          }
-        }
-        done += 1
-        selectKeys([tile.key], false)
-        setRerun({ done, total: sources.length, waiting: false })
-      }
-      setRerunMessage(`已提交 ${done} 张重跑。新图会出现在原条目之后，生成完成后点「刷新」查看。`)
+      const run = await api.createRerunBatch({ id, experiment_id: experimentId, items, name })
+      selectKeys(sources.map(tile => tile.key), false)
+      setBatch(null)
+      onQueued?.(run)
+      setRerunMessage(`已加入服务器队列：${sources.length} 张${run.queue_position ? `，前面还有 ${run.queue_position} 个任务` : '，马上开始'}。可以关闭页面，进度见「实验与训练集队列」；生成完成后点「刷新」查看新图。`)
+      setReload(value => value + 1)
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') {
-        setRerunMessage(`已停止：提交了 ${done} / ${sources.length} 张，剩余的可稍后再重跑。`)
-      } else if (error instanceof ApiFailure) {
-        setActionError(`重跑在第 ${done + 1} 张停止（已提交 ${done} 张）：${errorText(error)}`)
+      const definite = error instanceof ApiFailure && error.status >= 400 && error.status < 500
+      if (definite) {
+        // Not accepted: a later submission is a new batch.
+        const next = newBatchId()
+        if (next) setBatch(current => current && { ...current, id: next })
+        setActionError(`重跑未加入队列：${errorText(error)}`)
       } else {
-        // The request may or may not have been accepted: never resubmit blindly.
-        setActionError(`第 ${done + 1} 张的提交结果未知（网络中断）。已提交 ${done} 张；请先点「刷新」核对，再决定是否继续。`)
+        // Possibly accepted: resubmitting the unchanged batch returns it instead of queueing twice.
+        setActionError(`提交结果未知：${errorText(error)} 请先在「实验与训练集队列」核对；不修改内容直接再点「加入队列」不会重复排队。`)
       }
     } finally {
-      rerunController.current = null
-      setRerun(null)
-      setReload(value => value + 1)
+      setSubmitting(false)
     }
   }
 
@@ -278,18 +294,17 @@ export function ReviewGrid({ api, experimentId, onOpen, onClose }: {
         </select></label>
       <label className="history-select"><input type="checkbox" checked={hideDiscarded} onChange={event => { setHideDiscarded(event.target.checked); setPage(0) }} /> 隐藏已弃置</label>
       <span className="subtle" role="status">已弃置 {discardedCount} 张 · 失败 {failedCount} 条</span>
-      <button className="text-action" type="button" disabled={!groups || rerun !== null} onClick={() => setReload(value => value + 1)}><RefreshCw size={14} aria-hidden="true" /> 刷新</button>
-      {rerun
-        ? <button className="text-action" type="button" onClick={() => rerunController.current?.abort()}><X size={14} aria-hidden="true" /> 停止提交（{rerun.done} / {rerun.total}{rerun.waiting ? '，队列已满，等待中' : ''}）</button>
-        : <button className="text-action" type="button" disabled={!selectedTiles.length || batch !== null} title="为所选图片各重跑 1 张；可先改画风和训练词"
-          onClick={openBatch}><Dices size={14} aria-hidden="true" /> 重跑所选（{selectedTiles.length}）</button>}
+      {queuedCount > 0 && <span className="subtle" role="status">排队中的重跑 {queuedCount} 张</span>}
+      <button className="text-action" type="button" disabled={!groups || submitting} onClick={() => setReload(value => value + 1)}><RefreshCw size={14} aria-hidden="true" /> 刷新</button>
+      <button className="text-action" type="button" disabled={!selectedTiles.length || batch !== null || submitting} title="为所选图片各重跑 1 张；可先改画风和训练词"
+        onClick={openBatch}><Dices size={14} aria-hidden="true" /> 重跑所选（{selectedTiles.length}）</button>
       <button className="icon-button" type="button" title="返回单张查看" aria-label="返回单张查看" onClick={onClose}><X size={18} /></button>
     </div>
     {groups && <div className="review-grid-selection" role="group" aria-label="多选">
       <span role="status">已选 <strong>{selectedTiles.length}</strong> 张{hiddenSelected > 0 ? `（${hiddenSelected} 张不在当前筛选中）` : ''}</span>
-      <button className="text-action" type="button" disabled={!pendingFailedTiles.length || batch !== null} title="生成失败且还没补跑过的条目"
+      <button className="text-action" type="button" disabled={!pendingFailedTiles.length || batch !== null} title="生成失败、还没补跑过也不在重跑队列中的条目"
         onClick={() => selectKeys(pendingFailedTiles.map(tile => tile.key))}>选择全部失败（{pendingFailedTiles.length}）</button>
-      <button className="text-action" type="button" disabled={!pendingDiscardedTiles.length || batch !== null} title="已弃置且还没重跑过的图片"
+      <button className="text-action" type="button" disabled={!pendingDiscardedTiles.length || batch !== null} title="已弃置、还没重跑过也不在重跑队列中的图片"
         onClick={() => selectKeys(pendingDiscardedTiles)}>选择全部已弃置（{pendingDiscardedTiles.length}）</button>
       <button className="text-action" type="button" disabled={!shown.length || batch !== null} onClick={() => selectKeys(shown.map(tile => tile.key))}>选择本页</button>
       <button className="text-action" type="button" disabled={!visible.length || batch !== null} title="当前分类和筛选下的全部图片（所有页）"
@@ -301,21 +316,21 @@ export function ReviewGrid({ api, experimentId, onOpen, onClose }: {
     {actionError && <p className="alert" role="alert">{actionError}</p>}
     {rerunMessage && <p className="subtle" role="status">{rerunMessage}</p>}
     {batch && <div className="rerun-batch" role="group" aria-label="批量重跑设置">
-      <p><strong>重跑所选 {batch.sources.length} 张</strong>：每张 1 次付费生成，新随机种子。改过的训练词会成为新图的 caption。</p>
+      <p><strong>重跑所选 {batch.sources.length} 张</strong>：每张 1 次付费生成，新随机种子。改过的训练词会成为新图的 caption。整批作为一个任务加入服务器队列（和训练集同一队列，按顺序执行），提交后可以关闭页面；可在队列中停止或继续。</p>
       <label className="field"><span>新画风（留空则每张保持原来的画风）</span>
         <textarea rows={2} value={batch.style} maxLength={3000} spellCheck={false}
           onChange={event => setBatch({ ...batch, style: event.target.value })} /></label>
       <label className="history-select"><input type="checkbox" checked={batch.discardReplaced}
-        onChange={event => setBatch({ ...batch, discardReplaced: event.target.checked })} /> 提交后弃置被替换的原图（只影响还没弃置的成功图片）</label>
+        onChange={event => setBatch({ ...batch, discardReplaced: event.target.checked })} /> 开始重跑某张时弃置被替换的原图（只影响还没弃置的成功图片）</label>
       <ol className="rerun-batch-items">{batch.sources.map((tile, index) => <li key={tile.key}>
-        <span>{ordinalLabel(tile.job)}{tile.index !== null && tile.job.image_urls.length > 1 ? ` · ${tile.index + 1}` : ''}{tile.job.status === 'failed' ? '（失败）' : tile.index !== null && tile.job.discarded_images?.includes(tile.index) ? '（已弃置）' : ''}{reruns.get(tile.job.id) ? `（已重跑 ${reruns.get(tile.job.id)} 次）` : ''}{tile.job.parameters.experiment?.item?.characters?.length ? '（多人：只改共享场景）' : ''}</span>
+        <span>{ordinalLabel(tile.job)}{tile.index !== null && tile.job.image_urls.length > 1 ? ` · ${tile.index + 1}` : ''}{tile.job.status === 'failed' ? '（失败）' : tile.index !== null && tile.job.discarded_images?.includes(tile.index) ? '（已弃置）' : ''}{reruns.get(tile.job.id) ? `（已重跑 ${reruns.get(tile.job.id)} 次）` : ''}{queued.get(tile.job.id) ? `（重跑排队中 ${queued.get(tile.job.id)} 张）` : ''}{tile.job.parameters.experiment?.item?.characters?.length ? '（多人：只改共享场景）' : ''}</span>
         <textarea rows={2} value={batch.prompts[index]} maxLength={1000} spellCheck={false} aria-label={`${ordinalLabel(tile.job)}的训练词`}
           onChange={event => setBatch({ ...batch, prompts: batch.prompts.map((value, at) => at === index ? event.target.value : value) })} />
         <span className="dataset-item-zh">{translatePrompt(batch.prompts[index])}</span>
       </li>)}</ol>
       <div className="rerun-batch-actions">
-        <button type="button" onClick={() => void rerunAll()}><Dices size={14} aria-hidden="true" /> 提交 {batch.sources.length} 张</button>
-        <button className="secondary" type="button" onClick={() => setBatch(null)}>取消</button>
+        <button type="button" disabled={submitting} onClick={() => void rerunAll()}><Dices size={14} aria-hidden="true" /> {submitting ? '正在加入队列...' : `加入队列（${batch.sources.length} 张）`}</button>
+        <button className="secondary" type="button" disabled={submitting} onClick={() => setBatch(null)}>取消</button>
       </div>
     </div>}
     {!groups && !loadError && <p className="subtle" role="status">正在读取训练集记录…</p>}

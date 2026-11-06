@@ -294,3 +294,33 @@ review only (operator restriction); no paid probes.
   `CAST(ordinal AS INTEGER)`: ordinals are exact decimal strings of any length.
 - The cover image may have expired; the web hides the cover when the thumbnail fails.
   Web shows it only for `kind === 'dataset'`, left of the history card; click = 浏览图片.
+
+## Durable re-run batches (2026-11-06)
+
+- `POST /api/rerun-batches` `{id, experiment_id, items:[{job_id, prompt?, style_prompt?,
+  discard_index?}] (1..3000), name?}` → 202 `RunState` with `kind: "rerun"`,
+  `rerun_experiment_id`, `rerun_items`. Idempotent by id (same frozen definition);
+  other content under the same id → 409 `experiment_run_conflict`.
+- Validated up front, item by item (message prefixed `Item N:`): the training set
+  must be the owner's dataset run (404 / 422 `rerun_unsupported`); every source must
+  be a finished group of that set (422 `rerun_source_missing`, 409 `job_active`);
+  edits and discard index use the single re-run rules (`reruns.rerun_parameters`,
+  shared with `POST /api/generations/{id}/rerun`; 422 `rerun_invalid` /
+  `rerun_image_missing`). GPT sets need the GPT provider (503).
+- Stored as a `style_experiment_runs` row (no schema change): definition
+  `{kind:"rerun", plan_version:2, parameters:<set's run parameters, sample_count 1>,
+  experiment_id, sources:[...]}`, lane = the set's lane, total = item count. It joins
+  the owner's lane queue in creation order and shares stop / continue / outage pause
+  / restart recovery / GPT parallelism / MAX_ACTIVE_RUNS with other runs.
+- Each ordinal: re-read the source job and build its re-run parameters (new random
+  seed, one sample). `RunStore.claim_rerun` persists the re-run job (via
+  `create_in_transaction(rerun=True)`), the in-flight row, the cursor and the optional
+  discard mark of the replaced image in one transaction before any paid call.
+- A source that is gone, moved or no longer valid is counted failed without a job
+  (`skip_rerun`, error `rerun_source_missing` or the refusal code); no retries.
+- Continue (`/style-experiment-runs/{id}/continue`) on a stopped batch queues a new
+  batch of the never-claimed sources, name + 「（续）」.
+- Batches own no generation rows, so they never appear in the saved-experiment list.
+- Release note: the browser-loop single re-runs are gone from the grid. Before the
+  first deploy of this, still queued single re-runs were failed as
+  `rerun_cancelled` (never paid) and running ones fall to `outcome_unknown`.

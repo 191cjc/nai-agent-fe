@@ -42,8 +42,9 @@ export class StyleRunStore {
     return this.runs.length > 0
   }
 
+  /** Experiments with unfinished work: runs, and the training sets of queued re-run batches. */
   get activeIds(): string[] {
-    return this.runs.map(run => run.id)
+    return this.runs.flatMap(run => run.kind === 'rerun' && run.rerun_experiment_id ? [run.id, run.rerun_experiment_id] : [run.id])
   }
 
   /** Only an unknown create outcome blocks new submissions; running runs just queue. */
@@ -52,7 +53,7 @@ export class StyleRunStore {
   }
 
   get kind(): 'style' | 'dataset' {
-    return this.definition?.kind ?? 'style'
+    return this.definition?.kind === 'dataset' ? 'dataset' : 'style'
   }
 
   /** The definition being submitted, so its form can show what was frozen. */
@@ -274,6 +275,13 @@ export class StyleRunStore {
         this.schedule()
       })
     }
+  }
+
+  /** Show a run created elsewhere (e.g. a re-run batch from the review grid) and poll it. */
+  track(run: ExperimentRunState): void {
+    if (!this.observing) return
+    this.acceptRun(run)
+    this.schedule()
   }
 
   /** Queue a new run for a stopped training set's never-started items (same seeds and styles). */

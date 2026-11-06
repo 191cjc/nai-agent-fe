@@ -207,9 +207,25 @@ export interface ExperimentRunRange {
   step: string
 }
 
+/** One source of a re-run batch: a finished group plus the owner's optional edits. */
+export interface RerunBatchItem extends RerunEdits {
+  job_id: string
+  /** Image of the source to mark discarded when the server submits this re-run. */
+  discard_index?: number
+}
+
+export interface RerunBatchCreate {
+  id: string
+  /** The training set every source group belongs to. */
+  experiment_id: string
+  items: RerunBatchItem[]
+  name?: string
+}
+
 export interface ExperimentRunDefinition {
   id: string
-  kind?: ExperimentKind
+  /** "rerun": a server-side batch of re-runs of one training set's groups. */
+  kind?: ExperimentKind | 'rerun'
   parameters: GenerationRequest
   ranges: ExperimentRunRange[]
   items?: DatasetItem[]
@@ -243,6 +259,9 @@ export interface ExperimentRunState extends ExperimentRunDefinition {
   provider_paused_until?: number | null
   /** GPT runs: owner-chosen concurrency, null = server maximum. */
   parallelism?: number | null
+  /** Re-run batches: their training set and one source per ordinal. */
+  rerun_experiment_id?: string | null
+  rerun_items?: RerunBatchItem[] | null
   seed: number
   sample_count: number
   created_at: number
@@ -311,10 +330,12 @@ function checkedRun(value: ExperimentRunState): ExperimentRunState {
     && Array.isArray(parameters.character_prompts) && parameters.character_prompts.every(character => character && typeof character.prompt === 'string'
       && (character.x === undefined || Number.isFinite(character.x)) && (character.y === undefined || Number.isFinite(character.y)))
     && validRequestSections(parameters)
-    && (value.kind === undefined || value.kind === 'style' || value.kind === 'dataset')
-    && Array.isArray(value.ranges) && (value.kind === 'dataset' ? value.ranges.length === 0 : value.ranges.length > 0)
+    && (value.kind === undefined || value.kind === 'style' || value.kind === 'dataset' || value.kind === 'rerun')
+    && Array.isArray(value.ranges) && (value.kind === 'dataset' || value.kind === 'rerun' ? value.ranges.length === 0 : value.ranges.length > 0)
     && value.ranges.every(range => range && Number.isInteger(range.tag_index)
       && typeof range.min === 'string' && typeof range.max === 'string' && typeof range.step === 'string')
+    && (value.kind !== 'rerun' || (typeof value.rerun_experiment_id === 'string' && Array.isArray(value.rerun_items)
+      && value.rerun_items.length > 0 && value.rerun_items.every(item => item && typeof item.job_id === 'string')))
     && (value.kind !== 'dataset' || (Array.isArray(value.items) && value.items.length > 0
       && value.items.every(item => item && typeof item.id === 'string' && typeof item.prompt === 'string'
         && (item.characters === undefined || (Array.isArray(item.characters) && item.characters.every(character => character && typeof character.prompt === 'string'))))))
@@ -372,6 +393,9 @@ export function errorText(error: unknown): string {
       experiment_run_missing: '尚未找到这次实验，提交结果仍待确认；请检查历史后再次连接。',
       rerun_unsupported: '只有训练集里的图片可以重跑。',
       rerun_invalid: '修改后的训练词或画风无效（不能为空，不能含 // 注释行，合计不超过 3000 字符）。',
+      rerun_source_missing: '源条目已不在这个训练集里（可能已删除），这一张没有重跑。',
+      rerun_image_missing: '要弃置的原图不存在。',
+      rerun_cancelled: '服务升级前取消的排队重跑（未付费）；可在网格中重新选择后批量重跑。',
       experiment_active: '这条记录属于进行中的画风实验，请先停止实验或等待完成后删除。',
       provider_auth_error: '图像服务认证失败，请联系管理员。',
       provider_rate_limited: '图像服务限流，请稍后重试。',
@@ -608,6 +632,13 @@ export class WorkspaceApi {
 
   /** One paid generation: the same training-set group, one sample, a new random seed. */
   /** One paid re-run; optional edits replace this re-run's content prompt (and caption) or style. */
+  /** Queue a server-side re-run batch; retrying with the same id returns the same batch. */
+  async createRerunBatch(batch: RerunBatchCreate, signal?: AbortSignal): Promise<ExperimentRunState> {
+    const run = checkedRun(await this.request<ExperimentRunState>('/api/rerun-batches', { method: 'POST', body: JSON.stringify(batch), signal }))
+    if (run.id !== batch.id) throw new ApiFailure(0, 'invalid_response', '重跑批次编号不匹配，请刷新队列核对。')
+    return run
+  }
+
   rerunGeneration(jobId: string, discardIndex: number | null, edits: RerunEdits = {}): Promise<GenerationAccepted> {
     return this.request(`/api/generations/${encodeURIComponent(jobId)}/rerun`, {
       method: 'POST', body: JSON.stringify({

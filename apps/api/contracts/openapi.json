@@ -1835,6 +1835,103 @@
         "title": "ReferenceUse",
         "type": "object"
       },
+      "RerunBatchCreate": {
+        "properties": {
+          "experiment_id": {
+            "format": "uuid",
+            "title": "Experiment Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RerunBatchItem"
+            },
+            "maxItems": 3000,
+            "minItems": 1,
+            "title": "Items",
+            "type": "array"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "required": [
+          "id",
+          "experiment_id",
+          "items"
+        ],
+        "title": "RerunBatchCreate",
+        "type": "object"
+      },
+      "RerunBatchItem": {
+        "properties": {
+          "discard_index": {
+            "anyOf": [
+              {
+                "maximum": 7.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discard Index"
+          },
+          "job_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Job Id",
+            "type": "string"
+          },
+          "prompt": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt"
+          },
+          "style_prompt": {
+            "anyOf": [
+              {
+                "maxLength": 3000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Style Prompt"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "title": "RerunBatchItem",
+        "type": "object"
+      },
       "RerunRequest": {
         "properties": {
           "discard_index": {
@@ -2010,7 +2107,8 @@
             "default": "style",
             "enum": [
               "style",
-              "dataset"
+              "dataset",
+              "rerun"
             ],
             "title": "Kind",
             "type": "string"
@@ -2085,6 +2183,31 @@
             },
             "title": "Ranges",
             "type": "array"
+          },
+          "rerun_experiment_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rerun Experiment Id"
+          },
+          "rerun_items": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/RerunBatchItem"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rerun Items"
           },
           "sample_count": {
             "title": "Sample Count",
@@ -4958,6 +5081,112 @@
           }
         },
         "summary": "Get Reference Thumbnail"
+      }
+    },
+    "/api/rerun-batches": {
+      "post": {
+        "operationId": "create_rerun_batch_api_rerun_batches_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "__Host-nai_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "  Host-Nai Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RerunBatchCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Create Rerun Batch"
       }
     },
     "/api/style-experiment-runs": {

@@ -196,15 +196,16 @@ function ContinueButton({ runs, run }: { runs: StyleRunStore; run: ExperimentRun
 
 const RunRow = observer(({ runs, run, saved }: { runs: StyleRunStore; run: ExperimentRunState; saved: SavedResultsStore }) => {
   const dataset = run.kind === 'dataset'
+  const rerun = run.kind === 'rerun'
   const character = dataset && !!run.character
-  const unit = dataset ? '条' : '组'
-  const fallback = dataset ? (character ? '角色训练集' : '画风训练集') : '画风实验'
+  const unit = rerun ? '张' : dataset ? '条' : '组'
+  const fallback = rerun ? '批量重跑' : dataset ? (character ? '角色训练集' : '画风训练集') : '画风实验'
   const unfinished = run.status === 'running' || run.status === 'stopping'
   const queued = run.status === 'running' && !!run.queue_position
   const stopping = runs.isStopping(run.id)
   return <li className={`run-queue-item${queued ? ' queued' : ''}`}>
     <div className="experiment-progress-line" role="status" aria-live="polite" aria-atomic="true">
-      <span className={`dataset-type-badge ${character ? 'character' : 'style'}`}>{dataset ? (character ? '角色' : '画风') : '实验'}</span>
+      <span className={`dataset-type-badge ${rerun ? 'rerun' : character ? 'character' : 'style'}`}>{rerun ? '重跑' : dataset ? (character ? '角色' : '画风') : '实验'}</span>
       <strong>{run.name || fallback} · {runStatus(run)}</strong>
       <span className="run-lane">{LANES[run.lane ?? 'novelai']}</span>
       <span>已处理 {run.processed_count} / {run.total} {unit}</span>
@@ -214,7 +215,7 @@ const RunRow = observer(({ runs, run, saved }: { runs: StyleRunStore; run: Exper
         : run.current_ordinal !== null && <span>当前第 {run.current_ordinal} {unit}</span>}
     </div>
     <div className="server-run-actions">
-      {!queued && <button className="secondary" type="button" onClick={() => void saved.openExperiment(run.id)}>
+      {!queued && <button className="secondary" type="button" onClick={() => void saved.openExperiment(rerun && run.rerun_experiment_id ? run.rerun_experiment_id : run.id)}>
         <FlaskConical size={14} aria-hidden="true" /> 查看已保存结果
       </button>}
       {unfinished ? <button className="secondary" type="button" disabled={stopping || run.status === 'stopping'} onClick={() => {
@@ -222,7 +223,7 @@ const RunRow = observer(({ runs, run, saved }: { runs: StyleRunStore; run: Exper
       }}>
         <Square size={13} aria-hidden="true" />{stopping ? '正在请求停止...' : run.status === 'stopping' ? `等待当前${unit}结束` : queued ? '取消排队' : '停止'}
       </button> : <>
-        {dataset && run.status === 'stopped' && <ContinueButton runs={runs} run={run} />}
+        {(dataset || rerun) && run.status === 'stopped' && <ContinueButton runs={runs} run={run} />}
         <button className="icon-button" type="button" title="从列表移除" aria-label={`从列表移除 ${run.name || fallback}`}
           onClick={() => runs.dismissFinished(run.id)}><X size={14} aria-hidden="true" /></button>
       </>}
@@ -230,7 +231,11 @@ const RunRow = observer(({ runs, run, saved }: { runs: StyleRunStore; run: Exper
     {unfinished && run.lane === 'gpt' && <ParallelismControl runs={runs} run={run} />}
     {run.error_code && <p className="experiment-note">最近一{unit}诊断：{errorText(new ApiFailure(0, run.error_code, `本${unit}处理失败。`))}
       {run.status === 'running' && ` 服务器会继续处理后续${unit}，不会重试这一${unit}。`}</p>}
-    <details className="result-parameters server-run-snapshot"><summary>{dataset ? '批跑信息与固定配置' : '实验信息与固定配置'}</summary>
+    {rerun ? <details className="result-parameters server-run-snapshot"><summary>重跑批次信息</summary>
+      <p>每张 1 次付费生成、新随机种子；服务器按顺序提交，单张失败继续下一张，不会自动重试。源条目已删除的会记为失败并跳过。</p>
+      <p>改训练词 {run.rerun_items?.filter(item => item.prompt !== undefined).length ?? 0} 张 · 改画风 {run.rerun_items?.filter(item => item.style_prompt !== undefined).length ?? 0} 张 · 开始时弃置原图 {run.rerun_items?.filter(item => item.discard_index !== undefined).length ?? 0} 张</p>
+      <p>批次编号 {run.id} · 训练集 {run.rerun_experiment_id} · {new Date(run.created_at * 1000).toLocaleString()}</p>
+    </details> : <details className="result-parameters server-run-snapshot"><summary>{dataset ? '批跑信息与固定配置' : '实验信息与固定配置'}</summary>
       <p>每{unit} {run.sample_count} 张 · 计划 {(BigInt(run.total) * BigInt(run.sample_count)).toString()} 张 · {dataset ? `基础种子 ${run.seed}，第 N 条使用基础种子 + N − 1` : `统一请求种子 ${run.seed}`}</p>
       <PromptSummary parameters={run.parameters} />
       {run.parameters.negative_prompt && <p>负向：{run.parameters.negative_prompt}</p>}
@@ -243,7 +248,7 @@ const RunRow = observer(({ runs, run, saved }: { runs: StyleRunStore; run: Exper
       <p>{run.parameters.steps} 步 · CFG {run.parameters.cfg_scale} · 每{unit} {run.sample_count} 张 · {run.parameters.quality ? '高质量' : '标准质量'}</p>
       <p>原始请求种子 {run.parameters.seed ?? '随机'} · {dataset ? '基础' : '统一'}实际种子 {run.seed}</p>
       <p>实验编号 {run.id} · {new Date(run.created_at * 1000).toLocaleString()}</p>
-    </details>
+    </details>}
   </li>
 })
 

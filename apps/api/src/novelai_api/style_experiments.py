@@ -21,6 +21,7 @@ from .db import Database
 from .generations import (
     EXPERIMENT_ROWS,
     DatasetItem,
+    ExperimentConflict,
     ExperimentContext,
     GenerationManager,
     GenerationNotConfigured,
@@ -30,6 +31,7 @@ from .generations import (
     ResultStorageUnavailable,
     _experiment_connection,
 )
+from .reruns import RerunBatchCreate, RerunBatchItem, RerunRefused, rerun_parameters
 from .style_plan import ExperimentRange, create_style_plan
 
 
@@ -78,7 +80,8 @@ def run_lane(request: "RunCreate | DatasetRunCreate") -> Lane:
 class RunState(BaseModel):
     _plan_version: Literal[1, 2] = PrivateAttr(default=2)
     id: str
-    kind: Literal["style", "dataset"] = "style"
+    # "rerun": a durable batch of paid re-runs of one training set's finished groups.
+    kind: Literal["style", "dataset", "rerun"] = "style"
     lane: Lane = "novelai"
     # Unfinished runs only: 0 is the run its lane is executing, N waits behind N others.
     queue_position: int | None = None
@@ -106,6 +109,9 @@ class RunState(BaseModel):
     items: list[DatasetItem] = Field(default_factory=list)
     styles: list[str] | None = None
     character: CharacterPlan | None = None
+    # Re-run batches: the training set they belong to and one source per ordinal.
+    rerun_experiment_id: str | None = None
+    rerun_items: list[RerunBatchItem] | None = None
     created_at: int
     updated_at: int
     error_code: str | None
@@ -225,11 +231,14 @@ class RunStore:
         definition = json.loads(row["definition_json"])
         kind = definition.get("kind", "style")
         version = definition.get("plan_version", 1)
-        if kind not in ("style", "dataset") or version not in (1, 2):
+        if kind not in ("style", "dataset", "rerun") or version not in (1, 2):
             raise ValueError("Unsupported stored style plan version")
+        rerun = kind == "rerun"
         state = RunState(
-            kind=kind, items=definition.get("items", []), styles=definition.get("styles"),
-            character=definition.get("character"),
+            kind=kind, items=[] if rerun else definition.get("items", []),
+            styles=definition.get("styles"), character=definition.get("character"),
+            rerun_experiment_id=definition.get("experiment_id") if rerun else None,
+            rerun_items=definition.get("sources") if rerun else None,
             **{key: row[key] for key in (
                 "id", "lane", "status", "total", "next_ordinal", "processed_count",
                 "succeeded_count", "failed_count", "current_ordinal", "current_job_id", "seed",
@@ -242,13 +251,21 @@ class RunStore:
         return state
 
     def create(
-        self, user_id: str, request: RunCreate | DatasetRunCreate,
+        self, user_id: str, request: RunCreate | DatasetRunCreate | RerunBatchCreate,
         *, references: list[ReferenceImageUse] | None = None,
+        rerun_base: "tuple[GenerationRequest, Lane] | None" = None,
     ) -> RunState:
-        definition, total = (
-            request.definition(references) if isinstance(request, DatasetRunCreate)
-            else request.definition()
-        )
+        if isinstance(request, RerunBatchCreate):
+            if rerun_base is None:
+                raise ValueError("A re-run batch needs its training set's parameters and lane")
+            definition, total = rerun_definition(request, rerun_base[0])
+            lane, request_seed = rerun_base[1], None
+        else:
+            definition, total = (
+                request.definition(references) if isinstance(request, DatasetRunCreate)
+                else request.definition()
+            )
+            lane, request_seed = run_lane(request), request.parameters.seed
         run_id = str(request.id)
         with self.database.connect(write=True) as connection:
             existing = connection.execute(
@@ -289,7 +306,7 @@ class RunStore:
                     (user_id, reference.id, reference.sha256),
                 ).fetchone() is None:
                     raise ReferenceMissing("reference_not_found")
-            seed = request.parameters.seed
+            seed = request_seed
             if seed is None:
                 seed = secrets.randbelow(4294967295) + 1
             now = int(time.time())
@@ -297,10 +314,10 @@ class RunStore:
                 "INSERT INTO style_experiment_runs (user_id, id, definition_json, total, "
                 "seed, lane, status, created_at, updated_at, parallelism) "
                 "VALUES (?, ?, ?, ?, ?, ?, 'running', ?, ?, ?)",
-                (user_id, run_id, definition, total, seed, run_lane(request), now, now,
+                (user_id, run_id, definition, total, seed, lane, now, now,
                  getattr(request, "gpt_concurrency", None)),
             )
-            name = request.name if isinstance(request, DatasetRunCreate) else None
+            name = getattr(request, "name", None)
             if name is not None:
                 connection.execute(
                     "INSERT INTO experiment_names (user_id, run_id, name, named_at) "
@@ -389,6 +406,11 @@ class RunStore:
         run = self.get(user_id, run_id)
         if run is None:
             return None
+        if run.kind == "rerun":
+            return self.create(
+                user_id, rerun_continuation(run, new_id, name=self.name(user_id, run_id)),
+                rerun_base=(run.parameters, run.lane),
+            )
         request, pinned = continuation_request(
             run, new_id, name=self.name(user_id, run_id), gpt_model=gpt_model,
         )
@@ -500,6 +522,60 @@ class RunStore:
             self._sync_current(connection, user_id, run_id)
         return job_id if existing is None and refusal is None else None
 
+    def claim_rerun(
+        self, user_id: str, run_id: str, ordinal: str, parameters: GenerationRequest,
+        discard_index: int | None, *, limit: int = 1,
+    ) -> str | None:
+        """Persist one batch re-run job, its in-flight row, the cursor and the optional
+        discard mark of the replaced image together, before any paid call."""
+        with self.database.connect(write=True) as connection:
+            row = connection.execute(
+                _ROW + "WHERE user_id = ? AND id = ?", (user_id, run_id),
+            ).fetchone()
+            if (
+                row is None or row["status"] != "running" or row["in_flight_count"] >= limit
+                or row["next_ordinal"] != ordinal or int(ordinal) > int(row["total"])
+            ):
+                return None
+            # Raises ExperimentConflict (rolling everything back) when the source is gone.
+            job_id = JobStore.create_in_transaction(connection, user_id, parameters, rerun=True)
+            now = int(time.time())
+            connection.execute(
+                "INSERT INTO style_experiment_inflight (user_id, run_id, job_id, ordinal) "
+                "VALUES (?, ?, ?, ?)", (user_id, run_id, job_id, ordinal),
+            )
+            connection.execute(
+                "UPDATE style_experiment_runs SET next_ordinal = ?, updated_at = ? "
+                "WHERE user_id = ? AND id = ?", (str(int(ordinal) + 1), now, user_id, run_id),
+            )
+            source = parameters.experiment.rerun_of if parameters.experiment else None
+            if discard_index is not None and source is not None:
+                connection.execute(
+                    "INSERT OR IGNORE INTO discarded_images (user_id, job_id, image_index, "
+                    "created_at) VALUES (?, ?, ?, ?)", (user_id, source, discard_index, now),
+                )
+            self._sync_current(connection, user_id, run_id)
+        return job_id
+
+    def skip_rerun(self, user_id: str, run_id: str, ordinal: str, error_code: str) -> None:
+        """Count one batch item that can no longer be re-run as failed, without a job."""
+        with self.database.connect(write=True) as connection:
+            row = connection.execute(
+                _ROW + "WHERE user_id = ? AND id = ?", (user_id, run_id),
+            ).fetchone()
+            if row is None or row["status"] != "running" or row["next_ordinal"] != ordinal:
+                return
+            processed = int(row["processed_count"]) + 1
+            done = processed >= int(row["total"]) and row["in_flight_count"] == 0
+            connection.execute(
+                "UPDATE style_experiment_runs SET next_ordinal = ?, processed_count = ?, "
+                "failed_count = ?, error_code = ?, status = ?, updated_at = ? "
+                "WHERE user_id = ? AND id = ?",
+                (str(int(ordinal) + 1), str(processed), str(int(row["failed_count"]) + 1),
+                 error_code, "completed" if done else "running", int(time.time()),
+                 user_id, run_id),
+            )
+
     def fail_unowned(self, user_id: str, run_id: str, job_ids: list[str]) -> None:
         # Call only after the manager's admission for these jobs is no longer live. A worker
         # that lost terminal persistence must not strand the run or repeat paid work.
@@ -572,6 +648,37 @@ class RunStore:
                 _ROW + "WHERE user_id = ? AND id = ?", (user_id, run_id),
             ).fetchone()
             return self._located(connection, row)
+
+
+def rerun_definition(request: RerunBatchCreate, base: GenerationRequest) -> tuple[str, str]:
+    """Frozen batch: the training set's run parameters (for display) and each source."""
+    definition = {
+        "kind": "rerun",
+        "plan_version": 2,
+        "parameters": base.model_copy(update={"sample_count": 1}).model_dump(mode="json"),
+        "experiment_id": str(request.experiment_id),
+        "sources": [
+            item.model_dump(mode="json", exclude_none=True) for item in request.items
+        ],
+    }
+    return json.dumps(definition, sort_keys=True, separators=(",", ":")), str(len(request.items))
+
+
+def rerun_continuation(run: RunState, new_id: UUID, *, name: str | None) -> RerunBatchCreate:
+    """A new batch for a stopped batch's never-claimed sources."""
+    if run.status in ("running", "stopping"):
+        raise ContinuationRefused("experiment_run_active")
+    offset = int(run.next_ordinal) - 1
+    items = run.rerun_items or []
+    if offset >= len(items):
+        raise ContinuationRefused("nothing_to_continue")
+    label = (name or "").strip()
+    if label and not label.endswith(CONTINUATION_SUFFIX):
+        label = label[:80 - len(CONTINUATION_SUFFIX)].rstrip() + CONTINUATION_SUFFIX
+    return RerunBatchCreate(
+        id=new_id, experiment_id=UUID(run.rerun_experiment_id or ""), items=items[offset:],
+        name=label or None,
+    )
 
 
 def group_parameters(run: RunState) -> GenerationRequest:
@@ -674,8 +781,45 @@ class StyleExperimentService:
                 return
             run = self.store.get(user_id, run_id)
 
+    def _submit_rerun(self, user_id: str, run: RunState, limit: int) -> bool:
+        """Claim and submit a re-run batch's next source; False when nothing more can start."""
+        ordinal = run.next_ordinal
+        source = (run.rerun_items or [])[int(ordinal) - 1]
+        job = self.manager.store.get(user_id, source.job_id)
+        context = job.parameters.experiment if job is not None else None
+        if job is None or context is None or str(context.id) != run.rerun_experiment_id:
+            # The owner deleted the source group or its training set meanwhile.
+            self.store.skip_rerun(user_id, run.id, ordinal, "rerun_source_missing")
+            return True
+        try:
+            parameters = rerun_parameters(job, source)
+        except RerunRefused as refused:
+            self.store.skip_rerun(user_id, run.id, ordinal, refused.code)
+            return True
+
+        def create(owner: str, request: GenerationRequest) -> str | None:
+            return self.store.claim_rerun(
+                owner, run.id, ordinal, request, source.discard_index, limit=limit,
+            )
+
+        try:
+            return self.manager.submit(user_id, parameters, create=create) is not None
+        except ExperimentConflict:
+            self.store.skip_rerun(user_id, run.id, ordinal, "rerun_source_missing")
+        except (GenerationNotConfigured, ResultStorageUnavailable) as exception:
+            self.store.skip_rerun(user_id, run.id, ordinal, (
+                "provider_unavailable" if isinstance(exception, GenerationNotConfigured)
+                else "result_storage_unavailable"
+            ))
+        except Exception:
+            self._release_orphans(user_id, run.id)
+            self.store.reconcile(user_id, run.id)
+        return False
+
     def _submit_next(self, user_id: str, run: RunState, limit: int) -> bool:
         """Claim and submit the run's next ordinal; False when nothing more can start now."""
+        if run.kind == "rerun":
+            return self._submit_rerun(user_id, run, limit)
         parameters = group_parameters(run)
         ordinal = run.next_ordinal
 

@@ -165,14 +165,23 @@ zero reachability and near-limit bounds; do not run frontend helper tests.
   (`<job>:<index>` / `<job>:x`) held in ReviewGrid state, so it survives paging,
   category and hide-discarded filters; a reload keeps only keys that still exist.
 - Quick picks: all failed groups not yet re-run; discarded images not yet replaced
-  (per group, discarded count minus existing re-runs); this page; the whole current
-  filter (all pages); clear. Quick picks never select already-replaced items.
+  (per group, discarded count minus existing re-runs minus sources still queued in
+  this set's unfinished re-run batches); this page; the whole current filter (all
+  pages); clear. Quick picks never select already-replaced or already-queued items.
 - 「重跑所选」 opens the batch editor for the selected tiles: one optional new style,
-  per-tile prompt edits, and 「提交后弃置被替换的原图」 (default on; passes
+  per-tile prompt edits, and 「开始重跑某张时弃置被替换的原图」 (default on; sends
   `discard_index` only for kept succeeded images). Rows flag failed / discarded /
-  already re-run N times. Submission stays sequential with the 429 queue_full wait;
-  each accepted tile is deselected, so a stopped batch can be resumed.
-- No API change: uses POST /api/generations/{id}/rerun edits and discard_index.
+  already re-run N times / queued N.
+- Submission (2026-11-06, replaces the browser loop): one
+  `POST /api/rerun-batches` creates a durable server-side batch (see backend
+  dataset-run-contract 「Durable re-run batches」); the page may close afterwards.
+  The batch id is generated when the editor opens and reused after an unknown
+  outcome (idempotent); a definite 4xx refusal draws a new id. Accepted tiles are
+  deselected and the run is handed to `StyleRunStore.track` so it shows in the
+  queue panel at once.
+- Queue panel: kind `rerun` rows show badge 「重跑」, unit 张, 「查看已保存结果」 opens
+  the source training set, stopped batches offer 「继续剩余 N 张」. While a batch is
+  unfinished its training set counts as active (cannot be deleted from the list).
 
 ## Per-image Chinese gloss of training prompts (2026-11-06)
 

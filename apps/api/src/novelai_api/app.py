@@ -13,7 +13,7 @@ from uuid import UUID
 from fastapi import Cookie, Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field
 
 from .account_balance import AccountBalance, BalanceFailure, BalanceProvider, BalanceService
 from .advice import (
@@ -28,7 +28,7 @@ from .advice import (
 from .auth import current_user, issue_session, revoke_session
 from .codex_advice import CodexAdviceRunner
 from .config import Settings
-from .dataset_plan import DatasetRunCreate, has_comment_line
+from .dataset_plan import DatasetRunCreate
 from .db import Database
 from .generations import (
     ExperimentConflict,
@@ -49,7 +49,6 @@ from .generations import (
 from .gpt_images import GptImageProvider
 from .mcp_account import NovelAiMcpBalanceProvider
 from .mcp_images import NovelAiMcpProvider
-from .prompt_comments import compile_prompt_comments
 from .prompt_snapshots import (
     PromptSnapshot,
     PromptSnapshotConflict,
@@ -63,6 +62,12 @@ from .reference_images import (
     ReferenceImage,
     ReferenceImageList,
     ReferenceImageStore,
+)
+from .reruns import (
+    RerunBatchCreate,
+    RerunEdits,
+    RerunRefused,
+    rerun_parameters,
 )
 from .security import SESSION_COOKIE, SESSION_LIFETIME_SECONDS
 from .style_experiments import (
@@ -103,13 +108,17 @@ class GenerationAccepted(BaseModel):
     status: str
 
 
-class RerunRequest(BaseModel):
-    # Image of the source job to mark discarded once the re-run is accepted.
-    discard_index: int | None = Field(default=None, ge=0, le=7)
-    # Optional owner edits for this one re-run: the item's content prompt (it also becomes
-    # the re-run's caption) and the style. Absent keeps the source group's frozen values.
-    prompt: str | None = Field(default=None, min_length=1, max_length=1000)
-    style_prompt: str | None = Field(default=None, min_length=1, max_length=3000)
+class RerunRequest(RerunEdits):
+    pass
+
+
+def rerun_refusal(refused: RerunRefused) -> JSONResponse:
+    if refused.code == "rerun_image_missing":
+        raise HTTPException(
+            status_code=404,
+            detail=ApiError(code="not_found", message="Image not found").model_dump(),
+        )
+    return error(409 if refused.code == "job_active" else 422, refused.code, refused.message)
 
 
 def error(status: int, code: str, message: str, *, retryable: bool = False) -> JSONResponse:
@@ -630,6 +639,53 @@ def create_app(
         return item.sha256 if item is not None else None
 
     @app.post(
+        "/api/rerun-batches",
+        status_code=202,
+        response_model=RunState,
+        responses={
+            401: {"model": ApiError}, 403: {"model": ApiError}, 404: {"model": ApiError},
+            409: {"model": ApiError}, 422: {"model": ApiError}, 503: {"model": ApiError},
+        },
+    )
+    def create_rerun_batch(
+        payload: RerunBatchCreate, user: Annotated[UserInfo, Depends(require_user)],
+    ) -> RunState | JSONResponse:
+        # A durable queued batch of paid re-runs of one training set's finished groups.
+        # The server submits each item in turn, so the owner may close the page. Retrying
+        # with the same id returns the same batch.
+        existing = experiments.store.get(user.id, str(payload.id))
+        if existing is None:
+            source_run = own_run(user, str(payload.experiment_id))
+            if source_run.kind != "dataset":
+                return error(422, "rerun_unsupported", "Only training-set images can be re-run")
+            if source_run.lane == "gpt" and manager.gpt_provider is None:
+                return error(
+                    503, "gpt_image_unavailable", "GPT image generation is not configured",
+                )
+            for position, item in enumerate(payload.items, start=1):
+                job = manager.store.get(user.id, item.job_id)
+                context = job.parameters.experiment if job is not None else None
+                if job is None or context is None or str(context.id) != source_run.id:
+                    return error(
+                        422, "rerun_source_missing",
+                        f"Item {position}: group is not part of this training set",
+                    )
+                try:
+                    rerun_parameters(job, item)
+                except RerunRefused as refused:
+                    return error(
+                        409 if refused.code == "job_active" else 422, refused.code,
+                        f"Item {position}: {refused.message}",
+                    )
+            base = (source_run.parameters, source_run.lane)
+        else:
+            base = (existing.parameters, existing.lane)
+        try:
+            return experiments.store.create(user.id, payload, rerun_base=base)
+        except RunConflict as exception:
+            return error(409, exception.code, "Experiment run conflicts with existing work")
+
+    @app.post(
         "/api/style-experiment-runs/{run_id}/continue",
         status_code=202,
         response_model=RunState,
@@ -900,58 +956,13 @@ def create_app(
         # One explicit paid generation: the same frozen dataset group with a new random
         # seed and one sample. The shown image may be marked discarded in the same click.
         job = own_job(user, job_id)
-        context = job.parameters.experiment
-        if context is None or context.kind != "dataset":
-            return error(422, "rerun_unsupported", "Only training-set images can be re-run")
-        if job.status not in ("succeeded", "failed"):
-            return error(409, "job_active", "Generation is still running")
-        if payload.discard_index is not None and (
-            job.status != "succeeded" or not 0 <= payload.discard_index < job.image_count
-        ):
-            raise HTTPException(
-                status_code=404,
-                detail=ApiError(code="not_found", message="Image not found").model_dump(),
-            )
+        try:
+            parameters = rerun_parameters(job, payload)
+        except RerunRefused as refused:
+            return rerun_refusal(refused)
         reference = job.parameters.reference
         if reference is not None and reference.mode == "gpt" and manager.gpt_provider is None:
             return error(503, "gpt_image_unavailable", "GPT image generation is not configured")
-        source = job.parameters
-        update: dict = {"seed": None, "sample_count": 1}
-        item = context.item
-        if payload.prompt is not None and item is not None and payload.prompt != item.prompt:
-            if source.prompt_comments and has_comment_line(payload.prompt):
-                return error(422, "rerun_invalid", "Training prompts cannot contain comment lines")
-            old_item = item.prompt.strip()
-            if source.reference is None:
-                positive = payload.prompt
-            elif source.positive_prompt.endswith(old_item):
-                # Character groups send "<traits>, <item prompt>"; keep the traits.
-                positive = source.positive_prompt[: len(source.positive_prompt) - len(old_item)] \
-                    + payload.prompt.strip()
-            else:
-                return error(422, "rerun_invalid", "This group's prompt cannot be edited")
-            update["positive_prompt"] = positive
-            item = item.model_copy(update={"prompt": payload.prompt})
-        if payload.style_prompt is not None and payload.style_prompt != source.style_prompt:
-            effective = (
-                compile_prompt_comments(payload.style_prompt) if source.prompt_comments
-                else payload.style_prompt
-            )
-            if not effective.strip():
-                return error(422, "rerun_invalid", "Style prompt cannot be blank")
-            update["style_prompt"] = payload.style_prompt
-        experiment = context.model_copy(update={"rerun_of": job.id, "item": item})
-        if len(update) == 2:
-            # No edits: the frozen source as before (never re-validated against newer rules).
-            parameters = source.model_copy(update={**update, "experiment": experiment})
-        else:
-            try:
-                parameters = GenerationRequest.model_validate({
-                    **source.model_dump(mode="json"), **update,
-                    "experiment": experiment.model_dump(mode="json"),
-                })
-            except ValidationError:
-                return error(422, "rerun_invalid", "Edited prompt or style is not a valid request")
         try:
             new_id = manager.submit(user.id, parameters, create=manager.store.create_rerun)
         except GenerationNotConfigured:
