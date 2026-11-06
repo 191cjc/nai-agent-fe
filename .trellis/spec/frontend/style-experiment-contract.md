@@ -159,7 +159,9 @@ zero reachability and near-limit bounds; do not run frontend helper tests.
 ## Review grid multi-select re-run (2026-11-06)
 
 - Every tile (including failed groups without an image) has a top-left select toggle;
-  clicking the image still toggles discard. Selection is a Set of tile keys
+  clicking the image also toggles selection (never discard — accidental clicks
+  discarded images). Discard/restore is only the dedicated top-right ⊘ / ↶ button
+  beside 「查看原图」. Selection is a Set of tile keys
   (`<job>:<index>` / `<job>:x`) held in ReviewGrid state, so it survives paging,
   category and hide-discarded filters; a reload keeps only keys that still exist.
 - Quick picks: all failed groups not yet re-run; discarded images not yet replaced

@@ -169,7 +169,8 @@ acceptance; do not issue paid requests for cache verification.
   and every preview Blob URL is revoked on page change/close. Previews never
   enter the full-PNG LRU; 「查看原图」 opens the normal viewer via
   `SavedResultsStore.showGroup(offset, image)`.
-- Click toggles the discard mark (same PUT/DELETE as the viewer). Filters:
+- The per-tile ⊘ / ↶ button toggles the discard mark (same PUT/DELETE as the
+  viewer); clicking the image itself only selects it. Filters:
   item category (from the frozen item id prefix) and 「隐藏已弃置」.
 - 「重跑全部待替换」: after one confirm showing the paid count, submits one
   rerun per discarded image and per failed group not yet replaced

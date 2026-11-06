@@ -275,7 +275,7 @@ export const SavedResultViewer = observer(({ saved, api, onClose, onUseSeed, can
       </div>
       <div className="saved-viewer-toolbar-actions">
         {datasetSelection && <button className="text-action" type="button" aria-pressed={grid}
-          title="一屏查看多张小预览，点一下标记弃置；适合筛训练集" onClick={() => setGridFor(grid ? null : selection.id)}>
+          title="一屏查看多张小预览，可多选重跑、按按钮弃置；适合筛训练集" onClick={() => setGridFor(grid ? null : selection.id)}>
           <LayoutGrid size={15} aria-hidden="true" /> {grid ? '单张查看' : '网格检查'}</button>}
         {isExperiment && !grid && <button className="text-action saved-preload-button" type="button" aria-describedby="saved-preload-help"
           onClick={() => { if (saved.preloading) saved.cancelPreload(); else void saved.preloadImages() }}>

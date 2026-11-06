@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Ban, CheckSquare, Dices, Maximize2, RefreshCw, Square, X } from 'lucide-react'
+import { Ban, CheckSquare, Dices, Maximize2, RefreshCw, Square, Undo2, X } from 'lucide-react'
 import { ApiFailure, errorText, type GenerationView, type RerunEdits, type WorkspaceApi } from './api'
 import { DATASET_CATEGORIES } from './dataset-prompts'
 import { CHARACTER_CATEGORIES } from './character-prompts'
@@ -296,7 +296,7 @@ export function ReviewGrid({ api, experimentId, onOpen, onClose }: {
         onClick={() => selectKeys(visible.map(tile => tile.key))}>选择筛选结果（{visible.length}）</button>
       <button className="text-action" type="button" disabled={!selected.size || batch !== null} onClick={() => setSelected(new Set())}>清空选择</button>
     </div>}
-    <p className="prompt-hint">点图片标记弃置或恢复（导出时跳过已弃置）；勾选左上角方框多选后「重跑所选」，翻页和切换分类不会丢失已选；点右上角放大按钮查看原图。每页 {PAGE_SIZE} 张，只加载小尺寸预览，不占用原图缓存。</p>
+    <p className="prompt-hint">点图片选择或取消选择，点右上角 ⊘ 按钮弃置或恢复（导出时跳过已弃置）；多选后「重跑所选」，翻页和切换分类不会丢失已选；点右上角放大按钮查看原图。每页 {PAGE_SIZE} 张，只加载小尺寸预览，不占用原图缓存。</p>
     {loadError && <p className="alert" role="alert">记录读取失败：{loadError}</p>}
     {actionError && <p className="alert" role="alert">{actionError}</p>}
     {rerunMessage && <p className="subtle" role="status">{rerunMessage}</p>}
@@ -327,9 +327,9 @@ export function ReviewGrid({ api, experimentId, onOpen, onClose }: {
       const zh = item ? datasetItemZh(item) : ''
       const chosen = selected.has(tile.key)
       return <li key={tile.key} className={`${discarded ? 'discarded' : ''}${chosen ? ' selected' : ''}`.trim() || undefined}>
-        <button type="button" className="review-grid-tile" disabled={tile.index === null || busyKeys.has(tile.key)} aria-pressed={discarded}
-          title={zh ? `${prompt}\n${zh}` : prompt} aria-label={`${ordinalLabel(tile.job)}${tile.index !== null ? `，图像 ${tile.index + 1}` : ''}，${discarded ? '已弃置，点击恢复' : '点击弃置'}`}
-          onClick={() => void toggle(tile)}>
+        <button type="button" className="review-grid-tile" disabled={batch !== null} aria-pressed={chosen}
+          title={zh ? `${prompt}\n${zh}` : prompt} aria-label={`${ordinalLabel(tile.job)}${tile.index !== null ? `，图像 ${tile.index + 1}` : ''}${discarded ? '，已弃置' : ''}，${chosen ? '已选择，点击取消选择' : '点击选择'}`}
+          onClick={() => selectKeys([tile.key], !chosen)}>
           {tile.index === null ? <span className="review-grid-empty">{tile.job.status === 'failed' ? '生成失败' : tile.job.status === 'succeeded' ? '图片已过期' : '未完成'}</span>
             : preview && preview !== 'error' ? <img src={preview} alt="" loading="lazy" />
               : <span className="review-grid-empty">{preview === 'error' ? '预览不可用' : '加载中…'}</span>}
@@ -340,6 +340,10 @@ export function ReviewGrid({ api, experimentId, onOpen, onClose }: {
           onClick={() => selectKeys([tile.key], !chosen)}>{chosen ? <CheckSquare size={16} aria-hidden="true" /> : <Square size={16} aria-hidden="true" />}</button>
         <span className="review-grid-label">{ordinalLabel(tile.job)}{tile.job.image_urls.length > 1 && tile.index !== null ? ` · ${tile.index + 1}` : ''}</span>
         {zh && <span className="review-grid-zh" title={`${prompt}\n${zh}`}>{zh}</span>}
+        {tile.index !== null && <button className={`icon-button review-grid-discard${discarded ? ' restore' : ''}`} type="button" disabled={busyKeys.has(tile.key)}
+          title={discarded ? '恢复（导出时包含）' : '弃置（导出时跳过，可恢复）'} aria-pressed={discarded}
+          aria-label={`${discarded ? '恢复' : '弃置'}${ordinalLabel(tile.job)}${tile.job.image_urls.length > 1 ? `，图像 ${tile.index + 1}` : ''}`}
+          onClick={() => void toggle(tile)}>{discarded ? <Undo2 size={14} aria-hidden="true" /> : <Ban size={14} aria-hidden="true" />}</button>}
         {tile.index !== null && <button className="icon-button review-grid-open" type="button" title="查看原图" aria-label={`查看${ordinalLabel(tile.job)}原图`}
           onClick={() => onOpen(tile.offset, tile.index ?? 0)}><Maximize2 size={14} aria-hidden="true" /></button>}
       </li>

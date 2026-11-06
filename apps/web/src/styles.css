@@ -604,6 +604,8 @@ h1, h2, h3 { letter-spacing: 0; }
 .review-grid-label { overflow: hidden; color: var(--muted); font-size: 11px; white-space: nowrap; text-overflow: ellipsis; }
 .review-grid-zh { display: -webkit-box; overflow: hidden; color: #c9c4b4; font-size: 11px; line-height: 1.35; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
 .review-grid-open { position: absolute; top: 4px; right: 4px; background: rgba(20, 20, 26, 0.75); }
+.review-grid-discard { position: absolute; top: 4px; right: 44px; background: rgba(20, 20, 26, 0.75); color: #e08a90; }
+.review-grid-discard.restore { color: #d8d5cc; }
 .review-grid-check { position: absolute; top: 4px; left: 4px; background: rgba(20, 20, 26, 0.75); color: #d8d5cc; }
 .review-grid-tiles li.selected .review-grid-check { color: var(--gold); }
 .review-grid-tiles li.selected .review-grid-tile { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(214, 177, 102, 0.45); }
