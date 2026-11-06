@@ -185,7 +185,7 @@ and idempotency. Do not regenerate OpenAPI for this internal-only change.
   kept claiming one group per ~6 s and burned ~400 queued items as failures.
 - `lane_health.LaneHealth` per lane on `GenerationManager.health`. A group
   failing with `provider_unavailable` or `provider_rate_limited` (both raised only
-  before any paid call) pauses that lane: 15 s doubling to 10 min. Any succeeded
+  before any paid call) pauses that lane: 15 s doubling to 2 min (cap lowered from 10 min: upstream auto-restarts recover within minutes). Any succeeded
   group on the lane clears it. Other failure codes never pause.
 - `StyleExperimentService._advance` checks `manager.lane_ready(lane)` after the
   queue check; while paused it claims nothing and consumes no ordinal (same as

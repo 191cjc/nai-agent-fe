@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 # Codes that mean the provider never accepted the paid call.
 TRANSIENT_FAILURES = frozenset({"provider_unavailable", "provider_rate_limited"})
 BASE_DELAY = 15.0
-MAX_DELAY = 600.0
+MAX_DELAY = 120.0
 
 
 class LaneHealth:
