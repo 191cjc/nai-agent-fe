@@ -155,3 +155,19 @@ zero reachability and near-limit bounds; do not run frontend helper tests.
   (`face-N`), so adding a category never renumbers existing items. Every item keeps
   hair, eye colour and coloured clothing tags and has a `TAG_ZH` gloss for each tag.
   Purpose: large faces in the set so style LoRAs learn eye/face rendering.
+
+## Review grid multi-select re-run (2026-11-06)
+
+- Every tile (including failed groups without an image) has a top-left select toggle;
+  clicking the image still toggles discard. Selection is a Set of tile keys
+  (`<job>:<index>` / `<job>:x`) held in ReviewGrid state, so it survives paging,
+  category and hide-discarded filters; a reload keeps only keys that still exist.
+- Quick picks: all failed groups not yet re-run; discarded images not yet replaced
+  (per group, discarded count minus existing re-runs); this page; the whole current
+  filter (all pages); clear. Quick picks never select already-replaced items.
+- 「重跑所选」 opens the batch editor for the selected tiles: one optional new style,
+  per-tile prompt edits, and 「提交后弃置被替换的原图」 (default on; passes
+  `discard_index` only for kept succeeded images). Rows flag failed / discarded /
+  already re-run N times. Submission stays sequential with the 429 queue_full wait;
+  each accepted tile is deselected, so a stopped batch can be resumed.
+- No API change: uses POST /api/generations/{id}/rerun edits and discard_index.

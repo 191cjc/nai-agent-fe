@@ -602,6 +602,12 @@ h1, h2, h3 { letter-spacing: 0; }
 .review-grid-empty { padding: 8px; color: var(--muted); font-size: 12px; text-align: center; }
 .review-grid-label { overflow: hidden; color: var(--muted); font-size: 11px; white-space: nowrap; text-overflow: ellipsis; }
 .review-grid-open { position: absolute; top: 4px; right: 4px; background: rgba(20, 20, 26, 0.75); }
+.review-grid-check { position: absolute; top: 4px; left: 4px; background: rgba(20, 20, 26, 0.75); color: #d8d5cc; }
+.review-grid-tiles li.selected .review-grid-check { color: var(--gold); }
+.review-grid-tiles li.selected .review-grid-tile { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(214, 177, 102, 0.45); }
+.review-grid-tiles li.selected.discarded .review-grid-tile { border-color: var(--gold); }
+.review-grid-selection { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: 12px; }
+.review-grid-selection strong { color: var(--gold); }
 .review-grid-pages { position: sticky; bottom: 0; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 12px; padding: 6px 0; background: #11131a; font-size: 12px; }
 .experiment-title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-bottom: 4px; }
 .experiment-title strong { font-size: 14px; overflow-wrap: anywhere; }
