@@ -181,3 +181,7 @@ zero reachability and near-limit bounds; do not run frontend helper tests.
   looked up; unknown tags stay as written, so custom prompts are glossed tag by tag.
 - `PromptGloss.tsx` is loaded through `dataset-lazy.ts`; the gloss table stays out of
   the main bundle (its own `prompt-zh` chunk).
+- 2026-11-06: `TAG_ZH` expanded 1113 → 2998 entries with the most-used Danbooru
+  general tags (WD tagger `selected_tags.csv`, category 0, by count), excluding
+  explicit sexual/genital tags and non-word tags; keys sorted case-insensitively.
+  Built-in style and character library tags remain 100% glossed.
