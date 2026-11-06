@@ -4,6 +4,7 @@ import { ApiFailure, errorText, type GenerationView, type RerunEdits, type Works
 import { DATASET_CATEGORIES } from './dataset-prompts'
 import { CHARACTER_CATEGORIES } from './character-prompts'
 import { translatePrompt } from './prompt-zh'
+import { datasetItemZh } from './PromptGloss'
 
 /** Tiles per page: bounds preview requests and Blob memory (~60 × 30 KB). */
 const PAGE_SIZE = 60
@@ -321,11 +322,13 @@ export function ReviewGrid({ api, experimentId, onOpen, onClose }: {
     {groups && <ul className="review-grid-tiles">{shown.map(tile => {
       const discarded = tile.index !== null && tile.job.discarded_images?.includes(tile.index) === true
       const preview = previews[tile.key]
-      const prompt = tile.job.parameters.experiment?.item?.prompt ?? ''
+      const item = tile.job.parameters.experiment?.item
+      const prompt = item?.prompt ?? ''
+      const zh = item ? datasetItemZh(item) : ''
       const chosen = selected.has(tile.key)
       return <li key={tile.key} className={`${discarded ? 'discarded' : ''}${chosen ? ' selected' : ''}`.trim() || undefined}>
         <button type="button" className="review-grid-tile" disabled={tile.index === null || busyKeys.has(tile.key)} aria-pressed={discarded}
-          title={prompt} aria-label={`${ordinalLabel(tile.job)}${tile.index !== null ? `，图像 ${tile.index + 1}` : ''}，${discarded ? '已弃置，点击恢复' : '点击弃置'}`}
+          title={zh ? `${prompt}\n${zh}` : prompt} aria-label={`${ordinalLabel(tile.job)}${tile.index !== null ? `，图像 ${tile.index + 1}` : ''}，${discarded ? '已弃置，点击恢复' : '点击弃置'}`}
           onClick={() => void toggle(tile)}>
           {tile.index === null ? <span className="review-grid-empty">{tile.job.status === 'failed' ? '生成失败' : tile.job.status === 'succeeded' ? '图片已过期' : '未完成'}</span>
             : preview && preview !== 'error' ? <img src={preview} alt="" loading="lazy" />
@@ -336,6 +339,7 @@ export function ReviewGrid({ api, experimentId, onOpen, onClose }: {
           title={chosen ? '取消选择' : '选择'} aria-label={`${chosen ? '取消选择' : '选择'}${ordinalLabel(tile.job)}${tile.index !== null ? `，图像 ${tile.index + 1}` : ''}`}
           onClick={() => selectKeys([tile.key], !chosen)}>{chosen ? <CheckSquare size={16} aria-hidden="true" /> : <Square size={16} aria-hidden="true" />}</button>
         <span className="review-grid-label">{ordinalLabel(tile.job)}{tile.job.image_urls.length > 1 && tile.index !== null ? ` · ${tile.index + 1}` : ''}</span>
+        {zh && <span className="review-grid-zh" title={`${prompt}\n${zh}`}>{zh}</span>}
         {tile.index !== null && <button className="icon-button review-grid-open" type="button" title="查看原图" aria-label={`查看${ordinalLabel(tile.job)}原图`}
           onClick={() => onOpen(tile.offset, tile.index ?? 0)}><Maximize2 size={14} aria-hidden="true" /></button>}
       </li>

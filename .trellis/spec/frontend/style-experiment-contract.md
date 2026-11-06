@@ -171,3 +171,13 @@ zero reachability and near-limit bounds; do not run frontend helper tests.
   already re-run N times. Submission stays sequential with the 429 queue_full wait;
   each accepted tile is deselected, so a stopped batch can be resumed.
 - No API change: uses POST /api/generations/{id}/rerun edits and discard_index.
+
+## Per-image Chinese gloss of training prompts (2026-11-06)
+
+- The saved-result viewer shows 「中文：…」 under each training-set image's prompt
+  (scene plus every person) and 「画风中文：…」 when any style tag has a gloss; the review
+  grid shows a two-line gloss under each tile (full English + Chinese on hover).
+- Glosses come from the `TAG_ZH` dictionary (`translatePrompt`): each comma tag is
+  looked up; unknown tags stay as written, so custom prompts are glossed tag by tag.
+- `PromptGloss.tsx` is loaded through `dataset-lazy.ts`; the gloss table stays out of
+  the main bundle (its own `prompt-zh` chunk).
