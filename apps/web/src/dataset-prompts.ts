@@ -30,11 +30,11 @@ export const DATASET_CATEGORIES: readonly DatasetCategory[] = [
   { id: 'scene', label: '人物与场景', description: '人物较小、环境占比大的远景' },
   { id: 'light', label: '光照与时段', description: '逆光、夜景、室内暖光等光照条件' },
   { id: 'multi', label: '多人互动', description: '两人及以上的构图与互动' },
-  { id: 'fantasy', label: '异世界奇幻', description: '恶魔、精灵、龙娘、兽耳、天使等成年亚人，法师骑士冒险者，魔物与奇幻场景' },
+  { id: 'fantasy', label: '异世界奇幻', description: '恶魔、精灵、龙娘、兽耳、天使等成年亚人，法师骑士冒险者（无人物的奇幻场景与魔物在「无人物」）' },
   { id: 'ornate', label: '华丽立绘', description: '成年女性神祇与幻想角色的全身立绘：华丽金饰服装、极长飘发、飘带披帛、头冠光环、法杖宝珠、发光与深色背景' },
   { id: 'boy', label: '男孩（年幼）', description: '年幼男孩的日常场景；仅限健全内容，不可搭配身体描写类画风' },
   { id: 'girl', label: '女孩（年幼）', description: '少量年幼女孩的日常场景，避免画小年龄角色时出错；仅限健全内容，不可搭配身体描写类画风' },
-  { id: 'nohuman', label: '无人物', description: '风景、建筑、静物与动物' },
+  { id: 'nohuman', label: '无人物', description: '风景、建筑、静物与动物，以及龙、史莱姆、地下城、魔法阵等奇幻场景' },
 ]
 
 // Every person prompt names hair, eyes and coloured clothing so the generated image
@@ -310,14 +310,6 @@ const PROMPTS: Record<string, readonly LibraryItem[]> = {
     { prompt: '2girls, full body, from below, back-to-back, fighting stance, magic, ruins', characters: [
       'girl, demon girl, black horns, demon tail, black tail, long hair, black hair, red eyes, black armor, black boots, holding sword',
       'girl, angel, halo, white wings, long hair, blunt bangs, blonde hair, blue eyes, white robe, white boots, holding staff'] },
-    'no humans, dragon, red dragon, flying, spread wings, mountains, clouds, sunset',
-    'no humans, dragon, black dragon, from below, roaring, castle, ruins, storm, lightning',
-    'no humans, slime (creature), blue slime, grass, forest, sunlight',
-    'no humans, scenery, floating island, waterfall, castle, clouds, blue sky',
-    'no humans, scenery, fantasy, medieval, town, market, stone road, banner, morning',
-    'no humans, scenery, dungeon, stone wall, torch, treasure chest, darkness',
-    'no humans, magic circle, glowing, runes, stone floor, ruins, night',
-    'no humans, scenery, from above, village, treehouse, giant tree, forest, rope bridge',
     '1girl, solo, mermaid, upper body, sitting, on rock, ocean, long hair, blue hair, blue eyes, seashell hair ornament, white strapless top, blue scales, pearl necklace',
     '1girl, solo, fairy, full body, flying, fairy wings, transparent wings, short hair, parted bangs, green hair, yellow eyes, green leaf dress, barefoot, flowers, forest',
     '1girl, solo, fox girl, full body, standing, multiple tails, white tails, fox ears, long hair, white hair, red eyes, red and white kimono, geta, shrine, night, blue fire',
@@ -436,6 +428,15 @@ const PROMPTS: Record<string, readonly LibraryItem[]> = {
     'no humans, fox, white fox, snow, forest, winter',
     'no humans, scenery, desert, oasis, palm tree, sunset',
     'no humans, scenery, flower field, windmill, blue sky, clouds',
+    // Fantasy scenes and creatures without people (moved from 异世界奇幻).
+    'no humans, dragon, red dragon, flying, spread wings, mountains, clouds, sunset',
+    'no humans, dragon, black dragon, from below, roaring, castle, ruins, storm, lightning',
+    'no humans, slime (creature), blue slime, grass, forest, sunlight',
+    'no humans, scenery, floating island, waterfall, castle, clouds, blue sky',
+    'no humans, scenery, fantasy, medieval, town, market, stone road, banner, morning',
+    'no humans, scenery, dungeon, stone wall, torch, treasure chest, darkness',
+    'no humans, magic circle, glowing, runes, stone floor, ruins, night',
+    'no humans, scenery, from above, village, treehouse, giant tree, forest, rope bridge',
   ],
 }
 

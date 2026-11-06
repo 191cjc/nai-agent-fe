@@ -324,3 +324,11 @@ review only (operator restriction); no paid probes.
 - Release note: the browser-loop single re-runs are gone from the grid. Before the
   first deploy of this, still queued single re-runs were failed as
   `rerun_cancelled` (never paid) and running ones fall to `outcome_unknown`.
+
+## No-human fantasy items live in `nohuman` (2026-11-06)
+
+- The 8 `no humans` items of `fantasy` (dragons, slime, floating island, town,
+  dungeon, magic circle, treehouse village) moved to the end of `nohuman`, so a
+  category run of 「无人物」 includes them and 「异世界奇幻」 is people only. Total stays
+  298. Item ids are positional: later `fantasy-N` ids and the moved items' ids
+  changed; frozen runs keep their old ids (only the grid's category filter reads them).
