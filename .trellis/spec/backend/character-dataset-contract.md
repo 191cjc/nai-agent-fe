@@ -175,3 +175,9 @@ needs one operator-approved probe.
   edited items keep their ids (stored runs keep their own frozen text).
 - Still no gender, count, appearance, outfit or props: weapon/prop actions were
   deliberately not added (a named prop fights the character's own).
+
+## Default style pool v2 (2026-11-06)
+
+- `style-presets.ts` defaults: 动画上色, 动画截图, 平涂, 厚涂, 90 年代, 游戏 CG (6).
+  Watercolor, colored pencil, oil and gouache stay selectable but are off by default:
+  traditional media soften eyes/outfit detail, which character LoRAs learn as blur.
