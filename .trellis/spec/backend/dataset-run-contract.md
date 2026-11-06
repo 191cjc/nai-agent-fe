@@ -283,3 +283,14 @@ review only (operator restriction); no paid probes.
   tag) shown under each library item and in the re-run editor; never sent or
   captioned. Loaded only with the lazy dataset chunk. Keep it complete when adding
   library tags.
+
+## Training-set cover (2026-11-06)
+
+- `ExperimentSummary.cover_job_id` (additive, nullable): the lowest-ordinal succeeded
+  group with `image_count > 0` whose image 0 is not discarded; re-runs count, ties by
+  creation order. Computed in the same aggregate pass as the summary (MIN over a key of
+  `printf('%06d', length(ordinal)) || ordinal || printf('%012d', row_order) || id`,
+  then the trailing 36-char UUID) — never a per-set correlated query, and never
+  `CAST(ordinal AS INTEGER)`: ordinals are exact decimal strings of any length.
+- The cover image may have expired; the web hides the cover when the thumbnail fails.
+  Web shows it only for `kind === 'dataset'`, left of the history card; click = 浏览图片.

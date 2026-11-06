@@ -558,7 +558,7 @@ def test_huge_ordinals_page_in_numeric_order_and_groups_survive_restart(database
             assert page["summary"] == {
                 "id": run_id, "kind": "style", "total": total, "group_count": 5,
                 "completed_count": 5, "image_count": 10, "created_at": 100, "updated_at": 200,
-                "name": None, "dataset_type": None,
+                "name": None, "dataset_type": None, "cover_job_id": ids["1"],
             }
         ordered_runs = sorted([run_id, another_id], reverse=True)
         first = client.get("/api/style-experiments?limit=1").json()

@@ -147,3 +147,11 @@ zero reachability and near-limit bounds; do not run frontend helper tests.
 - Wrong: browser lifetime owns the paid loop or disconnection means stopped.
 - Correct: explicit Start creates a durable server run; browser reads progress,
   compares saved images and sends Stop only when the user chooses it.
+
+## Built-in face close-up category (2026-11-06)
+
+- Style dataset library category `face` (脸部特写, 24 items, default-selected like every
+  library item) sits after `portrait`. Ids are positional per category
+  (`face-N`), so adding a category never renumbers existing items. Every item keeps
+  hair, eye colour and coloured clothing tags and has a `TAG_ZH` gloss for each tag.
+  Purpose: large faces in the set so style LoRAs learn eye/face rendering.

@@ -903,6 +903,17 @@
             "title": "Completed Count",
             "type": "integer"
           },
+          "cover_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Job Id"
+          },
           "created_at": {
             "title": "Created At",
             "type": "integer"

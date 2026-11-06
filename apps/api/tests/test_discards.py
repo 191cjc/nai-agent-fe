@@ -167,3 +167,49 @@ def test_manual_only_history_skips_experiment_and_dataset_groups(
         ).json()
         assert [item["id"] for item in latest_manual["items"]] == [manual]
         assert latest_manual["next_offset"] is None
+
+
+def test_experiment_cover_is_first_succeeded_undiscarded_group(
+    database: Database,  # noqa: F811
+) -> None:
+    from test_dataset_runs import dataset
+
+    app = create_app(
+        Settings(database.path, "https://testserver"), database,
+        image_provider=ReferenceProvider(), result_cache=ResultCache(),
+    )
+    app.state.experiments._interval = 0.01
+    with TestClient(app, base_url="https://testserver") as client:
+        login(client, database, "alice")
+        run = client.post("/api/dataset-runs", json=dataset().model_dump(mode="json"),
+                          headers=ORIGIN).json()
+        deadline = time.monotonic() + 3
+        while client.get(f"/api/style-experiment-runs/{run['id']}").json()["status"] != (
+            "completed"
+        ):
+            assert time.monotonic() < deadline
+            time.sleep(0.01)
+        items = client.get(f"/api/style-experiments/{run['id']}", params={"limit": 10}).json()
+        first, second, third = (item["id"] for item in items["items"])
+
+        def cover() -> str | None:
+            listed = client.get("/api/style-experiments", params={"limit": 10}).json()
+            detail = client.get(f"/api/style-experiments/{run['id']}", params={"limit": 1}).json()
+            assert listed["items"][0]["cover_job_id"] == detail["summary"]["cover_job_id"]
+            return detail["summary"]["cover_job_id"]
+
+        assert cover() == first
+        with sqlite3.connect(database.path) as connection:
+            connection.execute(
+                "UPDATE generation_jobs SET status = 'failed', image_count = 0 WHERE id = ?",
+                (first,),
+            )
+        assert cover() == second
+        url = f"/api/generations/{second}/images/0/discard"
+        assert client.put(url, headers=ORIGIN).status_code == 204
+        assert cover() == third
+        assert client.delete(url, headers=ORIGIN).status_code == 204
+        assert cover() == second
+        with sqlite3.connect(database.path) as connection:
+            connection.execute("UPDATE generation_jobs SET status = 'failed', image_count = 0")
+        assert cover() is None

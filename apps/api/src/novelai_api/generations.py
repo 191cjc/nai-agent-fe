@@ -441,6 +441,9 @@ class ExperimentSummary(BaseModel):
     name: str | None = None
     # Training sets only: character sets carry reference images, style sets do not.
     dataset_type: Literal["style", "character"] | None = None
+    # Cover: the lowest-ordinal succeeded group whose first image is not discarded (its
+    # image may since have expired; clients hide a missing thumbnail).
+    cover_job_id: str | None = None
 
 
 class ExperimentPage(BaseModel):
@@ -482,7 +485,15 @@ SELECT experiment_id AS id,
     MAX(updated_at) AS updated_at, MAX(names.name) AS name,
     CASE WHEN MAX(json_extract(settings_json, '$.experiment.kind')) IS NOT 'dataset' THEN NULL
         WHEN MAX(CASE WHEN json_type(settings_json, '$.reference') = 'object' THEN 1 ELSE 0 END) = 1
-        THEN 'character' ELSE 'style' END AS dataset_type
+        THEN 'character' ELSE 'style' END AS dataset_type,
+    -- One pass: the minimum sortable key of eligible rows carries the cover job id.
+    -- Ordinals are exact decimal strings of any length: order by (length, text) like
+    -- the group pages, then creation order; the fixed-length UUID job id ends the key.
+    substr(MIN(CASE WHEN status = 'succeeded' AND image_count > 0 AND NOT EXISTS (
+        SELECT 1 FROM discarded_images AS d WHERE d.user_id = experiment_rows.user_id
+            AND d.job_id = experiment_rows.id AND d.image_index = 0
+    ) THEN printf('%06d', length(ordinal)) || ordinal || printf('%012d', row_order) || id
+    END), -36) AS cover_job_id
 FROM experiment_rows LEFT JOIN experiment_names AS names
     ON names.user_id = experiment_rows.user_id AND names.run_id = experiment_rows.experiment_id
 """

@@ -182,6 +182,8 @@ export interface ExperimentSummary {
   name?: string | null
   /** Training sets only: character sets use reference images. */
   dataset_type?: 'style' | 'character' | null
+  /** First succeeded group whose first image is not discarded; its image may have expired. */
+  cover_job_id?: string | null
 }
 
 /** Longest training-set name the server accepts (after whitespace is collapsed). */

@@ -79,6 +79,9 @@ export const SavedExperimentList = observer(({ saved, api, onView, activeIds = [
     {exportingChosen && chosen.length > 0 && <Suspense fallback={null}><DatasetExportPanel key={chosen.join(',')} api={api}
       source={{ kind: 'experiments', ids: chosen }} onClose={() => setExportingChosen(false)} /></Suspense>}
     <div className="history-list">{saved.experiments.map(experiment => <article className="history-item saved-experiment-item" key={experiment.id}>
+      {experiment.kind === 'dataset' && experiment.cover_job_id && <ExperimentCover api={api} jobId={experiment.cover_job_id}
+        label={experimentLabel(experiment)} onOpen={() => { void saved.openExperiment(experiment.id); onView() }} />}
+      <div className="saved-experiment-body">
       {experiment.kind === 'dataset' && <label className="history-select"><input type="checkbox" checked={chosen.includes(experiment.id)} disabled={exportingChosen}
         onChange={event => setChosen(current => event.target.checked ? [...current.filter(id => id !== experiment.id), experiment.id] : current.filter(id => id !== experiment.id))} /> 选择</label>}
       {experiment.kind === 'dataset' && <ExperimentTitle saved={saved} experiment={experiment} />}
@@ -100,6 +103,7 @@ export const SavedExperimentList = observer(({ saved, api, onView, activeIds = [
           title={activeIds.includes(experiment.id) ? '正在运行或排队，结束或停止后可删除' : '永久删除'}
           aria-label={`删除 ${experimentLabel(experiment)}`} onClick={() => void remove([experiment.id])}><Trash2 size={16} /></button>
       </div>
+      </div>
       {exportingId === experiment.id && <Suspense fallback={null}><DatasetExportPanel api={api} source={{ kind: 'experiment', id: experiment.id }} fileName={experiment.name ?? undefined} onClose={() => setExportingId(null)} /></Suspense>}
     </article>)}</div>
     {saved.listLoaded && <div className="pager">
@@ -111,6 +115,49 @@ export const SavedExperimentList = observer(({ saved, api, onView, activeIds = [
     </div>}
   </div>
 })
+
+const COVER_BUSY_RETRIES = 3
+
+/** Training-set cover: thumbnail of its first succeeded image; hidden once expired or missing. */
+function ExperimentCover({ api, jobId, label, onOpen }: {
+  api: WorkspaceApi; jobId: string; label: string; onOpen: () => void
+}) {
+  const [url, setUrl] = useState<string | null>(null)
+  const [failed, setFailed] = useState(false)
+  useEffect(() => {
+    const controller = new AbortController()
+    let owned: string | null = null
+    setUrl(null)
+    setFailed(false)
+    void (async () => {
+      for (let attempt = 0; ; attempt += 1) {
+        try {
+          const blob = await api.thumbnail(`/api/generation-results/${jobId}/images/0`, controller.signal)
+          if (controller.signal.aborted) return
+          owned = URL.createObjectURL(blob)
+          setUrl(owned)
+          return
+        } catch (error) {
+          if (controller.signal.aborted) return
+          if (error instanceof ApiFailure && error.code === 'thumbnail_busy' && attempt < COVER_BUSY_RETRIES) {
+            await new Promise(resolve => setTimeout(resolve, 800 * (attempt + 1)))
+            continue
+          }
+          setFailed(true)
+          return
+        }
+      }
+    })()
+    return () => {
+      controller.abort()
+      if (owned) URL.revokeObjectURL(owned)
+    }
+  }, [api, jobId])
+  if (failed) return null
+  return <button className="experiment-cover" type="button" title="浏览图片" aria-label={`浏览 ${label} 的图片`} onClick={onOpen}>
+    {url ? <img src={url} alt="" /> : <span className="experiment-cover-placeholder" aria-hidden="true" />}
+  </button>
+}
 
 /** 画风/角色 badge plus the owner's name, renamed in place. */
 const ExperimentTitle = observer(({ saved, experiment }: { saved: SavedResultsStore; experiment: ExperimentSummary }) => {
