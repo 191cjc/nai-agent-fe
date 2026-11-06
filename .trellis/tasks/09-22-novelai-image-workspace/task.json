@@ -26,7 +26,8 @@
     "10-28-lora-dataset-runs",
     "10-29-character-lora-dataset",
     "10-30-gpt-image-character-mode",
-    "10-30-discard-dataset-images"
+    "10-30-discard-dataset-images",
+    "11-06-provider-outage-pause"
   ],
   "parent": null,
   "relatedFiles": [],

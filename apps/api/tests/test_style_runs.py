@@ -495,6 +495,12 @@ def test_queue_slots_rotate_between_continuously_active_owners(database: Databas
         def parallelism(self, lane):
             return 1
 
+        def lane_ready(self, lane):
+            return True
+
+        def lane_paused_until(self, lane):
+            return None
+
         def finish_all(self):
             for job_id, parameters in self.pending.items():
                 assert self.store.mark_running(job_id)

@@ -128,6 +128,7 @@ absent/false preserves the legacy contracts below.
 | Earlier unfinished run in the same owner lane | 202; new run waits (queue_position > 0) |
 | Foreign/missing run | 404 |
 | Group provider/storage/outcome failure | Failed history + counter, continue next ordinal |
+| Pre-payment outage (`provider_unavailable`/`provider_rate_limited`) | That group fails (no retry); lane pauses new claims with backoff, then resumes |
 | Queue temporarily full | Wait without consuming ordinal |
 | Explicit Stop | Persist stopping/stopped; no new claim |
 | Browser closed/poll disconnected | Server keeps running; later GET reconnects |
@@ -177,3 +178,24 @@ and idempotency. Do not regenerate OpenAPI for this internal-only change.
 - `RunState.parallelism` and `Capabilities.gpt_concurrency_max` are additive.
   Web: 「同时生成条数」 in GPT settings and an 「调整」 control on unfinished GPT
   runs in the queue.
+
+## Provider outage pause (2026-11-06)
+
+- Incident: the NovelAI MCP host refused connections 01:47–02:51; the scheduler
+  kept claiming one group per ~6 s and burned ~400 queued items as failures.
+- `lane_health.LaneHealth` per lane on `GenerationManager.health`. A group
+  failing with `provider_unavailable` or `provider_rate_limited` (both raised only
+  before any paid call) pauses that lane: 15 s doubling to 10 min. Any succeeded
+  group on the lane clears it. Other failure codes never pause.
+- `StyleExperimentService._advance` checks `manager.lane_ready(lane)` after the
+  queue check; while paused it claims nothing and consumes no ordinal (same as
+  queue contention). The failed group stays failed: never auto-retry.
+- When the pause expires the NovelAI lane runs `NovelAiMcpProvider.probe()` — one
+  unpaid MCP `initialize`, 5 s connect / 10 s total, HTTP 200 = healthy. Failure
+  extends the backoff without claiming. GPT has no probe: it goes half-open.
+- Ordinary single generations and re-runs are not gated.
+- `RunState.provider_paused_until` (additive, epoch seconds | null) is filled for
+  running runs on a paused lane; web shows 「上游暂不可用 · 等待恢复（HH:MM:SS 后重试）」.
+- Logging: `Generation group failed on lane L: code (ExceptionClass)` and lane
+  pause/probe/recover lines at WARNING. Never log prompts, tokens or bodies.
+- Pause state is in memory; a restart clears it (first claim acts as the probe).

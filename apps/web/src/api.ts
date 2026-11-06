@@ -237,6 +237,8 @@ export interface ExperimentRunState extends ExperimentRunDefinition {
   current_job_id: string | null
   /** Accepted groups not yet counted; GPT runs may hold several at once. */
   in_flight_count?: number
+  /** Running runs: epoch seconds the lane's provider stays paused after an outage (no new items start), null when not paused. */
+  provider_paused_until?: number | null
   /** GPT runs: owner-chosen concurrency, null = server maximum. */
   parallelism?: number | null
   seed: number

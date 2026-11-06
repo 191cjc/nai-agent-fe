@@ -161,6 +161,33 @@ class NovelAiMcpProvider:
         # would turn slow paid calls into outcome_unknown.
         self.image_to_image_timeout = max(timeout, image_to_image_timeout)
 
+    def probe(self) -> bool:
+        """Unpaid reachability check: one MCP initialize, short deadline, no tool call."""
+        try:
+            with httpx.Client(
+                transport=self.transport, timeout=httpx.Timeout(10.0, connect=5.0),
+                follow_redirects=False,
+            ) as client:
+                response = client.post(
+                    self.url,
+                    json={
+                        "jsonrpc": "2.0", "id": 1, "method": "initialize",
+                        "params": {
+                            "protocolVersion": PROTOCOL_VERSION,
+                            "capabilities": {},
+                            "clientInfo": {"name": "novelai-workspace", "version": "0.1.0"},
+                        },
+                    },
+                    headers={
+                        "Authorization": f"Bearer {self.token}",
+                        "Accept": "application/json, text/event-stream",
+                        "Content-Type": "application/json",
+                    },
+                )
+        except httpx.HTTPError:
+            return False
+        return response.status_code == 200
+
     def generate(self, parameters: GenerationRequest) -> Sequence[GeneratedImage]:
         return self.generate_with_request(parameters, lambda _arguments: None)
 

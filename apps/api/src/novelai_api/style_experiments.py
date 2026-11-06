@@ -94,6 +94,9 @@ class RunState(BaseModel):
     current_job_id: str | None
     # Accepted groups of this run not yet counted (0..lane parallelism).
     in_flight_count: int = 0
+    # Running runs only: epoch seconds until which the lane's provider is paused after an
+    # outage (no new groups are claimed meanwhile); None when claims may proceed.
+    provider_paused_until: int | None = None
     # GPT runs: owner-chosen concurrency (None = server maximum); always None on NovelAI.
     parallelism: int | None = None
     seed: int
@@ -189,8 +192,18 @@ def continuation_request(
 
 
 class RunStore:
-    def __init__(self, database: Database):
+    def __init__(
+        self, database: Database,
+        *, paused_until: Callable[[str], float | None] | None = None,
+    ):
         self.database = database
+        self._paused_until = paused_until
+
+    def _mark_paused(self, state: RunState) -> RunState:
+        if self._paused_until is not None and state.status == "running":
+            until = self._paused_until(state.lane)
+            state.provider_paused_until = int(until) if until is not None else None
+        return state
 
     @staticmethod
     def _position(connection: sqlite3.Connection, row: sqlite3.Row) -> int | None:
@@ -202,11 +215,10 @@ class RunStore:
             (row["user_id"], row["lane"], row["created_at"], row["seq"]),
         ).fetchone()[0]
 
-    @classmethod
-    def _located(cls, connection: sqlite3.Connection, row: sqlite3.Row) -> RunState:
-        state = cls._state(row)
-        state.queue_position = cls._position(connection, row)
-        return state
+    def _located(self, connection: sqlite3.Connection, row: sqlite3.Row) -> RunState:
+        state = self._state(row)
+        state.queue_position = self._position(connection, row)
+        return self._mark_paused(state)
 
     @staticmethod
     def _state(row: sqlite3.Row) -> RunState:
@@ -327,7 +339,7 @@ class RunStore:
             state.queue_position = lanes.get(row["lane"], 0)
             lanes[row["lane"]] = state.queue_position + 1
             state.name = row["display_name"]
-            runs.append(state)
+            runs.append(self._mark_paused(state))
         return runs
 
     def active(self, user_id: str) -> RunState | None:
@@ -585,7 +597,7 @@ def group_parameters(run: RunState) -> GenerationRequest:
 
 class StyleExperimentService:
     def __init__(self, database: Database, manager: GenerationManager, *, interval: float = 1):
-        self.store = RunStore(database)
+        self.store = RunStore(database, paused_until=manager.lane_paused_until)
         self.manager = manager
         self._interval = interval
         self._stop = threading.Event()
@@ -645,6 +657,9 @@ class StyleExperimentService:
             return
         if run.queue_position != 0:
             # Queued behind an earlier run of this owner's lane; waits without a claim.
+            return
+        if not self.manager.lane_ready(run.lane):
+            # Provider outage pause: wait without consuming an ordinal (see lane_health).
             return
         # NovelAI runs keep one group in flight; GPT runs fill up to the owner's chosen
         # concurrency, never beyond the lane's configured parallelism.

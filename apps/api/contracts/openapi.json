@@ -2046,6 +2046,17 @@
             "title": "Processed Count",
             "type": "string"
           },
+          "provider_paused_until": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Paused Until"
+          },
           "queue_position": {
             "anyOf": [
               {

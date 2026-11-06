@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import secrets
 import sqlite3
 import threading
@@ -24,6 +25,7 @@ from pydantic import (
 )
 
 from .db import Database
+from .lane_health import LaneHealth
 from .prompt_comments import compile_prompt_comments
 from .prompt_sections import PromptSections
 
@@ -43,6 +45,9 @@ NATIVE_CHARACTER_MODELS = frozenset(
         "nai-diffusion-5-curated",
     }
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class CharacterPrompt(BaseModel):
@@ -1001,6 +1006,12 @@ class GenerationManager:
             lane: threading.BoundedSemaphore(workers + 2)
             for lane, workers in self._workers.items()
         }
+        # Pre-payment provider outages pause new run claims per lane (see lane_health).
+        probe = getattr(provider, "probe", None)
+        self.health = {
+            "novelai": LaneHealth("novelai", probe if callable(probe) else None),
+            "gpt": LaneHealth("gpt"),
+        }
         self._executors: dict[str, ThreadPoolExecutor] = {}
         self._work_lock = threading.Lock()
         self._working: dict[str, _Admission] = {}
@@ -1027,6 +1038,13 @@ class GenerationManager:
     def parallelism(self, lane: str) -> int:
         """Groups of one run that may be in flight at once on this lane."""
         return self._workers[lane]
+
+    def lane_ready(self, lane: str) -> bool:
+        """False while the lane's provider is in an outage pause; run claims must wait."""
+        return self.health[lane].ready()
+
+    def lane_paused_until(self, lane: str) -> float | None:
+        return self.health[lane].paused_until()
 
     @staticmethod
     def lane(request: GenerationRequest) -> str:
@@ -1163,9 +1181,18 @@ class GenerationManager:
                     return
                 if not self.store.finish(job_id, image_count=len(images)):
                     self.cache.discard(job_id)
+                self.health[self.lane(parameters)].report(None)
             except ProviderFailure as exception:
                 self.cache.discard(job_id)
                 self.store.finish(job_id, error_code=exception.code)
+                lane = self.lane(parameters)
+                cause = exception.__cause__
+                # Codes and exception class only; never prompts, tokens or upstream bodies.
+                logger.warning(
+                    "Generation group failed on lane %s: %s%s", lane, exception.code,
+                    f" ({type(cause).__name__})" if cause is not None else "",
+                )
+                self.health[lane].report(exception.code)
             except ResultStorageUnavailable:
                 self.cache.discard(job_id)
                 self.store.finish(job_id, error_code="result_storage_error")

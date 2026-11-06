@@ -140,7 +140,14 @@ export const StyleExperimentConfig = observer(({ generation, hidden }: { generat
 })
 
 function runStatus(run: ExperimentRunState): string {
-  if (run.status === 'running') return run.queue_position ? `排队中 · 前面还有 ${run.queue_position} 个` : '生成中'
+  if (run.status === 'running') {
+    if (run.queue_position) return `排队中 · 前面还有 ${run.queue_position} 个`
+    if (run.provider_paused_until) {
+      const at = new Date(run.provider_paused_until * 1000).toLocaleTimeString('zh-CN', { hour12: false })
+      return `上游暂不可用 · 等待恢复（${at} 后重试）`
+    }
+    return '生成中'
+  }
   return { stopping: '正在停止', stopped: '已停止', completed: '已完成' }[run.status] ?? run.status
 }
 
