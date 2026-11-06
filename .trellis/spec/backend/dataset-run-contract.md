@@ -332,3 +332,19 @@ review only (operator restriction); no paid probes.
   category run of 「无人物」 includes them and 「异世界奇幻」 is people only. Total stays
   298. Item ids are positional: later `fantasy-N` ids and the moved items' ids
   changed; frozen runs keep their old ids (only the grid's category filter reads them).
+
+## Training-caption overrides (schema 12, 2026-11-06)
+
+- Table `caption_overrides(user_id, job_id → generation_jobs ON DELETE CASCADE,
+  caption 1..3000, updated_at)`. Training only: never sent to a provider; the
+  group's frozen parameters and re-runs are unchanged (a re-run does not inherit it).
+- `PUT /api/style-experiments/{experiment_id}/captions` `{items:[{job_id, caption:
+  str|null}] (1..3000)}` → `{updated}`. Caption is stripped; blank → 422
+  `caption_blank`; null clears. Every job must be the owner's dataset group of that
+  set, else 404 and the whole batch rolls back.
+- `GenerationView.caption_override` (str | null) on every job view and page (batched
+  lookup in `GenerationManager.views`).
+- Web export (`datasetCaption`): the override replaces the derived content tags
+  verbatim (character traits are not filtered from it); trigger, shared prefix and
+  character-set style are still prepended. `contentCaption()` is the editable text
+  (override, else derived tags).

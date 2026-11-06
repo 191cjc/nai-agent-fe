@@ -164,6 +164,64 @@
         "title": "Capabilities",
         "type": "object"
       },
+      "CaptionEdit": {
+        "properties": {
+          "caption": {
+            "anyOf": [
+              {
+                "maxLength": 3000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caption"
+          },
+          "job_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Job Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "title": "CaptionEdit",
+        "type": "object"
+      },
+      "CaptionEdits": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CaptionEdit"
+            },
+            "maxItems": 3000,
+            "minItems": 1,
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "CaptionEdits",
+        "type": "object"
+      },
+      "CaptionsSaved": {
+        "properties": {
+          "updated": {
+            "title": "Updated",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "updated"
+        ],
+        "title": "CaptionsSaved",
+        "type": "object"
+      },
       "CharacterPlan": {
         "description": "Frozen character block: reference ids are pinned to their digests at creation.",
         "properties": {
@@ -1179,6 +1237,17 @@
       },
       "GenerationView": {
         "properties": {
+          "caption_override": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caption Override"
+          },
           "created_at": {
             "title": "Created At",
             "type": "integer"
@@ -6133,6 +6202,112 @@
           }
         },
         "summary": "Get Style Experiment"
+      }
+    },
+    "/api/style-experiments/{experiment_id}/captions": {
+      "put": {
+        "operationId": "set_experiment_captions_api_style_experiments__experiment_id__captions_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "experiment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Experiment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "__Host-nai_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "  Host-Nai Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaptionEdits"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaptionsSaved"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Set Experiment Captions"
       }
     },
     "/api/style-experiments/{experiment_id}/name": {

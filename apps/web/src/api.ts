@@ -160,6 +160,8 @@ export interface GenerationView extends HistoryItem {
   provider_request: Record<string, unknown> | null
   /** Owner review marks: exports skip these image indexes. */
   discarded_images?: number[]
+  /** Training-set groups: owner-edited training caption (content tags); null = derived from the item. */
+  caption_override?: string | null
 }
 
 export interface HistoryPage {
@@ -395,6 +397,7 @@ export function errorText(error: unknown): string {
       rerun_invalid: '修改后的训练词或画风无效（不能为空，不能含 // 注释行，合计不超过 3000 字符）。',
       rerun_source_missing: '源条目已不在这个训练集里（可能已删除），这一张没有重跑。',
       rerun_image_missing: '要弃置的原图不存在。',
+      caption_blank: '训练词不能为空。',
       rerun_cancelled: '服务升级前取消的排队重跑（未付费）；可在网格中重新选择后批量重跑。',
       experiment_active: '这条记录属于进行中的画风实验，请先停止实验或等待完成后删除。',
       provider_auth_error: '图像服务认证失败，请联系管理员。',
@@ -637,6 +640,13 @@ export class WorkspaceApi {
     const run = checkedRun(await this.request<ExperimentRunState>('/api/rerun-batches', { method: 'POST', body: JSON.stringify(batch), signal }))
     if (run.id !== batch.id) throw new ApiFailure(0, 'invalid_response', '重跑批次编号不匹配，请刷新队列核对。')
     return run
+  }
+
+  /** Set (string) or clear (null) training-caption overrides of one training set's groups. */
+  setCaptions(experimentId: string, items: { job_id: string; caption: string | null }[]): Promise<{ updated: number }> {
+    return this.request(`/api/style-experiments/${encodeURIComponent(experimentId)}/captions`, {
+      method: 'PUT', body: JSON.stringify({ items }),
+    })
   }
 
   rerunGeneration(jobId: string, discardIndex: number | null, edits: RerunEdits = {}): Promise<GenerationAccepted> {

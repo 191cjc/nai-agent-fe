@@ -321,6 +321,19 @@ export class SavedResultsStore {
     }
   }
 
+  /** Save (string) or clear (null) the shown training-set group's caption override; throws on failure. */
+  async setCaption(caption: string | null): Promise<void> {
+    const job = this.job
+    const experimentId = job?.parameters.experiment?.id
+    if (!job || job.parameters.experiment?.kind !== 'dataset' || !experimentId) return
+    const epoch = this.viewerEpoch
+    await this.api.setCaptions(experimentId, [{ job_id: job.id, caption }])
+    runInAction(() => {
+      if (epoch !== this.viewerEpoch || this.job?.id !== job.id) return
+      this.job = { ...this.job, caption_override: caption }
+    })
+  }
+
   /** Training-set groups only; failed groups and expired images can be re-run too. */
   get canRerun(): boolean {
     const job = this.job

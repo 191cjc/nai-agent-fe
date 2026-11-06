@@ -4,4 +4,5 @@ import { lazy } from 'react'
 export const DatasetRunConfig = lazy(() => import('./DatasetRun').then(module => ({ default: module.DatasetRunConfig })))
 export const DatasetExportPanel = lazy(() => import('./DatasetRun').then(module => ({ default: module.DatasetExportPanel })))
 export const DatasetItemGloss = lazy(() => import('./PromptGloss').then(module => ({ default: module.DatasetItemGloss })))
+export const CaptionEditor = lazy(() => import('./CaptionEditor').then(module => ({ default: module.CaptionEditor })))
 export const ReviewGrid = lazy(() => import('./ReviewGrid').then(module => ({ default: module.ReviewGrid })))

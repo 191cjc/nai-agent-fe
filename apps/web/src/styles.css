@@ -647,3 +647,11 @@ h1, h2, h3 { letter-spacing: 0; }
 .rerun-batch-items li { display: grid; gap: 3px; }
 .rerun-batch-items li > span:first-child { font-size: 12px; color: var(--muted); }
 .rerun-batch-actions { display: flex; gap: 8px; }
+.caption-editor { display: grid; gap: 4px; }
+.caption-editor-actions { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.caption-edited { display: inline-block; margin-left: 6px; padding: 0 6px; border: 1px solid var(--gold); border-radius: 999px; color: var(--gold); font-size: 11px; line-height: 16px; }
+.caption-bulk-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 13px; }
+.caption-bulk-row > span:first-child { color: var(--muted); }
+.caption-bulk-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+.caption-bulk-preview { display: grid; gap: 6px; margin: 0; padding-left: 18px; font-size: 12px; }
+.caption-bulk-preview li { display: grid; gap: 2px; overflow-wrap: anywhere; }

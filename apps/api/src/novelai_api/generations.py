@@ -366,6 +366,14 @@ class RequestRecordingImageProvider(ImageProvider, Protocol):
     ) -> Sequence[GeneratedImage]: ...
 
 
+class _ForeignCaption(Exception):
+    """A caption edit named a job outside the owner's training set (rolls back the batch)."""
+
+    def __init__(self, job_id: str):
+        self.job_id = job_id
+        super().__init__(job_id)
+
+
 class ProviderFailure(Exception):
     def __init__(self, code: str):
         self.code = code
@@ -394,6 +402,8 @@ class GenerationView(HistoryItem):
     provider_request: dict[str, Any] | None = None
     # Owner review marks: exports skip these image indexes; files are kept.
     discarded_images: list[int] = Field(default_factory=list)
+    # Owner-edited training caption (content tags) of a training-set group; None = derived.
+    caption_override: str | None = None
 
 
 class HistoryPage(BaseModel):
@@ -688,6 +698,61 @@ class JobStore:
                     "DELETE FROM discarded_images WHERE user_id = ? AND job_id = ? "
                     "AND image_index = ?", (user_id, job_id, index),
                 )
+
+    def caption_overrides(self, user_id: str, job_ids: Sequence[str]) -> dict[str, str]:
+        captions: dict[str, str] = {}
+        if not job_ids:
+            return captions
+        with self.database.connect() as connection:
+            for start in range(0, len(job_ids), 500):
+                chunk = list(job_ids[start:start + 500])
+                captions.update((row["job_id"], row["caption"]) for row in connection.execute(
+                    "SELECT job_id, caption FROM caption_overrides WHERE user_id = ? "
+                    f"AND job_id IN ({','.join('?' * len(chunk))})", (user_id, *chunk),
+                ).fetchall())
+        return captions
+
+    def set_captions(
+        self, user_id: str, experiment_id: str, entries: Sequence[tuple[str, str | None]],
+    ) -> str | None:
+        """Set (or clear with None) caption overrides of one training set's groups in one
+        transaction. Returns the first job id that is not a group of that set, else None."""
+        try:
+            self._set_captions(user_id, experiment_id, entries)
+        except _ForeignCaption as foreign:
+            return foreign.job_id  # Raised inside the transaction: nothing was written.
+        return None
+
+    def _set_captions(
+        self, user_id: str, experiment_id: str, entries: Sequence[tuple[str, str | None]],
+    ) -> None:
+        with self.database.connect(write=True) as connection:
+            now = int(time.time())
+            for job_id, caption in entries:
+                row = connection.execute(
+                    "SELECT settings_json FROM generation_jobs WHERE id = ? AND user_id = ?",
+                    (job_id, user_id),
+                ).fetchone()
+                context = (
+                    json.loads(row["settings_json"]).get("experiment")
+                    if row is not None and _valid_experiment(row["settings_json"]) else None
+                )
+                if not context or context.get("kind") != "dataset" or (
+                    str(context.get("id")) != experiment_id
+                ):
+                    raise _ForeignCaption(job_id)
+                if caption is None:
+                    connection.execute(
+                        "DELETE FROM caption_overrides WHERE user_id = ? AND job_id = ?",
+                        (user_id, job_id),
+                    )
+                else:
+                    connection.execute(
+                        "INSERT INTO caption_overrides (user_id, job_id, caption, updated_at) "
+                        "VALUES (?, ?, ?, ?) ON CONFLICT(user_id, job_id) DO UPDATE SET "
+                        "caption = excluded.caption, updated_at = excluded.updated_at",
+                        (user_id, job_id, caption, now),
+                    )
 
     def discarded(self, user_id: str, job_ids: Sequence[str]) -> dict[str, list[int]]:
         marks: dict[str, list[int]] = {job_id: [] for job_id in job_ids}
@@ -1063,13 +1128,22 @@ class GenerationManager:
         return "gpt" if reference is not None and reference.mode == "gpt" else "novelai"
 
     def views(self, jobs: Sequence[HistoryItem], user_id: str) -> list[GenerationView]:
-        """Batch the discard lookup for pages instead of one query per job."""
-        marks = self.store.discarded(user_id, [job.id for job in jobs])
-        return [self.view(job, user_id, discarded=marks[job.id]) for job in jobs]
+        """Batch the discard and caption lookups for pages instead of one query per job."""
+        ids = [job.id for job in jobs]
+        marks = self.store.discarded(user_id, ids)
+        captions = self.store.caption_overrides(user_id, ids)
+        return [
+            self.view(job, user_id, discarded=marks[job.id], caption=captions.get(job.id, ""))
+            for job in jobs
+        ]
 
     def view(
         self, job: HistoryItem, user_id: str, *, discarded: list[int] | None = None,
+        caption: str | None = None,
     ) -> GenerationView:
+        # caption: "" = looked up, none set; None = not looked up yet.
+        if caption is None:
+            caption = self.store.caption_overrides(user_id, [job.id]).get(job.id, "")
         result = self.cache.describe(job.id, user_id) if job.status == "succeeded" else None
         raw_request = job._provider_request_json
         if raw_request is _NOT_LOADED:
@@ -1086,6 +1160,7 @@ class GenerationManager:
                 discarded if discarded is not None
                 else self.store.discarded(user_id, [job.id])[job.id]
             ),
+            caption_override=caption or None,
         )
 
     def is_inflight(self, job_id: str) -> bool:

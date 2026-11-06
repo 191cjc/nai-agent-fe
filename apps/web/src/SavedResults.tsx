@@ -3,7 +3,7 @@ import { observer } from 'mobx-react-lite'
 import { ArrowLeft, ArrowRight, Ban, CheckSquare, Dices, Download, FlaskConical, Images, LayoutGrid, Layers, Pencil, RefreshCw, RotateCcw, Trash2, UserRound, X } from 'lucide-react'
 import { ApiFailure, errorText, MAX_EXPERIMENT_NAME, type ExperimentRunState, type ExperimentSummary, type RerunEdits, type WorkspaceApi } from './api'
 import { datasetItemText } from './dataset-run'
-import { DatasetExportPanel, DatasetItemGloss, ReviewGrid } from './dataset-lazy'
+import { CaptionEditor, DatasetExportPanel, DatasetItemGloss, ReviewGrid } from './dataset-lazy'
 import { GenerationParameters } from './GenerationParameters'
 import type { SavedResultsStore } from './saved-results'
 import { ImageSaveButton, ImageSeedButton } from './ImageActions'
@@ -375,6 +375,7 @@ export const SavedResultViewer = observer(({ saved, api, onClose, onUseSeed, can
         </div>
         {context?.item && <p className="dataset-item-prompt" aria-label="训练集提示词">提示词：{datasetItemText(context.item)}</p>}
         {context?.item && <Suspense fallback={null}><DatasetItemGloss item={context.item} style={job.parameters.style_prompt} /></Suspense>}
+        {isDataset && <Suspense fallback={null}><CaptionEditor key={job.id} job={job} saved={saved} /></Suspense>}
         {context?.item && job.parameters.reference && <p className="subtle">
           {job.parameters.reference.mode === 'gpt' ? `GPT 参考图生成 · ${job.parameters.model} · 质量 ${job.parameters.reference.gpt_quality ?? '自动'}` : job.parameters.reference.mode === 'vibe' ? `Vibe Transfer · 信息提取度 ${job.parameters.reference.information_extracted ?? 1} · 强度 ${job.parameters.reference.reference_strength ?? 1}` : job.parameters.reference.mode === 'precise' ? `精准参考 · ${preciseLabel(job.parameters.reference.precise_type)} · 强度 ${job.parameters.reference.precise_strength ?? 1} · 保真度 ${job.parameters.reference.precise_fidelity ?? 1}` : `图生图 strength ${job.parameters.reference.strength} · noise ${job.parameters.reference.noise}`}
           {' · '}画风：{job.parameters.style_prompt}</p>}

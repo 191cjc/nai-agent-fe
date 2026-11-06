@@ -250,7 +250,7 @@ def test_v1_migration_restricts_existing_files_and_preserves_auth(tmp_path: Path
         for file_path in (path, Path(f"{path}-wal"), Path(f"{path}-shm")):
             assert stat.S_IMODE(file_path.stat().st_mode) == 0o600
         with database.connect() as migrated:
-            assert migrated.execute("PRAGMA user_version").fetchone()[0] == 11
+            assert migrated.execute("PRAGMA user_version").fetchone()[0] == 12
             assert migrated.execute("SELECT token_digest FROM access_tokens").fetchone()[0] == (
                 "private-digest"
             )

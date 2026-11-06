@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Ban, CheckSquare, Dices, Maximize2, RefreshCw, Square, Undo2, X } from 'lucide-react'
+import { Ban, CheckSquare, Dices, Maximize2, PencilLine, RefreshCw, Square, Undo2, X } from 'lucide-react'
 import { ApiFailure, errorText, type ExperimentRunState, type GenerationView, type RerunBatchItem, type WorkspaceApi } from './api'
 import { DATASET_CATEGORIES } from './dataset-prompts'
 import { CHARACTER_CATEGORIES } from './character-prompts'
 import { translatePrompt } from './prompt-zh'
+import { contentCaption } from './dataset-export'
 import { datasetItemZh } from './PromptGloss'
 
 /** Tiles per page: bounds preview requests and Blob memory (~60 × 30 KB). */
@@ -54,6 +55,23 @@ function wait(ms: number, signal: AbortSignal): Promise<void> {
   })
 }
 
+export type CaptionOperation =
+  | { kind: 'replace'; find: string; replace: string }
+  | { kind: 'prefix'; text: string }
+  | { kind: 'suffix'; text: string }
+  | { kind: 'reset' }
+
+/** Training caption after one bulk operation; null = back to the derived caption. */
+export function applyCaptionOperation(current: string, operation: CaptionOperation): string | null {
+  const tidy = (text: string) => text.trim().replace(/^[,\s]+|[,\s]+$/g, '')
+  switch (operation.kind) {
+    case 'reset': return null
+    case 'replace': return tidy(current.split(operation.find).join(operation.replace))
+    case 'prefix': return [tidy(operation.text), tidy(current)].filter(Boolean).join(', ')
+    case 'suffix': return [tidy(current), tidy(operation.text)].filter(Boolean).join(', ')
+  }
+}
+
 /** Sources of this set's unfinished re-run batches the server has not submitted yet. */
 export function queuedRerunSources(runs: readonly ExperimentRunState[], experimentId: string): Map<string, number> {
   const queued = new Map<string, number>()
@@ -87,6 +105,9 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
   const [submitting, setSubmitting] = useState(false)
   // Not-yet-submitted sources of this set's server-side re-run batches (by source job id).
   const [queued, setQueued] = useState<ReadonlyMap<string, number>>(new Map())
+  // Bulk training-caption editor (training only, never generates).
+  const [captionEdit, setCaptionEdit] = useState<{ scope: 'selected' | 'visible' | 'all'; kind: CaptionOperation['kind']; find: string; text: string } | null>(null)
+  const [captionBusy, setCaptionBusy] = useState(false)
   const [rerunMessage, setRerunMessage] = useState('')
   // Selected tiles by key; kept across pages, category and discard filters until submitted or cleared.
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
@@ -157,6 +178,27 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
     const remaining = Math.max(0, marks.length - (replaced.get(group.id) ?? 0))
     return marks.slice(0, remaining).map(index => `${group.id}:${index}`)
   }), [groups, replaced])
+
+  // Groups (not images) a bulk caption edit touches: succeeded groups of the chosen tiles.
+  const captionPlan = useMemo(() => {
+    if (!captionEdit) return null
+    const scoped = captionEdit.scope === 'selected' ? selectedTiles : captionEdit.scope === 'visible' ? visible : tiles
+    const jobs = [...new Map(scoped.filter(tile => tile.job.status === 'succeeded').map(tile => [tile.job.id, tile.job])).values()]
+    const operation: CaptionOperation | null = captionEdit.kind === 'replace'
+      ? (captionEdit.find ? { kind: 'replace', find: captionEdit.find, replace: captionEdit.text } : null)
+      : captionEdit.kind === 'reset' ? { kind: 'reset' }
+        : (captionEdit.text.trim() ? { kind: captionEdit.kind, text: captionEdit.text } : null)
+    const changes: { job: GenerationView; before: string; after: string | null }[] = []
+    let blank = 0
+    if (operation) for (const job of jobs) {
+      const before = contentCaption(job.parameters, job.caption_override)
+      const after = applyCaptionOperation(before, operation)
+      if (after === '') { blank += 1; continue }
+      if (after === null ? job.caption_override == null : after === before) continue
+      changes.push({ job, before, after })
+    }
+    return { jobs: jobs.length, ready: operation !== null, changes, blank }
+  }, [captionEdit, selectedTiles, visible, tiles])
 
   // Previews for the shown page only; every Blob URL is revoked when the page changes.
   useEffect(() => {
@@ -285,6 +327,31 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
     }
   }
 
+  async function applyCaptions() {
+    if (!captionPlan || !captionPlan.changes.length || captionBusy) return
+    const { changes } = captionPlan
+    if (!window.confirm(`修改 ${changes.length} 条的训练词？只影响导出的 caption，不会重新生成。可再用「恢复默认」撤销。`)) return
+    setCaptionBusy(true)
+    setActionError('')
+    setRerunMessage('')
+    let saved = 0
+    try {
+      for (let start = 0; start < changes.length; start += 3000) {
+        const chunk = changes.slice(start, start + 3000)
+        await api.setCaptions(experimentId, chunk.map(change => ({ job_id: change.job.id, caption: change.after })))
+        const updated = new Map(chunk.map(change => [change.job.id, change.after]))
+        setGroups(current => current?.map(group => updated.has(group.id) ? { ...group, caption_override: updated.get(group.id) ?? null } : group) ?? null)
+        saved += chunk.length
+      }
+      setCaptionEdit(null)
+      setRerunMessage(`已修改 ${saved} 条的训练词（只影响导出）。`)
+    } catch (error) {
+      setActionError(`训练词修改在第 ${saved + 1} 条处停止（已保存 ${saved} 条）：${errorText(error)}`)
+    } finally {
+      setCaptionBusy(false)
+    }
+  }
+
   return <section ref={scrollRef} className="review-grid" aria-label="网格检查">
     <div className="review-grid-toolbar">
       <label className="field review-grid-filter"><span>分类</span>
@@ -298,6 +365,8 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
       <button className="text-action" type="button" disabled={!groups || submitting} onClick={() => setReload(value => value + 1)}><RefreshCw size={14} aria-hidden="true" /> 刷新</button>
       <button className="text-action" type="button" disabled={!selectedTiles.length || batch !== null || submitting} title="为所选图片各重跑 1 张；可先改画风和训练词"
         onClick={openBatch}><Dices size={14} aria-hidden="true" /> 重跑所选（{selectedTiles.length}）</button>
+      <button className="text-action" type="button" disabled={!groups || captionEdit !== null || captionBusy} title="对已选、当前筛选或全部条目的训练词做替换、加前缀、加后缀；只影响导出"
+        onClick={() => setCaptionEdit({ scope: selectedTiles.length ? 'selected' : 'all', kind: 'replace', find: '', text: '' })}><PencilLine size={14} aria-hidden="true" /> 批量改训练词</button>
       <button className="icon-button" type="button" title="返回单张查看" aria-label="返回单张查看" onClick={onClose}><X size={18} /></button>
     </div>
     {groups && <div className="review-grid-selection" role="group" aria-label="多选">
@@ -315,6 +384,43 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
     {loadError && <p className="alert" role="alert">记录读取失败：{loadError}</p>}
     {actionError && <p className="alert" role="alert">{actionError}</p>}
     {rerunMessage && <p className="subtle" role="status">{rerunMessage}</p>}
+    {captionEdit && captionPlan && <div className="rerun-batch" role="group" aria-label="批量改训练词">
+      <p><strong>批量改训练词</strong>：只改导出的 caption（内容标签部分），不重新生成、不付费。触发词、导出前缀和角色训练集的画风仍在导出时自动加在最前面。失败的条目没有图片，不处理。</p>
+      <div className="caption-bulk-row" role="radiogroup" aria-label="范围">
+        <span>范围</span>
+        {([['selected', `已选（${new Set(selectedTiles.map(tile => tile.job.id)).size} 条）`], ['visible', `当前筛选（${new Set(visible.map(tile => tile.job.id)).size} 条）`], ['all', `全部（${groups?.length ?? 0} 条）`]] as const).map(([value, label]) =>
+          <label key={value} className="history-select"><input type="radio" name="caption-scope" checked={captionEdit.scope === value} disabled={captionBusy}
+            onChange={() => setCaptionEdit({ ...captionEdit, scope: value })} /> {label}</label>)}
+      </div>
+      <div className="caption-bulk-row" role="radiogroup" aria-label="操作">
+        <span>操作</span>
+        {([['replace', '文本替换'], ['prefix', '加前缀'], ['suffix', '加后缀'], ['reset', '恢复默认']] as const).map(([value, label]) =>
+          <label key={value} className="history-select"><input type="radio" name="caption-kind" checked={captionEdit.kind === value} disabled={captionBusy}
+            onChange={() => setCaptionEdit({ ...captionEdit, kind: value })} /> {label}</label>)}
+      </div>
+      {captionEdit.kind === 'replace' && <div className="caption-bulk-fields">
+        <label className="field"><span>查找（区分大小写，替换全部出现处）</span>
+          <input type="text" value={captionEdit.find} maxLength={1000} spellCheck={false} disabled={captionBusy}
+            onChange={event => setCaptionEdit({ ...captionEdit, find: event.target.value })} /></label>
+        <label className="field"><span>替换为（留空即删除）</span>
+          <input type="text" value={captionEdit.text} maxLength={1000} spellCheck={false} disabled={captionBusy}
+            onChange={event => setCaptionEdit({ ...captionEdit, text: event.target.value })} /></label>
+      </div>}
+      {(captionEdit.kind === 'prefix' || captionEdit.kind === 'suffix') && <label className="field">
+        <span>{captionEdit.kind === 'prefix' ? '加在训练词最前面' : '加在训练词最后面'}（用逗号分隔多个标签）</span>
+        <input type="text" value={captionEdit.text} maxLength={1000} spellCheck={false} disabled={captionBusy}
+          onChange={event => setCaptionEdit({ ...captionEdit, text: event.target.value })} /></label>}
+      {captionEdit.kind === 'reset' && <p className="prompt-hint">把范围内改过的训练词恢复为由提示词自动生成的训练词。</p>}
+      <p role="status">{captionPlan.ready ? `范围内 ${captionPlan.jobs} 条成功条目，将修改 ${captionPlan.changes.length} 条${captionPlan.blank ? `；${captionPlan.blank} 条改完会变空，已跳过` : ''}。` : '填写内容后显示预览。'}</p>
+      {captionPlan.changes.length > 0 && <ol className="caption-bulk-preview">{captionPlan.changes.slice(0, 3).map(change => <li key={change.job.id}>
+        <span>{ordinalLabel(change.job)}</span><span className="subtle">原：{change.before}</span><span>新：{change.after ?? contentCaption(change.job.parameters)}</span>
+      </li>)}</ol>}
+      <div className="rerun-batch-actions">
+        <button type="button" disabled={captionBusy || !captionPlan.changes.length} onClick={() => void applyCaptions()}>
+          <PencilLine size={14} aria-hidden="true" /> {captionBusy ? '正在保存...' : `修改 ${captionPlan.changes.length} 条`}</button>
+        <button className="secondary" type="button" disabled={captionBusy} onClick={() => setCaptionEdit(null)}>取消</button>
+      </div>
+    </div>}
     {batch && <div className="rerun-batch" role="group" aria-label="批量重跑设置">
       <p><strong>重跑所选 {batch.sources.length} 张</strong>：每张 1 次付费生成，新随机种子。改过的训练词会成为新图的 caption。整批作为一个任务加入服务器队列（和训练集同一队列，按顺序执行），提交后可以关闭页面；可在队列中停止或继续。</p>
       <label className="field"><span>新画风（留空则每张保持原来的画风）</span>
@@ -338,8 +444,9 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
       const discarded = tile.index !== null && tile.job.discarded_images?.includes(tile.index) === true
       const preview = previews[tile.key]
       const item = tile.job.parameters.experiment?.item
-      const prompt = item?.prompt ?? ''
-      const zh = item ? datasetItemZh(item) : ''
+      const override = tile.job.caption_override ?? null
+      const prompt = override ?? item?.prompt ?? ''
+      const zh = override ? translatePrompt(override) : item ? datasetItemZh(item) : ''
       const chosen = selected.has(tile.key)
       return <li key={tile.key} className={`${discarded ? 'discarded' : ''}${chosen ? ' selected' : ''}`.trim() || undefined}>
         <button type="button" className="review-grid-tile" disabled={batch !== null} aria-pressed={chosen}
@@ -353,7 +460,7 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
         <button className="icon-button review-grid-check" type="button" aria-pressed={chosen} disabled={batch !== null}
           title={chosen ? '取消选择' : '选择'} aria-label={`${chosen ? '取消选择' : '选择'}${ordinalLabel(tile.job)}${tile.index !== null ? `，图像 ${tile.index + 1}` : ''}`}
           onClick={() => selectKeys([tile.key], !chosen)}>{chosen ? <CheckSquare size={16} aria-hidden="true" /> : <Square size={16} aria-hidden="true" />}</button>
-        <span className="review-grid-label">{ordinalLabel(tile.job)}{tile.job.image_urls.length > 1 && tile.index !== null ? ` · ${tile.index + 1}` : ''}</span>
+        <span className="review-grid-label">{ordinalLabel(tile.job)}{tile.job.image_urls.length > 1 && tile.index !== null ? ` · ${tile.index + 1}` : ''}{override ? ' · 训练词已改' : ''}</span>
         {zh && <span className="review-grid-zh" title={`${prompt}\n${zh}`}>{zh}</span>}
         {tile.index !== null && <button className={`icon-button review-grid-discard${discarded ? ' restore' : ''}`} type="button" disabled={busyKeys.has(tile.key)}
           title={discarded ? '恢复（导出时包含）' : '弃置（导出时跳过，可恢复）'} aria-pressed={discarded}

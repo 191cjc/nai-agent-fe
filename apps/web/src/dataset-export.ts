@@ -114,13 +114,8 @@ export const ANIMAGINE_QUALITY_PREFIX = 'masterpiece, high score, great score, a
  */
 export const NOOBAI_QUALITY_PREFIX = 'masterpiece, best quality, newest, absurdres, highres'
 
-/**
- * Caption order: trigger, optional shared prefix (quality tags), then content tags.
- * The prefix is user text for every image; style and trait tags are never added.
- */
-export function datasetCaption(
-  parameters: GenerationRequest, trigger: string, prefix = '', includeCharacterStyle = true,
-): string {
+/** Content tags of a group's training caption, derived from its frozen item (no trigger, prefix or style). */
+function derivedContentTags(parameters: GenerationRequest): { tags: string[]; traits: Set<string> } {
   const item = parameters.experiment?.kind === 'dataset' ? parameters.experiment.item : undefined
   const compile = parameters.prompt_comments === true && !parameters.prompt_sections
   // Multi-person items caption the scene plus every person; the bare per-person gender
@@ -136,7 +131,29 @@ export function datasetCaption(
   const traits = item && parameters.reference
     ? new Set(captionTags(parameters.positive_prompt.trim().slice(0, -item.prompt.trim().length || undefined)))
     : new Set<string>()
-  const tags = sources.flatMap(captionTags).filter(tag => !traits.has(tag))
+  return { tags: [...new Set(sources.flatMap(captionTags).filter(tag => !traits.has(tag)))], traits }
+}
+
+/**
+ * The editable 「训练词」 of a group: its owner override, else the content tags derived from
+ * the frozen item. Trigger, shared prefix and (character sets) style are added on export.
+ */
+export function contentCaption(parameters: GenerationRequest, override?: string | null): string {
+  return override ?? derivedContentTags(parameters).tags.join(', ')
+}
+
+/**
+ * Caption order: trigger, optional shared prefix (quality tags), then content tags.
+ * The prefix is user text for every image; style and trait tags are never added.
+ * An owner override replaces the derived content tags verbatim (traits are not filtered).
+ */
+export function datasetCaption(
+  parameters: GenerationRequest, trigger: string, prefix = '', includeCharacterStyle = true,
+  override?: string | null,
+): string {
+  const item = parameters.experiment?.kind === 'dataset' ? parameters.experiment.item : undefined
+  const { tags: derived, traits } = derivedContentTags(parameters)
+  const tags = override ? captionTags(override) : derived
   const lead = [trigger.trim(), ...captionTags(prefix)].filter(Boolean)
   // Character groups vary the drawing style on purpose (style pool); naming it keeps
   // those looks off the character. Style-LoRA groups never caption their style.
@@ -181,7 +198,7 @@ export async function buildDatasetZip(
     if (signal.aborted) throw new DOMException('Export cancelled.', 'AbortError')
     if (job.status !== 'succeeded' || !job.image_urls.length) skipped += Math.max(1, job.parameters.sample_count)
     else {
-      const caption = encoder.encode(datasetCaption(job.parameters, trigger, prefix, includeCharacterStyle) + '\n')
+      const caption = encoder.encode(datasetCaption(job.parameters, trigger, prefix, includeCharacterStyle, job.caption_override) + '\n')
       const marks = new Set(job.discarded_images ?? [])
       for (const [imageIndex, path] of job.image_urls.entries()) {
         // Review marks: discarded images never enter the dataset.

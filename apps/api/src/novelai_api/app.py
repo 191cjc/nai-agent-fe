@@ -777,6 +777,46 @@ def create_app(
             next_offset=next_offset,
         )
 
+    class CaptionEdit(BaseModel):
+        job_id: str = Field(min_length=1, max_length=64)
+        # Content tags used as this group's training caption; null restores the derived one.
+        caption: str | None = Field(default=None, max_length=3000)
+
+    class CaptionEdits(BaseModel):
+        items: list[CaptionEdit] = Field(min_length=1, max_length=3000)
+
+    class CaptionsSaved(BaseModel):
+        updated: int
+
+    @app.put(
+        "/api/style-experiments/{experiment_id}/captions",
+        response_model=CaptionsSaved,
+        responses={
+            401: {"model": ApiError}, 403: {"model": ApiError}, 404: {"model": ApiError},
+            422: {"model": ApiError}, 503: {"model": ApiError},
+        },
+    )
+    def set_experiment_captions(
+        experiment_id: UUID, payload: CaptionEdits,
+        user: Annotated[UserInfo, Depends(require_user)],
+    ) -> CaptionsSaved | JSONResponse:
+        # Training-only edits: the export uses them; generation parameters never change.
+        entries = []
+        for item in payload.items:
+            caption = item.caption.strip() if item.caption is not None else None
+            if caption == "":
+                return error(422, "caption_blank", "Training caption cannot be blank")
+            entries.append((item.job_id, caption))
+        foreign = manager.store.set_captions(user.id, str(experiment_id), entries)
+        if foreign is not None:
+            raise HTTPException(
+                status_code=404,
+                detail=ApiError(
+                    code="not_found", message="Group not found in this training set",
+                ).model_dump(),
+            )
+        return CaptionsSaved(updated=len(entries))
+
     @app.delete(
         "/api/style-experiments/{experiment_id}",
         response_model=ExperimentDeleted,

@@ -196,3 +196,14 @@ zero reachability and near-limit bounds; do not run frontend helper tests.
   general tags (WD tagger `selected_tags.csv`, category 0, by count), excluding
   explicit sexual/genital tags and non-word tags; keys sorted case-insensitively.
   Built-in style and character library tags remain 100% glossed.
+
+## Training-caption edits (2026-11-06)
+
+- Saved viewer, training-set groups: 「训练词（导出 caption）」 line with 「已修改」
+  badge, 「修改训练词」 (lazy `CaptionEditor`) and 「恢复默认」. Only the export
+  changes; nothing is generated.
+- Review grid 「批量改训练词」: scope 已选 / 当前筛选 / 全部 (succeeded groups only),
+  operation 文本替换 (case-sensitive, all occurrences; empty replacement deletes) /
+  加前缀 / 加后缀 / 恢复默认 (`applyCaptionOperation`); preview of the change count and
+  three samples; results that would be blank are skipped. Saved in ≤3000-item chunks
+  via the captions PUT; tiles show 「训练词已改」 and gloss the override.
