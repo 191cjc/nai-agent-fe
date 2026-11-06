@@ -159,3 +159,19 @@ needs one operator-approved probe.
   props (traits supply them; a named staff/weapon would fight the character's own).
 - 2026-11-05: six large `setting` items start with `wide shot` so automatic canvases
   give character sets a few landscape images (default 58 portrait / 50 square / 6 landscape).
+
+## Character library v3 (2026-11-06)
+
+- Coverage audit of the 114 defaults: 101 front/unspecified views, 2 close-ups,
+  expressions only on near shots. v3 (default 138, 150 with outfit):
+  - `framing` +20 appended: 12 side/back/three-quarter/looking-back angles and 8
+    `close-up, face focus` items (face/eye detail for character identity).
+  - `pose` +4 appended: lying on side/stomach, turning around, sitting leaning back.
+  - 10 full-body pose/setting items gained an expression; 11 upper-body/setting/light
+    items gained a view angle (from side / from behind / three-quarter view).
+- Result: non-front views 34/138 (25%), close-up+portrait 31, full-body items with an
+  expression 14/59; canvases 67 square / 64 portrait / 7 landscape.
+- New items are appended so existing positional ids (`char-<category>-N`) never shift;
+  edited items keep their ids (stored runs keep their own frozen text).
+- Still no gender, count, appearance, outfit or props: weapon/prop actions were
+  deliberately not added (a named prop fights the character's own).
