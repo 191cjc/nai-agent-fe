@@ -359,3 +359,13 @@ review only (operator restriction); no paid probes.
 - Per-run item cap raised 300 → 400 (`DatasetRunCreate.items`, web
   `MAX_DATASET_ITEMS`): the default selection (all 322) exceeded 300 since the
   `face` category was added.
+
+## Per-person re-run edits (2026-11-07)
+
+- `RerunEdits` (single re-run and each `POST /api/rerun-batches` item) accepts optional
+  `characters: [str]` (1–6, each 1–1000): one new prompt per person of a multi-person
+  item, in order. The count must equal the source item's `characters` (422
+  `rerun_invalid`, also for blank or comment-line text with `prompt_comments`); x/y
+  are kept. It replaces `experiment.item.characters[*].prompt` (so the caption
+  follows) and `character_prompts`. A list equal to the frozen prompts is no edit
+  (keeps the unvalidated `model_copy` path). Single-person groups refuse it (count 0).

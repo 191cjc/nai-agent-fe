@@ -23,6 +23,11 @@ class RerunEdits(BaseModel):
     # the re-run's caption) and the style. Absent keeps the source group's frozen values.
     prompt: str | None = Field(default=None, min_length=1, max_length=1000)
     style_prompt: str | None = Field(default=None, min_length=1, max_length=3000)
+    # Multi-person groups: one new prompt per person, in order and with the same count as
+    # the source item; positions are kept. Each also becomes part of the re-run's caption.
+    characters: list[
+        Annotated[str, StringConstraints(min_length=1, max_length=1000)]
+    ] | None = Field(default=None, min_length=1, max_length=6)
 
 
 class RerunBatchItem(RerunEdits):
@@ -82,6 +87,21 @@ def rerun_parameters(job: HistoryItem, edits: RerunEdits) -> GenerationRequest:
             raise RerunRefused("rerun_invalid", "This group's prompt cannot be edited")
         update["positive_prompt"] = positive
         item = item.model_copy(update={"prompt": edits.prompt})
+    if edits.characters is not None and item is not None and edits.characters != [
+        character.prompt for character in item.characters
+    ]:
+        if len(edits.characters) != len(item.characters):
+            raise RerunRefused("rerun_invalid", "Character count must match the source group")
+        if any(not text.strip() for text in edits.characters):
+            raise RerunRefused("rerun_invalid", "Character prompts cannot be blank")
+        if source.prompt_comments and any(has_comment_line(text) for text in edits.characters):
+            raise RerunRefused("rerun_invalid", "Training prompts cannot contain comment lines")
+        characters = [
+            character.model_copy(update={"prompt": text})
+            for character, text in zip(item.characters, edits.characters, strict=True)
+        ]
+        update["character_prompts"] = [character.model_dump() for character in characters]
+        item = item.model_copy(update={"characters": characters})
     if edits.style_prompt is not None and edits.style_prompt != source.style_prompt:
         effective = (
             compile_prompt_comments(edits.style_prompt) if source.prompt_comments

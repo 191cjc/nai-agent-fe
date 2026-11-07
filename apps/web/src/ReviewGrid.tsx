@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Ban, CheckSquare, Dices, Maximize2, PencilLine, RefreshCw, Square, Undo2, X } from 'lucide-react'
+import { Ban, CheckSquare, Dices, Maximize2, PencilLine, RefreshCw, Replace, Search, Square, Undo2, X } from 'lucide-react'
 import { ApiFailure, errorText, type ExperimentRunState, type GenerationView, type RerunBatchItem, type WorkspaceApi } from './api'
 import { DATASET_CATEGORIES } from './dataset-prompts'
 import { CHARACTER_CATEGORIES } from './character-prompts'
@@ -63,12 +63,61 @@ export type CaptionOperation =
 
 /** Training caption after one bulk operation; null = back to the derived caption. */
 export function applyCaptionOperation(current: string, operation: CaptionOperation): string | null {
-  const tidy = (text: string) => text.trim().replace(/^[,\s]+|[,\s]+$/g, '')
+  // Trim edge commas and collapse the empty tags a removal leaves behind ("a, , b").
+  const tidy = (text: string) => text.replace(/,\s*(?=,)/g, '').trim().replace(/^[,\s]+|[,\s]+$/g, '')
   switch (operation.kind) {
     case 'reset': return null
     case 'replace': return tidy(current.split(operation.find).join(operation.replace))
     case 'prefix': return [tidy(operation.text), tidy(current)].filter(Boolean).join(', ')
     case 'suffix': return [tidy(current), tidy(operation.text)].filter(Boolean).join(', ')
+  }
+}
+
+/**
+ * Search terms split on commas (ASCII or full-width); a leading "-" excludes. Matching is a
+ * case-insensitive substring test against the training caption and its Chinese gloss.
+ */
+export function parseSearch(query: string): { include: string[]; exclude: string[] } {
+  const include: string[] = []
+  const exclude: string[] = []
+  for (const raw of query.split(/[,，]/)) {
+    const term = raw.trim().toLowerCase()
+    if (term.startsWith('-')) { if (term.slice(1).trim()) exclude.push(term.slice(1).trim()) } else if (term) include.push(term)
+  }
+  return { include, exclude }
+}
+
+export function matchesSearch(text: string, search: { include: readonly string[]; exclude: readonly string[] }): boolean {
+  return search.include.every(term => text.includes(term)) && !search.exclude.some(term => text.includes(term))
+}
+
+/** Training caption of a group plus its Chinese gloss, lower-cased for search. */
+function searchText(job: GenerationView): string {
+  const override = job.caption_override ?? null
+  const item = job.parameters.experiment?.item
+  const zh = override ? translatePrompt(override) : item ? datasetItemZh(item) : ''
+  return `${contentCaption(job.parameters, override)}\n${zh}`.toLowerCase()
+}
+
+type RerunTarget = 'all' | 'scene' | 'people'
+type RerunOperation = Exclude<CaptionOperation, { kind: 'reset' }>
+
+/** Batch prompts after one find/replace, prefix or suffix over the chosen prompts. */
+export function applyRerunOperation(
+  prompts: readonly string[], characters: readonly (readonly string[])[], operation: RerunOperation, target: RerunTarget,
+): { prompts: string[]; characters: string[][]; changed: number; blank: number } {
+  let changed = 0
+  let blank = 0
+  const edit = (text: string) => {
+    const after = applyCaptionOperation(text, operation) ?? text
+    if (!after.trim()) { blank += 1; return text }
+    if (after !== text) changed += 1
+    return after
+  }
+  return {
+    prompts: prompts.map(text => target === 'people' ? text : edit(text)),
+    characters: characters.map(people => people.map(text => target === 'scene' ? text : edit(text))),
+    changed, blank,
   }
 }
 
@@ -97,6 +146,7 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
   const [loadError, setLoadError] = useState('')
   const [reload, setReload] = useState(0)
   const [category, setCategory] = useState('all')
+  const [query, setQuery] = useState('')
   const [hideDiscarded, setHideDiscarded] = useState(false)
   const [page, setPage] = useState(0)
   const [previews, setPreviews] = useState<Record<string, string | 'error'>>({})
@@ -113,7 +163,11 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
   // Batch editor over the selected tiles: one optional new style, an editable prompt per tile.
   // `id` is reused after an unknown outcome so a resubmission cannot queue the batch twice.
-  const [batch, setBatch] = useState<{ id: string; sources: Tile[]; prompts: string[]; style: string; discardReplaced: boolean } | null>(null)
+  // Multi-person tiles also get one editable prompt per person (`characters[tile][person]`).
+  const [batch, setBatch] = useState<{ id: string; sources: Tile[]; prompts: string[]; characters: string[][]; style: string; discardReplaced: boolean } | null>(null)
+  // Bulk find/replace, prefix or suffix over the open batch's prompts (applied on click, not live).
+  const [batchEdit, setBatchEdit] = useState<{ kind: RerunOperation['kind']; find: string; text: string; target: RerunTarget }>({ kind: 'replace', find: '', text: '', target: 'all' })
+  const [batchEditMessage, setBatchEditMessage] = useState('')
   const scrollRef = useRef<HTMLElement | null>(null)
 
   // Metadata only (no image bytes): bounded pages in server order.
@@ -144,8 +198,13 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
     return job.image_urls.map((_url, index) => ({ ...base, key: `${job.id}:${index}`, index }))
   }), [groups])
   const categories = useMemo(() => [...new Set(tiles.map(tile => tile.category))], [tiles])
+  // Per group, computed once per load or caption edit (not per keystroke).
+  const searchIndex = useMemo(() => new Map((groups ?? []).map(job => [job.id, searchText(job)])), [groups])
+  const search = useMemo(() => parseSearch(query), [query])
+  const searching = search.include.length > 0 || search.exclude.length > 0
   const visible = useMemo(() => tiles.filter(tile => (category === 'all' || tile.category === category)
-    && !(hideDiscarded && tile.index !== null && tile.job.discarded_images?.includes(tile.index))), [tiles, category, hideDiscarded])
+    && !(hideDiscarded && tile.index !== null && tile.job.discarded_images?.includes(tile.index))
+    && (!searching || matchesSearch(searchIndex.get(tile.job.id) ?? '', search))), [tiles, category, hideDiscarded, searching, searchIndex, search])
   const pages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE))
   const current = Math.min(page, pages - 1)
   useEffect(() => { scrollRef.current?.scrollTo({ top: 0 }) }, [current])
@@ -280,23 +339,42 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
     const id = newBatchId()
     if (!id) return
     setRerunMessage('')
-    setBatch({ id, sources: selectedTiles, prompts: selectedTiles.map(tile => tile.job.parameters.experiment?.item?.prompt ?? ''), style: '', discardReplaced: true })
+    setBatchEditMessage('')
+    setBatch({
+      id, sources: selectedTiles, style: '', discardReplaced: true,
+      prompts: selectedTiles.map(tile => tile.job.parameters.experiment?.item?.prompt ?? ''),
+      characters: selectedTiles.map(tile => (tile.job.parameters.experiment?.item?.characters ?? []).map(person => person.prompt)),
+    })
+  }
+
+  function applyBatchEdit() {
+    if (!batch) return
+    const operation: RerunOperation | null = batchEdit.kind === 'replace'
+      ? (batchEdit.find ? { kind: 'replace', find: batchEdit.find, replace: batchEdit.text } : null)
+      : (batchEdit.text.trim() ? { kind: batchEdit.kind, text: batchEdit.text } : null)
+    if (!operation) return
+    const result = applyRerunOperation(batch.prompts, batch.characters, operation, batchEdit.target)
+    setBatch({ ...batch, prompts: result.prompts, characters: result.characters })
+    setBatchEditMessage(`已修改 ${result.changed} 处训练词${result.blank ? `；${result.blank} 处改完会变空，已跳过` : ''}。提交前可逐条检查。`)
   }
 
   async function rerunAll() {
     if (!batch || submitting) return
-    const { id, sources, prompts, style, discardReplaced } = batch
-    if (prompts.some(prompt => !prompt.trim())) { setActionError('训练词不能为空。'); return }
+    const { id, sources, prompts, characters, style, discardReplaced } = batch
+    if (prompts.some(prompt => !prompt.trim()) || characters.some(people => people.some(prompt => !prompt.trim()))) { setActionError('训练词不能为空（包括每个人物）。'); return }
     const repeated = sources.filter(tile => replaced.get(tile.job.id)).length
     if (!window.confirm(`为所选 ${sources.length} 张各重跑 1 张（新随机种子${style.trim() ? '，使用新画风' : '，保持原画风'}）？这是 ${sources.length} 次付费生成。\n会作为一个任务加入服务器队列，在后台按顺序生成，提交后可以关闭页面。${repeated ? `\n其中 ${repeated} 张所在条目以前已经重跑过或正在排队重跑。` : ''}`)) return
     const items: RerunBatchItem[] = sources.map((tile, index) => {
       const source = tile.job
       // Replacing a kept image marks it discarded when the server submits its re-run.
       const discard = discardReplaced && tile.index !== null && !source.discarded_images?.includes(tile.index)
+      const people = (source.parameters.experiment?.item?.characters ?? []).map(person => person.prompt)
+      const editedPeople = people.length > 0 && characters[index].some((text, at) => text !== people[at])
       return {
         job_id: source.id,
         ...(discard && tile.index !== null ? { discard_index: tile.index } : {}),
         ...(prompts[index] !== source.parameters.experiment?.item?.prompt ? { prompt: prompts[index] } : {}),
+        ...(editedPeople ? { characters: characters[index] } : {}),
         ...(style.trim() ? { style_prompt: style } : {}),
       }
     })
@@ -359,8 +437,13 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
           <option value="all">全部（{tiles.length}）</option>
           {categories.map(id => <option key={id} value={id}>{CATEGORY_LABELS[id] ?? id}（{tiles.filter(tile => tile.category === id).length}）</option>)}
         </select></label>
+      <label className="field review-grid-search"><span>搜索训练词</span>
+        <span className="review-grid-search-input"><Search size={14} aria-hidden="true" />
+          <input type="search" value={query} maxLength={500} spellCheck={false} placeholder="如 red hair, -hat"
+            title="在训练词（含中文释义）里搜索，不区分大小写；逗号分隔多个词时须全部包含，词前加 - 表示排除"
+            onChange={event => { setQuery(event.target.value); setPage(0) }} /></span></label>
       <label className="history-select"><input type="checkbox" checked={hideDiscarded} onChange={event => { setHideDiscarded(event.target.checked); setPage(0) }} /> 隐藏已弃置</label>
-      <span className="subtle" role="status">已弃置 {discardedCount} 张 · 失败 {failedCount} 条</span>
+      <span className="subtle" role="status">{searching ? `搜索到 ${visible.length} 张 · ` : ''}已弃置 {discardedCount} 张 · 失败 {failedCount} 条</span>
       {queuedCount > 0 && <span className="subtle" role="status">排队中的重跑 {queuedCount} 张</span>}
       <button className="text-action" type="button" disabled={!groups || submitting} onClick={() => setReload(value => value + 1)}><RefreshCw size={14} aria-hidden="true" /> 刷新</button>
       <button className="text-action" type="button" disabled={!selectedTiles.length || batch !== null || submitting} title="为所选图片各重跑 1 张；可先改画风和训练词"
@@ -376,11 +459,13 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
       <button className="text-action" type="button" disabled={!pendingDiscardedTiles.length || batch !== null} title="已弃置、还没重跑过也不在重跑队列中的图片"
         onClick={() => selectKeys(pendingDiscardedTiles)}>选择全部已弃置（{pendingDiscardedTiles.length}）</button>
       <button className="text-action" type="button" disabled={!shown.length || batch !== null} onClick={() => selectKeys(shown.map(tile => tile.key))}>选择本页</button>
-      <button className="text-action" type="button" disabled={!visible.length || batch !== null} title="当前分类和筛选下的全部图片（所有页）"
-        onClick={() => selectKeys(visible.map(tile => tile.key))}>选择筛选结果（{visible.length}）</button>
+      <button className="text-action" type="button" disabled={!visible.length || batch !== null} title="当前分类、搜索和筛选下的全部图片（所有页）"
+        onClick={() => selectKeys(visible.map(tile => tile.key))}>{searching ? '选择搜索结果' : '选择筛选结果'}（{visible.length}）</button>
+      {searching && <button className="text-action" type="button" disabled={!visible.some(tile => selected.has(tile.key)) || batch !== null}
+        title="只取消当前搜索结果中的已选图片" onClick={() => selectKeys(visible.map(tile => tile.key), false)}>取消选择搜索结果</button>}
       <button className="text-action" type="button" disabled={!selected.size || batch !== null} onClick={() => setSelected(new Set())}>清空选择</button>
     </div>}
-    <p className="prompt-hint">点图片选择或取消选择，点右上角 ⊘ 按钮弃置或恢复（导出时跳过已弃置）；多选后「重跑所选」，翻页和切换分类不会丢失已选；点右上角放大按钮查看原图。每页 {PAGE_SIZE} 张，只加载小尺寸预览，不占用原图缓存。</p>
+    <p className="prompt-hint">点图片选择或取消选择，点右上角 ⊘ 按钮弃置或恢复（导出时跳过已弃置）；可在「搜索训练词」里查找后「选择搜索结果」批量选中；多选后「重跑所选」，翻页、切换分类和搜索不会丢失已选；点右上角放大按钮查看原图。每页 {PAGE_SIZE} 张，只加载小尺寸预览，不占用原图缓存。</p>
     {loadError && <p className="alert" role="alert">记录读取失败：{loadError}</p>}
     {actionError && <p className="alert" role="alert">{actionError}</p>}
     {rerunMessage && <p className="subtle" role="status">{rerunMessage}</p>}
@@ -428,12 +513,47 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
           onChange={event => setBatch({ ...batch, style: event.target.value })} /></label>
       <label className="history-select"><input type="checkbox" checked={batch.discardReplaced}
         onChange={event => setBatch({ ...batch, discardReplaced: event.target.checked })} /> 开始重跑某张时弃置被替换的原图（只影响还没弃置的成功图片）</label>
-      <ol className="rerun-batch-items">{batch.sources.map((tile, index) => <li key={tile.key}>
-        <span>{ordinalLabel(tile.job)}{tile.index !== null && tile.job.image_urls.length > 1 ? ` · ${tile.index + 1}` : ''}{tile.job.status === 'failed' ? '（失败）' : tile.index !== null && tile.job.discarded_images?.includes(tile.index) ? '（已弃置）' : ''}{reruns.get(tile.job.id) ? `（已重跑 ${reruns.get(tile.job.id)} 次）` : ''}{queued.get(tile.job.id) ? `（重跑排队中 ${queued.get(tile.job.id)} 张）` : ''}{tile.job.parameters.experiment?.item?.characters?.length ? '（多人：只改共享场景）' : ''}</span>
-        <textarea rows={2} value={batch.prompts[index]} maxLength={1000} spellCheck={false} aria-label={`${ordinalLabel(tile.job)}的训练词`}
-          onChange={event => setBatch({ ...batch, prompts: batch.prompts.map((value, at) => at === index ? event.target.value : value) })} />
-        <span className="dataset-item-zh">{translatePrompt(batch.prompts[index])}</span>
-      </li>)}</ol>
+      <div className="rerun-batch-replace" role="group" aria-label="批量替换训练词">
+        <div className="caption-bulk-row" role="radiogroup" aria-label="替换操作">
+          <span>批量修改下面的训练词</span>
+          {([['replace', '文本替换'], ['prefix', '加前缀'], ['suffix', '加后缀']] as const).map(([value, label]) =>
+            <label key={value} className="history-select"><input type="radio" name="rerun-edit-kind" checked={batchEdit.kind === value} disabled={submitting}
+              onChange={() => setBatchEdit({ ...batchEdit, kind: value })} /> {label}</label>)}
+        </div>
+        {batch.characters.some(people => people.length > 0) && <div className="caption-bulk-row" role="radiogroup" aria-label="替换范围">
+          <span>范围</span>
+          {([['all', '场景和人物'], ['scene', '只改场景'], ['people', '只改人物']] as const).map(([value, label]) =>
+            <label key={value} className="history-select"><input type="radio" name="rerun-edit-target" checked={batchEdit.target === value} disabled={submitting}
+              onChange={() => setBatchEdit({ ...batchEdit, target: value })} /> {label}</label>)}
+        </div>}
+        <div className="caption-bulk-fields">
+          {batchEdit.kind === 'replace' && <label className="field"><span>查找（区分大小写，替换全部出现处）</span>
+            <input type="text" value={batchEdit.find} maxLength={1000} spellCheck={false} disabled={submitting}
+              onChange={event => setBatchEdit({ ...batchEdit, find: event.target.value })} /></label>}
+          <label className="field"><span>{batchEdit.kind === 'replace' ? '替换为（留空即删除）' : batchEdit.kind === 'prefix' ? '加在最前面' : '加在最后面'}</span>
+            <input type="text" value={batchEdit.text} maxLength={1000} spellCheck={false} disabled={submitting}
+              onChange={event => setBatchEdit({ ...batchEdit, text: event.target.value })} /></label>
+          <button className="secondary" type="button" disabled={submitting || (batchEdit.kind === 'replace' ? !batchEdit.find : !batchEdit.text.trim())}
+            onClick={applyBatchEdit}><Replace size={14} aria-hidden="true" /> 应用到 {batch.sources.length} 张</button>
+        </div>
+        {batchEditMessage && <p className="subtle" role="status">{batchEditMessage}</p>}
+      </div>
+      <ol className="rerun-batch-items">{batch.sources.map((tile, index) => {
+        const people = batch.characters[index]
+        return <li key={tile.key}>
+          <span>{ordinalLabel(tile.job)}{tile.index !== null && tile.job.image_urls.length > 1 ? ` · ${tile.index + 1}` : ''}{tile.job.status === 'failed' ? '（失败）' : tile.index !== null && tile.job.discarded_images?.includes(tile.index) ? '（已弃置）' : ''}{reruns.get(tile.job.id) ? `（已重跑 ${reruns.get(tile.job.id)} 次）` : ''}{queued.get(tile.job.id) ? `（重跑排队中 ${queued.get(tile.job.id)} 张）` : ''}{people.length ? `（多人：${people.length} 人）` : ''}</span>
+          {people.length > 0 && <span className="subtle">场景</span>}
+          <textarea rows={2} value={batch.prompts[index]} maxLength={1000} spellCheck={false} aria-label={`${ordinalLabel(tile.job)}的${people.length ? '场景' : ''}训练词`}
+            onChange={event => setBatch({ ...batch, prompts: batch.prompts.map((value, at) => at === index ? event.target.value : value) })} />
+          <span className="dataset-item-zh">{translatePrompt(batch.prompts[index])}</span>
+          {people.map((text, person) => <div key={person} className="rerun-batch-person">
+            <span className="subtle">人物 {person + 1}（位置不变）</span>
+            <textarea rows={2} value={text} maxLength={1000} spellCheck={false} aria-label={`${ordinalLabel(tile.job)}的人物 ${person + 1} 训练词`}
+              onChange={event => setBatch({ ...batch, characters: batch.characters.map((row, at) => at === index ? row.map((value, which) => which === person ? event.target.value : value) : row) })} />
+            <span className="dataset-item-zh">{translatePrompt(text)}</span>
+          </div>)}
+        </li>
+      })}</ol>
       <div className="rerun-batch-actions">
         <button type="button" disabled={submitting} onClick={() => void rerunAll()}><Dices size={14} aria-hidden="true" /> {submitting ? '正在加入队列...' : `加入队列（${batch.sources.length} 张）`}</button>
         <button className="secondary" type="button" disabled={submitting} onClick={() => setBatch(null)}>取消</button>

@@ -38,6 +38,8 @@ export interface DatasetItem {
 export interface RerunEdits {
   prompt?: string
   style_prompt?: string
+  /** Multi-person groups: one prompt per person, same order and count; positions are kept. */
+  characters?: string[]
 }
 
 export interface ReferenceImageUse {

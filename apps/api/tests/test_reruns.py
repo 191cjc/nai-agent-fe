@@ -172,3 +172,55 @@ def test_rerun_prompt_edit_keeps_character_traits(database: Database) -> None:  
             "1girl, solo, silver hair, red eyes, full body, floating")
         assert rerun["parameters"]["experiment"]["item"]["prompt"] == "full body, floating"
         assert rerun["parameters"]["reference"] == source["parameters"]["reference"]
+
+
+def test_rerun_edits_each_person_of_a_multi_person_group(
+    database: Database,  # noqa: F811
+) -> None:
+    from test_dataset_runs import MULTI_ITEM
+
+    provider = ReferenceProvider()
+    app = create_app(
+        Settings(database.path, "https://testserver"), database,
+        image_provider=provider, result_cache=ResultCache(),
+    )
+    app.state.experiments._interval = 0.01
+    with TestClient(app, base_url="https://testserver") as client:
+        login(client, database, "alice")
+        run = finished_run(client, items=[MULTI_ITEM], model="nai-diffusion-4-5-full",
+                           prompt_comments=True)
+        page = client.get(f"/api/style-experiments/{run['id']}", params={"limit": 10}).json()
+        source = page["items"][0]
+        url = f"/api/generations/{source['id']}/rerun"
+        for bad in ({"characters": ["girl, red hair"]},  # count differs
+                    {"characters": ["girl", " "]},
+                    {"characters": ["girl", "x" * 1001]},
+                    {"characters": ["girl", "girl\n// hidden"]},
+                    {"characters": []}):
+            assert client.post(url, json=bad, headers=ORIGIN).status_code == 422, bad
+        edited = ["girl, long hair, red hair, navy blue blazer",
+                  "girl, short hair, blonde hair, white cardigan"]
+        accepted = client.post(url, json={"characters": edited, "prompt": "2girls, cafe"},
+                               headers=ORIGIN)
+        assert accepted.status_code == 202
+        rerun = wait(client, f"/api/generations/{accepted.json()['id']}",
+                     lambda job: job["status"] == "succeeded")
+        parameters = rerun["parameters"]
+        expected = [{**person, "prompt": text}
+                    for person, text in zip(MULTI_ITEM["characters"], edited, strict=True)]
+        assert parameters["positive_prompt"] == "2girls, cafe"
+        assert parameters["character_prompts"] == expected
+        assert parameters["experiment"]["item"] == {
+            **MULTI_ITEM, "prompt": "2girls, cafe", "characters": expected}
+        # Unchanged people are no edit at all: the frozen source is reused.
+        frozen = [person["prompt"] for person in MULTI_ITEM["characters"]]
+        same = client.post(url, json={"characters": frozen}, headers=ORIGIN)
+        assert same.status_code == 202
+        kept = client.get(f"/api/generations/{same.json()['id']}").json()["parameters"]
+        assert kept["character_prompts"] == MULTI_ITEM["characters"]
+        # Single-person groups have no people to edit.
+        single = finished_run(client)
+        plain = client.get(f"/api/style-experiments/{single['id']}", params={"limit": 1}).json()
+        refused = client.post(f"/api/generations/{plain['items'][0]['id']}/rerun",
+                              json={"characters": ["girl"]}, headers=ORIGIN)
+        assert refused.status_code == 422

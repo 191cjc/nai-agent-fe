@@ -207,3 +207,18 @@ zero reachability and near-limit bounds; do not run frontend helper tests.
   加前缀 / 加后缀 / 恢复默认 (`applyCaptionOperation`); preview of the change count and
   three samples; results that would be blank are skipped. Saved in ≤3000-item chunks
   via the captions PUT; tiles show 「训练词已改」 and gloss the override.
+
+## Review grid search and re-run bulk edits (2026-11-07)
+
+- 「搜索训练词」 filters tiles together with category and hide-discarded. Text searched
+  per group (precomputed once per load): `contentCaption()` (override, else derived
+  tags) plus its Chinese gloss, lower-cased. `parseSearch`: terms split on `,`/`，`, all
+  must match as substrings; `-term` excludes. While searching the quick pick reads
+  「选择搜索结果（N）」 plus 「取消选择搜索结果」; selection still survives search changes.
+- Re-run editor: multi-person tiles show the scene box plus one box per person
+  (「人物 N（位置不变）」); changed people are sent as `characters` (all people, in
+  order). A bulk bar applies 文本替换 / 加前缀 / 加后缀 (`applyRerunOperation`, reusing
+  `applyCaptionOperation`) to every prompt in the batch, scoped 场景和人物 / 只改场景 /
+  只改人物 when any multi-person tile is present; results that would be blank are
+  skipped and counted. It edits the drafts only; nothing is sent until 「加入队列」.
+- `applyCaptionOperation` also collapses empty tags left by a removal (`a, , b` → `a, b`).
