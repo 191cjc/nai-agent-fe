@@ -31,6 +31,7 @@ from .config import Settings
 from .dataset_plan import DatasetRunCreate
 from .db import Database
 from .generations import (
+    DiscardedImagesDeleted,
     ExperimentConflict,
     ExperimentDeleted,
     ExperimentDetail,
@@ -818,6 +819,43 @@ def create_app(
         return CaptionsSaved(updated=len(entries))
 
     @app.delete(
+        "/api/style-experiments/{experiment_id}/discarded-images",
+        response_model=DiscardedImagesDeleted,
+        responses={
+            401: {"model": ApiError}, 403: {"model": ApiError}, 404: {"model": ApiError},
+            422: {"model": ApiError}, 503: {"model": ApiError},
+        },
+    )
+    def delete_discarded_images(
+        experiment_id: UUID, user: Annotated[UserInfo, Depends(require_user)],
+    ) -> DiscardedImagesDeleted | JSONResponse:
+        outcome = manager.store.begin_discarded_cleanup(user.id, str(experiment_id))
+        if outcome is None:
+            raise HTTPException(
+                status_code=404,
+                detail=ApiError(code="not_found", message="Training set not found").model_dump(),
+            )
+        status, targets = outcome
+        if status == "unsupported":
+            return error(422, "cleanup_unsupported", "Only training-set images can be cleaned up")
+        result = DiscardedImagesDeleted()
+        for job_id, index in targets:
+            # Intent is committed first: failures/restarts keep the identity private and
+            # leave unfinished physical removals available to an explicit retry.
+            thumbnails.discard(job_id)
+            try:
+                removed = manager.cache.purge_image(job_id, user.id, index)
+                manager.store.complete_image_purge(user.id, job_id, index)
+            except (OSError, ResultStorageUnavailable, sqlite3.Error):
+                result.failed_images += 1
+            else:
+                if removed:
+                    result.deleted_images += 1
+                else:
+                    result.missing_images += 1
+        return result
+
+    @app.delete(
         "/api/style-experiments/{experiment_id}",
         response_model=ExperimentDeleted,
         responses={
@@ -878,9 +916,11 @@ def create_app(
     ) -> Response:
         job = own_job(user, job_id)
         image = (
-            manager.cache.image(job_id, user.id, image_id) if job.status == "succeeded" else None
+            manager.cache.image(job_id, user.id, image_id)
+            if job.status == "succeeded" and not manager.store.is_purged(user.id, job_id, image_id)
+            else None
         )
-        if image is None:
+        if image is None or manager.store.is_purged(user.id, job_id, image_id):
             raise HTTPException(
                 status_code=404,
                 detail=ApiError(code="not_found", message="Image not found").model_dump(),
@@ -916,7 +956,9 @@ def create_app(
         job = own_job(user, job_id)
         info = manager.cache.describe(job_id, user.id) if job.status == "succeeded" else None
         data = None
-        if info is not None and 0 <= image_id < info.image_count:
+        if info is not None and 0 <= image_id < info.image_count and not (
+            manager.store.is_purged(user.id, job_id, image_id)
+        ):
             data = thumbnails.get(job_id, user.id, image_id)
             if data is None:
                 image = manager.cache.image(job_id, user.id, image_id)
@@ -927,6 +969,9 @@ def create_app(
                         return error(503, "thumbnail_busy", "Previews are busy", retryable=True)
                     except (OSError, ValueError):
                         data = None
+        if manager.store.is_purged(user.id, job_id, image_id):
+            thumbnails.discard(job_id)
+            data = None
         if data is None:
             raise HTTPException(
                 status_code=404,
@@ -971,14 +1016,16 @@ def create_app(
         status_code=204,
         responses={
             401: {"model": ApiError}, 403: {"model": ApiError}, 404: {"model": ApiError},
-            422: {"model": ApiError}, 503: {"model": ApiError},
+            409: {"model": ApiError}, 422: {"model": ApiError}, 503: {"model": ApiError},
         },
     )
     def restore_image(
         job_id: str, image_index: int, user: Annotated[UserInfo, Depends(require_user)],
-    ) -> None:
+    ) -> Response:
         discard_target(user, job_id, image_index)
-        manager.store.set_discarded(user.id, job_id, image_index, False)
+        if not manager.store.set_discarded(user.id, job_id, image_index, False):
+            return error(409, "image_purged", "This image was permanently deleted")
+        return Response(status_code=204)
 
     @app.post(
         "/api/generations/{job_id}/rerun",
@@ -1174,9 +1221,11 @@ def create_app(
         job = own_job(user, payload.job_id)
         image = (
             manager.cache.image(payload.job_id, user.id, payload.image_index)
-            if job.status == "succeeded" else None
+            if job.status == "succeeded" and not manager.store.is_purged(
+                user.id, payload.job_id, payload.image_index,
+            ) else None
         )
-        if image is None:
+        if image is None or manager.store.is_purged(user.id, payload.job_id, payload.image_index):
             return error(404, "not_found", "Image not found or expired")
         try:
             return references.add(user.id, image.data, source="result")

@@ -26,11 +26,10 @@ generated image bytes to it.
   The migration removes group/other permissions from existing DB/WAL/SHM
   files while preserving owner bits and data. It does not chmod pre-existing
   directories or change the process-wide umask.
-- Admin migrations run before API readiness. DB schema lives in
-  `migrations/0001_auth.sql`, `0002_generations.sql` and
-  `0003_style_experiments.sql`, `0004_prompt_snapshots.sql` and
-  `0005_provider_requests.sql` and `0006_reference_images.sql` and `0007_discarded_images.sql` and `0008_experiment_names.sql` (current schema8), with
-  `PRAGMA user_version` and transactional scripts. Store job parameters, effective
+- Admin migrations run before API readiness. DB schema lives in the ordered SQL
+  files under `migrations/`, from `0001_auth.sql` through
+  `0013_purged_images.sql`, with `PRAGMA user_version` and transactional scripts.
+  Store job parameters, effective
   seed, timestamps and outcome, including optional experiment metadata in
   settings_json. Durable compact run/cursor/seed/Stop state uses the schema3 run table; see
   [Durable Experiments](./durable-experiment-contract.md). Image payloads are stored separately in private seven-day
@@ -50,6 +49,10 @@ generated image bytes to it.
   online backups; back them up separately like generation images). Readiness
   probes the table. Provider-request snapshots of reference groups store only
   `{sha256, byte_size}`. See [Character Dataset Runs](./character-dataset-contract.md).
+- Schema13 adds owner/job/index-keyed permanent-purge intent and file-cleanup
+  completion metadata. Persist intent before physical deletion, preserve pending
+  failures for retry, and keep image bytes outside SQLite. See
+  [Dataset Review and Cleanup](./dataset-review-contract.md).
 - Deploy the API on a trusted, private data volume. Existing parent directory
   modes and Windows ACLs require operator review; these POSIX modes do not
   protect against an attacker who can replace paths inside the directory.

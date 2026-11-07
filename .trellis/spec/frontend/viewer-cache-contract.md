@@ -104,7 +104,9 @@ no API, server scheduler or provider changes.
 
 - Good: explicitly load a72-image experiment and compare its cached PNGs with
   arrows while preserving fresh metadata and original seven-day expiry.
-- Base: ordinary opening still loads one selected PNG under32/64MiB budgets.
+- Base: ordinary single-image opening loads one selected PNG under32/64MiB budgets.
+  Saved datasets initially open the thumbnail grid without a full PNG, under
+  [Dataset Review and Cleanup](../backend/dataset-review-contract.md).
 - Bad: download1000 images into32-entry LRU while claiming all are cached, or
   mark expired historical images as successfully available.
 
@@ -172,6 +174,12 @@ acceptance; do not issue paid requests for cache verification.
 - The per-tile ⊘ / ↶ button toggles the discard mark (same PUT/DELETE as the
   viewer); clicking the image itself only selects it. Filters:
   item category (from the frozen item id prefix) and 「隐藏已弃置」.
+- Saved datasets now select this grid on each explicit open, with hide-discarded
+  initially enabled. Explicit current-set permanent cleanup, purged-slot omission,
+  and affected preview/full-image URL invalidation follow
+  [Dataset Review and Cleanup](../backend/dataset-review-contract.md).
+- Key review instances by set ID plus the store's per-open `selectionVersion`,
+  so reopening the same ID resets defaults and invalidates old async UI handlers.
 - 「重跑全部待替换」: after one confirm showing the paid count, submits one
   rerun per discarded image and per failed group not yet replaced
   (`pendingReruns`: wanted − existing groups whose `rerun_of` names it),

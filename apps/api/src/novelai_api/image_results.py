@@ -260,6 +260,14 @@ class DiskResultStore:
             total += image["size"]
         if total > MAX_RESULT_BYTES:
             raise ValueError("Invalid image result size")
+        deleted = manifest.get("deleted_images", [])
+        if (
+            not isinstance(deleted, list)
+            or any(type(index) is not int or not 0 <= index < len(manifest["images"])
+                   for index in deleted)
+            or len(set(deleted)) != len(deleted)
+        ):
+            raise ValueError("Invalid deleted image indexes")
         return manifest
 
     @contextmanager
@@ -274,6 +282,8 @@ class DiskResultStore:
                     raise ValueError("Image unavailable")
                 # A missing/symlink/short/oversized member invalidates the entire set.
                 for index, image in enumerate(manifest["images"]):
+                    if index in manifest.get("deleted_images", []):
+                        continue
                     details = os.stat(f"{index}.png", dir_fd=directory, follow_symlinks=False)
                     if not stat.S_ISREG(details.st_mode) or details.st_size != image["size"]:
                         raise ValueError("Image unavailable")
@@ -281,8 +291,8 @@ class DiskResultStore:
             finally:
                 os.close(directory)
 
-    # Reads take no lock: results appear by atomic rename and are never modified in place,
-    # so a concurrent sweep/discard can only make a read fail closed (None).
+    # Reads take no lock: publication and deletion markers use atomic rename. A
+    # concurrent member deletion/sweep can only make a read fail closed (None).
     def describe(self, job_id: str, user_id: str) -> ResultInfo | None:
         try:
             with self._result(job_id, user_id) as (_directory, manifest):
@@ -294,6 +304,8 @@ class DiskResultStore:
         try:
             with self._result(job_id, user_id) as (directory, manifest):
                 if not 0 <= index < len(manifest["images"]):
+                    return None
+                if index in manifest.get("deleted_images", []):
                     return None
                 data = self._read(directory, f"{index}.png", MAX_IMAGE_BYTES)
                 image = GeneratedImage(data, "image/png")
@@ -327,6 +339,75 @@ class DiskResultStore:
                 with self._root() as root:
                     self._remove_directory(root, job_id)
             except OSError:
+                pass
+
+    def purge_image(self, job_id: str, user_id: str, index: int) -> bool:
+        """Unlink exactly one original member, retaining siblings and the original TTL.
+
+        The durable marker is published before unlink. Retrying a previously marked
+        member still attempts unlink, so a filesystem error never becomes false success.
+        Only manifest metadata is read; no remaining image is decoded or rewritten.
+        """
+        if not _uuid(job_id) or not _uuid(user_id):
+            raise ResultStorageUnavailable("Image cleanup unavailable")
+        with self._lock:
+            directory_opened = False
+            try:
+                with self._root() as root:
+                    directory = os.open(job_id, DIRECTORY_FLAGS, dir_fd=root)
+                    directory_opened = True
+                    try:
+                        manifest = self._manifest(directory, job_id)
+                        if manifest["user_id"] != user_id or not (
+                            type(index) is int and 0 <= index < len(manifest["images"])
+                        ):
+                            raise ValueError("Image cleanup unavailable")
+                        deleted = set(manifest.get("deleted_images", []))
+                        if index not in deleted:
+                            manifest["deleted_images"] = sorted(deleted | {index})
+                            self._replace_manifest(directory, manifest)
+                        try:
+                            details = os.stat(
+                                f"{index}.png", dir_fd=directory, follow_symlinks=False,
+                            )
+                        except FileNotFoundError:
+                            return False
+                        if not stat.S_ISREG(details.st_mode):
+                            raise ValueError("Image cleanup unavailable")
+                        os.unlink(f"{index}.png", dir_fd=directory)
+                        os.fsync(directory)
+                        return True
+                    finally:
+                        os.close(directory)
+            except FileNotFoundError as exception:
+                # A missing result directory/root already contains no image bytes.
+                if not directory_opened:
+                    return False
+                raise ResultStorageUnavailable("Image cleanup unavailable") from exception
+            except (OSError, ValueError, TypeError) as exception:
+                raise ResultStorageUnavailable("Image cleanup unavailable") from exception
+
+    def _replace_manifest(self, directory: int, manifest: dict) -> None:
+        serialized = json.dumps(manifest, separators=(",", ":")).encode("utf-8")
+        if len(serialized) > MAX_MANIFEST_BYTES:
+            raise ValueError("Invalid image manifest size")
+        temporary = f".manifest-{uuid4()}"
+        descriptor = os.open(
+            temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+            0o600, dir_fd=directory,
+        )
+        try:
+            try:
+                self._write(descriptor, serialized)
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+            os.replace(temporary, "manifest.json", src_dir_fd=directory, dst_dir_fd=directory)
+            os.fsync(directory)
+        finally:
+            try:
+                os.unlink(temporary, dir_fd=directory)
+            except FileNotFoundError:
                 pass
 
     @staticmethod

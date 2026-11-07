@@ -51,10 +51,13 @@ def test_openapi_contract_matches_snapshot_without_database_or_provider_calls(
         ("/api/generations/{job_id}", "get"): {401, 404, 422, 503},
         ("/api/generations/{job_id}", "delete"): {401, 403, 404, 409, 422, 503},
         (DISCARD, "put"): {401, 403, 404, 422, 503},
-        (DISCARD, "delete"): {401, 403, 404, 422, 503},
+        (DISCARD, "delete"): {401, 403, 404, 409, 422, 503},
         ("/api/generations/{job_id}/rerun", "post"): {401, 403, 404, 409, 422, 429, 503},
         ("/api/rerun-batches", "post"): {401, 403, 404, 409, 422, 503},
         ("/api/style-experiments/{experiment_id}/captions", "put"): {401, 403, 404, 422, 503},
+        ("/api/style-experiments/{experiment_id}/discarded-images", "delete"): {
+            401, 403, 404, 422, 503,
+        },
         ("/api/prompt-snapshots", "get"): {401, 422, 503},
         ("/api/prompt-snapshots", "post"): {401, 403, 409, 422, 503},
         ("/api/prompt-snapshots/{snapshot_id}", "get"): {401, 404, 422, 503},
@@ -161,6 +164,11 @@ def test_openapi_contract_matches_snapshot_without_database_or_provider_calls(
     }
     assert "enabled" not in section_character_schema["required"]
     view_fields = schema["components"]["schemas"]["GenerationView"]["properties"]
+    for field in ("purged_images", "purge_pending_images"):
+        assert view_fields[field]["type"] == "array"
+        assert view_fields[field]["items"] == {"type": "integer"}
+    cleanup_fields = schema["components"]["schemas"]["DiscardedImagesDeleted"]["properties"]
+    assert set(cleanup_fields) == {"deleted_images", "missing_images", "failed_images"}
     assert view_fields["provider_request"] == {
         "anyOf": [{"additionalProperties": True, "type": "object"}, {"type": "null"}],
         "title": "Provider Request",

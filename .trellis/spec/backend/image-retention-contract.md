@@ -112,8 +112,10 @@ or paid generation/advice. Real operator interaction stays a separate gate.
 - `thumbnails.ThumbnailCache`: memory-only LRU keyed by `(job_id, index)` and
   bound to the owner, 32 MiB total. Nothing is written to the result
   directory, so retention sweeps, budgets and lock-free reads are unchanged.
-  Results never change in place; every hit is still gated by `describe`, and
-  a successful `DELETE /api/generations/{id}` evicts that job's previews.
+  Original image identities never change in place; explicit
+  [per-image purge](./dataset-review-contract.md) can remove a slot without
+  renumbering siblings. Every hit is gated by current result metadata and purge
+  intent, and successful job deletion or per-image purge evicts affected previews.
 - Rendering: Pillow, PNG only, ≤2048×2048 source pixels checked before
   decoding; a fresh image is saved so no PNG text/ICC/EXIF survives. At most
   2 concurrent renders; a request that waits 20 s returns 503

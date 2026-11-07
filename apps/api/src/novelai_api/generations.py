@@ -402,6 +402,9 @@ class GenerationView(HistoryItem):
     provider_request: dict[str, Any] | None = None
     # Owner review marks: exports skip these image indexes; files are kept.
     discarded_images: list[int] = Field(default_factory=list)
+    # Original indexes remain stable after irreversible cleanup, including pending unlinks.
+    purged_images: list[int] = Field(default_factory=list)
+    purge_pending_images: list[int] = Field(default_factory=list)
     # Owner-edited training caption (content tags) of a training-set group; None = derived.
     caption_override: str | None = None
 
@@ -432,6 +435,12 @@ ExperimentName = Annotated[str | None, AfterValidator(_clean_experiment_name)]
 class ExperimentDeleted(BaseModel):
     deleted_groups: int
     deleted_images: int
+
+
+class DiscardedImagesDeleted(BaseModel):
+    deleted_images: int = 0
+    missing_images: int = 0
+    failed_images: int = 0
 
 
 class ExperimentRename(BaseModel):
@@ -502,6 +511,9 @@ SELECT experiment_id AS id,
     substr(MIN(CASE WHEN status = 'succeeded' AND image_count > 0 AND NOT EXISTS (
         SELECT 1 FROM discarded_images AS d WHERE d.user_id = experiment_rows.user_id
             AND d.job_id = experiment_rows.id AND d.image_index = 0
+    ) AND NOT EXISTS (
+        SELECT 1 FROM purged_images AS p WHERE p.user_id = experiment_rows.user_id
+            AND p.job_id = experiment_rows.id AND p.image_index = 0
     ) THEN printf('%06d', length(ordinal)) || ordinal || printf('%012d', row_order) || id
     END), -36) AS cover_job_id
 FROM experiment_rows LEFT JOIN experiment_names AS names
@@ -686,8 +698,13 @@ class JobStore:
                 )
             return True
 
-    def set_discarded(self, user_id: str, job_id: str, index: int, discarded: bool) -> None:
+    def set_discarded(self, user_id: str, job_id: str, index: int, discarded: bool) -> bool:
         with self.database.connect(write=True) as connection:
+            if not discarded and connection.execute(
+                "SELECT 1 FROM purged_images WHERE user_id = ? AND job_id = ? "
+                "AND image_index = ?", (user_id, job_id, index),
+            ).fetchone() is not None:
+                return False
             if discarded:
                 connection.execute(
                     "INSERT OR IGNORE INTO discarded_images (user_id, job_id, image_index, "
@@ -698,6 +715,89 @@ class JobStore:
                     "DELETE FROM discarded_images WHERE user_id = ? AND job_id = ? "
                     "AND image_index = ?", (user_id, job_id, index),
                 )
+        return True
+
+    def begin_discarded_cleanup(
+        self, user_id: str, experiment_id: str,
+    ) -> tuple[str, list[tuple[str, int]]] | None:
+        """Snapshot one owner's discarded dataset identities and durably deny restore.
+
+        Read only identity/status metadata, never materialize stored prompts. The
+        immediate transaction serializes discard restoration against purge intent.
+        Previously completed purges are omitted; incomplete file removal is retried.
+        """
+        with self.database.connect(write=True) as connection:
+            run = connection.execute(
+                "SELECT json_extract(definition_json, '$.kind') AS kind "
+                "FROM style_experiment_runs WHERE user_id = ? AND id = ?",
+                (user_id, experiment_id),
+            ).fetchone()
+            groups = connection.execute(
+                "SELECT DISTINCT json_extract(settings_json, '$.experiment.kind') AS kind "
+                "FROM generation_jobs WHERE user_id = ? AND json_valid(settings_json) "
+                "AND json_extract(settings_json, '$.experiment.id') = ?",
+                (user_id, experiment_id),
+            ).fetchall()
+            if run is None and not groups:
+                return None
+            if (run is not None and run["kind"] != "dataset") or any(
+                group["kind"] != "dataset" for group in groups
+            ):
+                return "unsupported", []
+            rows = connection.execute(
+                "SELECT d.job_id, d.image_index FROM discarded_images AS d "
+                "JOIN generation_jobs AS j ON j.id = d.job_id AND j.user_id = d.user_id "
+                "LEFT JOIN purged_images AS p ON p.user_id = d.user_id "
+                "AND p.job_id = d.job_id AND p.image_index = d.image_index "
+                "WHERE d.user_id = ? AND j.status = 'succeeded' "
+                "AND d.image_index < j.image_count AND json_valid(j.settings_json) "
+                "AND json_extract(j.settings_json, '$.experiment.id') = ? "
+                "AND p.completed_at IS NULL ORDER BY d.job_id, d.image_index",
+                (user_id, experiment_id),
+            ).fetchall()
+            targets = [(row["job_id"], row["image_index"]) for row in rows]
+            connection.executemany(
+                "INSERT OR IGNORE INTO purged_images "
+                "(user_id, job_id, image_index, created_at) VALUES (?, ?, ?, ?)",
+                [(user_id, job_id, index, int(time.time())) for job_id, index in targets],
+            )
+        return "ready", targets
+
+    def complete_image_purge(self, user_id: str, job_id: str, index: int) -> None:
+        with self.database.connect(write=True) as connection:
+            connection.execute(
+                "UPDATE purged_images SET completed_at = COALESCE(completed_at, ?) "
+                "WHERE user_id = ? AND job_id = ? AND image_index = ?",
+                (int(time.time()), user_id, job_id, index),
+            )
+
+    def is_purged(self, user_id: str, job_id: str, index: int) -> bool:
+        with self.database.connect() as connection:
+            return connection.execute(
+                "SELECT 1 FROM purged_images WHERE user_id = ? AND job_id = ? "
+                "AND image_index = ?", (user_id, job_id, index),
+            ).fetchone() is not None
+
+    def purged(
+        self, user_id: str, job_ids: Sequence[str],
+    ) -> tuple[dict[str, list[int]], dict[str, list[int]]]:
+        marks: dict[str, list[int]] = {job_id: [] for job_id in job_ids}
+        pending: dict[str, list[int]] = {job_id: [] for job_id in job_ids}
+        if not job_ids:
+            return marks, pending
+        with self.database.connect() as connection:
+            for start in range(0, len(job_ids), 500):
+                chunk = list(job_ids[start:start + 500])
+                rows = connection.execute(
+                    "SELECT job_id, image_index, completed_at FROM purged_images "
+                    f"WHERE user_id = ? AND job_id IN ({','.join('?' * len(chunk))}) "
+                    "ORDER BY image_index", (user_id, *chunk),
+                ).fetchall()
+                for row in rows:
+                    marks[row["job_id"]].append(row["image_index"])
+                    if row["completed_at"] is None:
+                        pending[row["job_id"]].append(row["image_index"])
+        return marks, pending
 
     def caption_overrides(self, user_id: str, job_ids: Sequence[str]) -> dict[str, str]:
         captions: dict[str, str] = {}
@@ -895,7 +995,7 @@ class JobStore:
 @dataclass
 class CachedResult:
     user_id: str
-    images: tuple[GeneratedImage, ...]
+    images: tuple[GeneratedImage | None, ...]
     expires_at: int
     deadline: float
     size: int
@@ -936,6 +1036,7 @@ class ResultStore(Protocol):
     def put(self, job_id: str, user_id: str, images: Sequence[GeneratedImage]) -> bool: ...
     def describe(self, job_id: str, user_id: str) -> ResultInfo | None: ...
     def image(self, job_id: str, user_id: str, index: int) -> GeneratedImage | None: ...
+    def purge_image(self, job_id: str, user_id: str, index: int) -> bool: ...
     def discard(self, job_id: str) -> None: ...
 
 
@@ -995,6 +1096,23 @@ class ResultCache:
     def discard(self, job_id: str) -> None:
         with self._lock:
             self._remove(job_id)
+
+    def purge_image(self, job_id: str, user_id: str, index: int) -> bool:
+        """Release one member's bytes without changing any sibling's original index."""
+        with self._lock:
+            self._prune()
+            result = self._results.get(job_id)
+            if result is None or result.user_id != user_id or not 0 <= index < len(result.images):
+                return False
+            image = result.images[index]
+            if image is None:
+                return False
+            images = list(result.images)
+            images[index] = None
+            result.images = tuple(images)
+            result.size -= len(image.data)
+            self._size -= len(image.data)
+            return True
 
     def _remove(self, job_id: str) -> None:
         result = self._results.pop(job_id, None)
@@ -1132,18 +1250,26 @@ class GenerationManager:
         ids = [job.id for job in jobs]
         marks = self.store.discarded(user_id, ids)
         captions = self.store.caption_overrides(user_id, ids)
+        purged, pending = self.store.purged(user_id, ids)
         return [
-            self.view(job, user_id, discarded=marks[job.id], caption=captions.get(job.id, ""))
+            self.view(
+                job, user_id, discarded=marks[job.id], caption=captions.get(job.id, ""),
+                purged=purged[job.id], purge_pending=pending[job.id],
+            )
             for job in jobs
         ]
 
     def view(
         self, job: HistoryItem, user_id: str, *, discarded: list[int] | None = None,
         caption: str | None = None,
+        purged: list[int] | None = None, purge_pending: list[int] | None = None,
     ) -> GenerationView:
         # caption: "" = looked up, none set; None = not looked up yet.
         if caption is None:
             caption = self.store.caption_overrides(user_id, [job.id]).get(job.id, "")
+        if purged is None or purge_pending is None:
+            marks, pending = self.store.purged(user_id, [job.id])
+            purged, purge_pending = marks[job.id], pending[job.id]
         result = self.cache.describe(job.id, user_id) if job.status == "succeeded" else None
         raw_request = job._provider_request_json
         if raw_request is _NOT_LOADED:
@@ -1161,6 +1287,8 @@ class GenerationManager:
                 else self.store.discarded(user_id, [job.id])[job.id]
             ),
             caption_override=caption or None,
+            purged_images=purged,
+            purge_pending_images=purge_pending,
         )
 
     def is_inflight(self, job_id: str) -> bool:

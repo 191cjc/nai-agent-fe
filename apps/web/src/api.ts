@@ -162,6 +162,10 @@ export interface GenerationView extends HistoryItem {
   provider_request: Record<string, unknown> | null
   /** Owner review marks: exports skip these image indexes. */
   discarded_images?: number[]
+  /** Permanently unavailable original image indexes; original URL slots never shift. */
+  purged_images?: number[]
+  /** Purged indexes whose physical cleanup needs an explicit retry. */
+  purge_pending_images?: number[]
   /** Training-set groups: owner-edited training caption (content tags); null = derived from the item. */
   caption_override?: string | null
 }
@@ -169,6 +173,12 @@ export interface GenerationView extends HistoryItem {
 export interface HistoryPage {
   items: HistoryItem[]
   next_offset: number | null
+}
+
+export interface ImagePurgeResult {
+  deleted_images: number
+  missing_images: number
+  failed_images: number
 }
 
 export type ExperimentKind = 'style' | 'dataset'
@@ -383,6 +393,7 @@ export function errorText(error: unknown): string {
       provider_unavailable: '图像服务暂不可用，请联系管理员。',
       result_storage_unavailable: '图片保存空间暂不可用，本次未提交生成，请稍后再试或联系管理员。',
       result_storage_error: '图片保存失败，请检查历史记录；请勿自动重新生成。',
+      image_purged: '这张图片已永久清理，无法恢复。',
       experiment_conflict: '这组画风实验已经提交或实验信息不一致，请先检查历史记录。',
       experiment_run_active: '已有进行中的画风实验或训练集批跑，请查看其进度或手动停止。',
       gpt_concurrency_too_high: 'GPT 并发数超过了服务器上限（NAI_GPT_IMAGE_CONCURRENCY）。',
@@ -625,6 +636,14 @@ export class WorkspaceApi {
 
   deleteExperiment(id: string): Promise<{ deleted_groups: number; deleted_images: number }> {
     return this.request(`/api/style-experiments/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  }
+
+  async purgeDiscardedImages(id: string): Promise<ImagePurgeResult> {
+    const result = await this.request<ImagePurgeResult>(`/api/style-experiments/${encodeURIComponent(id)}/discarded-images`, { method: 'DELETE' })
+    if (!result || ![result.deleted_images, result.missing_images, result.failed_images].every(value => Number.isSafeInteger(value) && value >= 0)) {
+      throw new ApiFailure(0, 'invalid_response', '清理结果无法确认，请刷新记录后重试清理。')
+    }
+    return result
   }
 
   renameExperiment(id: string, name: string | null): Promise<void> {

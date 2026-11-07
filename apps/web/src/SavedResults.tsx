@@ -9,6 +9,7 @@ import type { SavedResultsStore } from './saved-results'
 import { ImageSaveButton, ImageSeedButton } from './ImageActions'
 import { preciseLabel } from './character-summary'
 import { ReferenceThumb } from './ReferencePreview'
+import { imagePurged } from './result-images'
 
 /** Name shown in confirmations; unnamed sets fall back to kind and creation time. */
 function experimentLabel(experiment: ExperimentSummary): string {
@@ -238,7 +239,6 @@ export const SavedResultViewer = observer(({ saved, api, onClose, onUseSeed, can
 }) => {
   const viewerRef = useRef<HTMLDivElement>(null)
   const selection = saved.selection
-  const [gridFor, setGridFor] = useState<string | null>(null)
   // Single re-run editor: prefilled with this group's frozen item prompt, people and style.
   // Stays open until the server queues it; `batchId` is reused after an unknown outcome.
   const [rerunEdit, setRerunEdit] = useState<{ jobId: string; batchId: string; prompt: string; characters: string[]; style: string } | null>(null)
@@ -254,12 +254,15 @@ export const SavedResultViewer = observer(({ saved, api, onClose, onUseSeed, can
   }, [selection])
   if (!selection) return null
   const datasetSelection = selection.kind === 'experiment' && saved.summary?.kind === 'dataset'
-  const grid = datasetSelection && gridFor === selection.id
+  const grid = datasetSelection && saved.grid
   const job = saved.job
   const image = saved.image
   const context = job?.parameters.experiment
   const isExperiment = selection.kind === 'experiment'
-  const isDataset = context?.kind === 'dataset'
+  const isDataset = datasetSelection || context?.kind === 'dataset'
+  const restorableDiscarded = job?.discarded_images?.filter(index => !imagePurged(job, index)).length ?? 0
+  const pendingPurges = new Set(job?.purge_pending_images ?? [])
+  const purgedCount = new Set(job?.purged_images?.filter(index => !pendingPurges.has(index)) ?? []).size
   const preloadLabel = {
     idle: '', reading: '正在读取实验记录', loading: '正在加载图片', completed: '本次加载检查已结束',
     cancelled: '已取消加载，已缓存图片仍可使用', capacity: '已达到缓存容量限制，后续图片尚未加载', error: '加载检查中断，可重新开始',
@@ -269,7 +272,9 @@ export const SavedResultViewer = observer(({ saved, api, onClose, onUseSeed, can
     : saved.imageLoading ? '正在加载图片...'
       : saved.error ? '记录暂不可用，请查看下方信息。'
         : saved.imageError ? '这张图片已过期或暂不可用。'
-          : job?.status === 'failed' ? '本组生成失败，参数和权重仍可查看。'
+          : pendingPurges.has(saved.imageIndex) ? '这张图片待重试清理，已禁止查看或恢复。'
+            : saved.currentPurged ? '这张图片已永久清理，生成参数记录仍保留。'
+            : job?.status === 'failed' ? '本组生成失败，参数和权重仍可查看。'
             : job?.status === 'queued' || job?.status === 'running' ? '任务尚未结束。服务器实验独立执行，可手动刷新查看结果。'
               : '图片已过期或没有保存的图片，参数和权重仍可查看。'
 
@@ -284,9 +289,9 @@ export const SavedResultViewer = observer(({ saved, api, onClose, onUseSeed, can
         {job && <span className={`status status-${job.status}`}>{jobStatus(job.status)}</span>}
       </div>
       <div className="saved-viewer-toolbar-actions">
-        {datasetSelection && <button className="text-action" type="button" aria-pressed={grid}
-          title="一屏查看多张小预览，可多选重跑、按按钮弃置；适合筛训练集" onClick={() => setGridFor(grid ? null : selection.id)}>
-          <LayoutGrid size={15} aria-hidden="true" /> {grid ? '单张查看' : '网格检查'}</button>}
+        {datasetSelection && <button className="text-action" type="button" aria-pressed={grid} disabled={saved.purgeBusy || saved.loading}
+          title="一屏查看多张小预览，可多选重跑、按按钮弃置；适合筛训练集" onClick={() => { if (grid) void saved.showSingle(); else saved.showGrid() }}>
+          <LayoutGrid size={15} aria-hidden="true" /> {grid ? '单张查看' : '缩略图'}</button>}
         {isExperiment && !grid && <button className="text-action saved-preload-button" type="button" aria-describedby="saved-preload-help"
           onClick={() => { if (saved.preloading) saved.cancelPreload(); else void saved.preloadImages() }}>
           {saved.preloading ? <X size={15} aria-hidden="true" /> : <Images size={15} aria-hidden="true" />}
@@ -298,8 +303,8 @@ export const SavedResultViewer = observer(({ saved, api, onClose, onUseSeed, can
       </div>
     </div>
     {grid ? <Suspense fallback={<p className="subtle" role="status">正在打开网格检查…</p>}>
-      <ReviewGrid api={api} experimentId={selection.id} setName={saved.summary?.name} onQueued={onRerunQueued} onClose={() => setGridFor(null)}
-        onOpen={(offset, image) => { setGridFor(null); void saved.showGroup(offset, image) }} />
+      <ReviewGrid key={`${selection.id}:${saved.selectionVersion}`} api={api} experimentId={selection.id} setName={saved.summary?.name} onQueued={onRerunQueued} onClose={() => void saved.showSingle()}
+        onPurge={saved.purgeDiscardedImages} onOpen={(offset, image) => void saved.showGroup(offset, image)} />
     </Suspense> : <>
       <figure className="canvas-figure">
         <div className="experiment-image-viewer" role="group" aria-label="已保存图片切换" aria-describedby="saved-navigation-help"
@@ -322,7 +327,7 @@ export const SavedResultViewer = observer(({ saved, api, onClose, onUseSeed, can
             disabled={!saved.canNext} onClick={() => move(1)}><ArrowRight size={22} aria-hidden="true" /></button>
         </div>
         <figcaption className="canvas-caption">
-          <span aria-live="polite" aria-atomic="true">{groupLabel}{job && (job.image_urls.length ? ` · 图像 ${saved.imageIndex + 1} / ${saved.imageSlots}` : ' · 无可用图片')}</span>
+          <span aria-live="polite" aria-atomic="true">{groupLabel}{job && (saved.retainedIndexes.length ? ` · 图像 ${saved.imageIndex + 1} / ${saved.imageSlots}` : ' · 无可用图片')}</span>
           {image && job && <ImageSaveButton key={image.url} url={image.url} filename={isExperiment ? `style-experiment-${image.filename}` : image.filename}
             isCurrent={() => canSave() && saved.selection === selection && saved.job?.id === job.id && saved.image?.url === image.url} />}
           {image && job && <button className="text-action" type="button" disabled={saved.discardBusy}
@@ -394,7 +399,9 @@ export const SavedResultViewer = observer(({ saved, api, onClose, onUseSeed, can
       {rerunIdError && <p className="alert" role="alert">{rerunIdError}</p>}
       {saved.rerunMessage && <p className="subtle" role="status">{saved.rerunMessage}</p>}
       {saved.rerunError && <p className="alert" role="alert">{saved.rerunError.startsWith('提交结果未知') ? '' : '重跑未加入队列：'}{saved.rerunError}</p>}
-      {job && (job.discarded_images?.length ?? 0) > 0 && <p className="subtle">本组已弃置 {job.discarded_images?.length} / {job.image_urls.length} 张（导出时跳过；可点「恢复」撤销）。</p>}
+      {restorableDiscarded > 0 && <p className="subtle">本组已弃置 {restorableDiscarded} 张（导出时跳过；可点「恢复」撤销）。</p>}
+      {purgedCount > 0 && <p className="subtle">本组已永久清理 {purgedCount} 张，无法恢复。</p>}
+      {pendingPurges.size > 0 && <p className="subtle">本组还有 {pendingPurges.size} 张待重试清理，已禁止查看或恢复。</p>}
       <div className="saved-result-actions"><span className="prompt-hint">私有保存 7 天</span><button type="button" className="text-action" disabled={saved.loading || saved.imageLoading} onClick={() => void saved.retry()}>
         <RefreshCw size={15} aria-hidden="true" /> 刷新保存记录
       </button></div>

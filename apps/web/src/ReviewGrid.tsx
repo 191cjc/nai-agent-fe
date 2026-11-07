@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Ban, CheckSquare, Dices, Maximize2, PencilLine, RefreshCw, Replace, Search, Square, Undo2, X } from 'lucide-react'
-import { ApiFailure, errorText, type ExperimentRunState, type GenerationView, type RerunBatchItem, type WorkspaceApi } from './api'
+import { Ban, CheckSquare, Dices, Maximize2, PencilLine, RefreshCw, Replace, Search, Square, Trash2, Undo2, X } from 'lucide-react'
+import { ApiFailure, errorText, type ExperimentRunState, type GenerationView, type ImagePurgeResult, type RerunBatchItem, type WorkspaceApi } from './api'
 import { DATASET_CATEGORIES } from './dataset-prompts'
 import { CHARACTER_CATEGORIES } from './character-prompts'
 import { translatePrompt } from './prompt-zh'
 import { contentCaption } from './dataset-export'
 import { datasetItemZh } from './PromptGloss'
+import { allImagesPurged, imagePurged, retainedImageIndexes } from './result-images'
 
 /** Tiles per page: bounds preview requests and Blob memory (~60 × 30 KB). */
 const PAGE_SIZE = 60
@@ -131,7 +132,7 @@ export function queuedRerunSources(runs: readonly ExperimentRunState[], experime
   return queued
 }
 
-export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClose }: {
+export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClose, onPurge }: {
   api: WorkspaceApi
   experimentId: string
   /** Training-set name, used to label its re-run batches in the queue. */
@@ -141,13 +142,19 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
   /** Opens the full-size viewer at this group offset and image index. */
   onOpen: (offset: number, image: number) => void
   onClose: () => void
+  /** Clears this selection's saved-viewer caches and refreshes its metadata/list. */
+  onPurge: () => Promise<ImagePurgeResult>
 }) {
   const [groups, setGroups] = useState<GenerationView[] | null>(null)
   const [loadError, setLoadError] = useState('')
   const [reload, setReload] = useState(0)
   const [category, setCategory] = useState('all')
   const [query, setQuery] = useState('')
-  const [hideDiscarded, setHideDiscarded] = useState(false)
+  const [hideDiscarded, setHideDiscarded] = useState(true)
+  const [metadataLimited, setMetadataLimited] = useState(false)
+  const [purging, setPurging] = useState(false)
+  const [cleanupMessage, setCleanupMessage] = useState('')
+  const [cleanupError, setCleanupError] = useState('')
   const [page, setPage] = useState(0)
   const [previews, setPreviews] = useState<Record<string, string | 'error'>>({})
   const [busyKeys, setBusyKeys] = useState<ReadonlySet<string>>(new Set())
@@ -169,12 +176,18 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
   const [batchEdit, setBatchEdit] = useState<{ kind: RerunOperation['kind']; find: string; text: string; target: RerunTarget }>({ kind: 'replace', find: '', text: '', target: 'all' })
   const [batchEditMessage, setBatchEditMessage] = useState('')
   const scrollRef = useRef<HTMLElement | null>(null)
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false }
+  }, [])
 
   // Metadata only (no image bytes): bounded pages in server order.
   useEffect(() => {
     const controller = new AbortController()
     setGroups(null)
     setLoadError('')
+    setMetadataLimited(false)
     void (async () => {
       const loaded: GenerationView[] = []
       let offset: number | null = 0
@@ -183,7 +196,10 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
         loaded.push(...result.items)
         offset = result.next_offset
       }
-      if (!controller.signal.aborted) setGroups(loaded)
+      if (!controller.signal.aborted) {
+        setGroups(loaded)
+        setMetadataLimited(offset !== null)
+      }
     })().catch(error => { if (!controller.signal.aborted) setLoadError(errorText(error)) })
     // Best effort: without the queue, quick picks just cannot exclude batched sources.
     void api.queuedExperimentRuns(controller.signal)
@@ -194,10 +210,11 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
 
   const tiles = useMemo<Tile[]>(() => (groups ?? []).flatMap((job, offset): Tile[] => {
     const base = { offset, job, category: categoryOf(job) }
+    if (allImagesPurged(job)) return []
     if (job.status !== 'succeeded' || !job.image_urls.length) return [{ ...base, key: `${job.id}:x`, index: null }]
-    return job.image_urls.map((_url, index) => ({ ...base, key: `${job.id}:${index}`, index }))
+    return retainedImageIndexes(job).map(index => ({ ...base, key: `${job.id}:${index}`, index }))
   }), [groups])
-  const categories = useMemo(() => [...new Set(tiles.map(tile => tile.category))], [tiles])
+  const categories = useMemo(() => [...new Set((groups ?? []).map(categoryOf))], [groups])
   // Per group, computed once per load or caption edit (not per keystroke).
   const searchIndex = useMemo(() => new Map((groups ?? []).map(job => [job.id, searchText(job)])), [groups])
   const search = useMemo(() => parseSearch(query), [query])
@@ -212,6 +229,13 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
   const shownPaths = shown.flatMap(tile => tile.index === null ? [] : [{ key: tile.key, path: tile.job.image_urls[tile.index] }])
   const pathKey = shownPaths.map(item => item.key).join('|')
   const discardedCount = tiles.filter(tile => tile.index !== null && tile.job.discarded_images?.includes(tile.index)).length
+  const cleanupCount = (groups ?? []).reduce((count, group) => {
+    if (group.status !== 'succeeded') return count
+    const targets = new Set((group.discarded_images ?? []).filter(index => !imagePurged(group, index)))
+    group.purge_pending_images?.forEach(index => targets.add(index))
+    return count + targets.size
+  }, 0)
+  const cleanupPendingCount = (groups ?? []).reduce((count, group) => count + (group.purge_pending_images?.length ?? 0), 0)
   const failedCount = (groups ?? []).filter(group => group.status === 'failed').length
   const reruns = useMemo(() => rerunCounts(groups ?? []), [groups])
   // Made plus still queued on the server: what quick picks treat as already replaced.
@@ -233,7 +257,7 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
   const pendingFailedTiles = useMemo(() => tiles.filter(tile => tile.job.status === 'failed' && !(replaced.get(tile.job.id) ?? 0)), [tiles, replaced])
   const pendingDiscardedTiles = useMemo(() => (groups ?? []).flatMap(group => {
     if (group.status !== 'succeeded') return []
-    const marks = [...(group.discarded_images ?? [])].sort((left, right) => left - right)
+    const marks = (group.discarded_images ?? []).filter(index => !imagePurged(group, index)).sort((left, right) => left - right)
     const remaining = Math.max(0, marks.length - (replaced.get(group.id) ?? 0))
     return marks.slice(0, remaining).map(index => `${group.id}:${index}`)
   }), [groups, replaced])
@@ -298,7 +322,7 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
   }, [api, pathKey])
 
   const toggle = useCallback(async (tile: Tile) => {
-    if (tile.index === null || busyKeys.has(tile.key)) return
+    if (tile.index === null || busyKeys.has(tile.key) || purging || imagePurged(tile.job, tile.index)) return
     const index = tile.index
     const discarded = !tile.job.discarded_images?.includes(index)
     setBusyKeys(keys => new Set(keys).add(tile.key))
@@ -317,7 +341,7 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
     } finally {
       setBusyKeys(keys => { const next = new Set(keys); next.delete(tile.key); return next })
     }
-  }, [api, busyKeys])
+  }, [api, busyKeys, purging])
 
   function selectKeys(keys: readonly string[], value = true) {
     setSelected(current => {
@@ -335,7 +359,7 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
   }
 
   function openBatch() {
-    if (!selectedTiles.length || submitting) return
+    if (!selectedTiles.length || submitting || purging) return
     const id = newBatchId()
     if (!id) return
     setRerunMessage('')
@@ -359,7 +383,7 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
   }
 
   async function rerunAll() {
-    if (!batch || submitting) return
+    if (!batch || submitting || purging) return
     const { id, sources, prompts, characters, style, discardReplaced } = batch
     if (prompts.some(prompt => !prompt.trim()) || characters.some(people => people.some(prompt => !prompt.trim()))) { setActionError('训练词不能为空（包括每个人物）。'); return }
     const repeated = sources.filter(tile => replaced.get(tile.job.id)).length
@@ -406,7 +430,7 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
   }
 
   async function applyCaptions() {
-    if (!captionPlan || !captionPlan.changes.length || captionBusy) return
+    if (!captionPlan || !captionPlan.changes.length || captionBusy || purging) return
     const { changes } = captionPlan
     if (!window.confirm(`修改 ${changes.length} 条的训练词？只影响导出的 caption，不会重新生成。可再用「恢复默认」撤销。`)) return
     setCaptionBusy(true)
@@ -430,7 +454,34 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
     }
   }
 
-  return <section ref={scrollRef} className="review-grid" aria-label="网格检查">
+  async function cleanupDiscarded() {
+    if (!groups || purging || submitting || captionBusy || busyKeys.size || batch || captionEdit || (!cleanupCount && !metadataLimited)) return
+    const name = setName ? `「${setName}」` : '当前未命名训练集'
+    const count = metadataLimited ? `当前已读取记录中有 ${cleanupCount} 张待清理，完整数量可能更多` : `共 ${cleanupCount} 张待清理`
+    if (!window.confirm(`确定永久清理${name}中全部已弃置图片？\n\n${count}。范围包含本训练集所有分页和重跑图片，不受当前分类、搜索或选择影响。\n图片会彻底删除，无法恢复；未弃置图片、参考图和生成参数记录会保留。`)) return
+    setPurging(true)
+    setCleanupMessage('')
+    setCleanupError('')
+    setActionError('')
+    // Immediately release this page's previews while server cleanup is in flight.
+    setGroups(null)
+    try {
+      const result = await onPurge()
+      if (!mounted.current) return
+      setCleanupMessage(`已永久删除 ${result.deleted_images} 张图片${result.missing_images ? `，${result.missing_images} 张已过期或不存在` : ''}。`)
+      if (result.failed_images) setCleanupError(`${result.failed_images} 张尚未完成文件清理，已禁止查看或恢复；可再次点击「清理已弃置图片」重试。`)
+    } catch (error) {
+      if (!mounted.current) return
+      setCleanupError(`清理结果暂无法确认：${errorText(error)} 刷新记录后可再次清理，重复清理不会影响未弃置图片。`)
+    } finally {
+      if (mounted.current) {
+        setPurging(false)
+        setReload(value => value + 1)
+      }
+    }
+  }
+
+  return <section ref={scrollRef} className="review-grid" aria-label="网格检查" aria-busy={purging}>
     <div className="review-grid-toolbar">
       <label className="field review-grid-filter"><span>分类</span>
         <select value={category} onChange={event => { setCategory(event.target.value); setPage(0) }}>
@@ -444,13 +495,17 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
             onChange={event => { setQuery(event.target.value); setPage(0) }} /></span></label>
       <label className="history-select"><input type="checkbox" checked={hideDiscarded} onChange={event => { setHideDiscarded(event.target.checked); setPage(0) }} /> 隐藏已弃置</label>
       <span className="subtle" role="status">{searching ? `搜索到 ${visible.length} 张 · ` : ''}已弃置 {discardedCount} 张 · 失败 {failedCount} 条</span>
+      {cleanupPendingCount > 0 && <span className="subtle" role="status">待重试清理 {cleanupPendingCount} 张</span>}
       {queuedCount > 0 && <span className="subtle" role="status">排队中的重跑 {queuedCount} 张</span>}
-      <button className="text-action" type="button" disabled={!groups || submitting} onClick={() => setReload(value => value + 1)}><RefreshCw size={14} aria-hidden="true" /> 刷新</button>
+      <button className="text-action" type="button" disabled={(!groups && !loadError) || submitting || purging} onClick={() => setReload(value => value + 1)}><RefreshCw size={14} aria-hidden="true" /> 刷新</button>
       <button className="text-action" type="button" disabled={!selectedTiles.length || batch !== null || submitting} title="为所选图片各重跑 1 张；可先改画风和训练词"
         onClick={openBatch}><Dices size={14} aria-hidden="true" /> 重跑所选（{selectedTiles.length}）</button>
       <button className="text-action" type="button" disabled={!groups || captionEdit !== null || captionBusy} title="对已选、当前筛选或全部条目的训练词做替换、加前缀、加后缀；只影响导出"
         onClick={() => setCaptionEdit({ scope: selectedTiles.length ? 'selected' : 'all', kind: 'replace', find: '', text: '' })}><PencilLine size={14} aria-hidden="true" /> 批量改训练词</button>
-      <button className="icon-button" type="button" title="返回单张查看" aria-label="返回单张查看" onClick={onClose}><X size={18} /></button>
+      <button className="text-action danger-text" type="button" disabled={!groups || purging || submitting || captionBusy || busyKeys.size > 0 || batch !== null || captionEdit !== null || (!cleanupCount && !metadataLimited)}
+        title="永久删除当前训练集全部已弃置图片，包含所有分页和重跑图片，不受筛选与选择影响"
+        onClick={() => void cleanupDiscarded()}><Trash2 size={14} aria-hidden="true" /> {purging ? '正在清理…' : '清理已弃置图片'}{cleanupCount ? `（${metadataLimited ? '至少 ' : ''}${cleanupCount}）` : ''}</button>
+      <button className="icon-button" type="button" disabled={purging} title="返回单张查看" aria-label="返回单张查看" onClick={onClose}><X size={18} /></button>
     </div>
     {groups && <div className="review-grid-selection" role="group" aria-label="多选">
       <span role="status">已选 <strong>{selectedTiles.length}</strong> 张{hiddenSelected > 0 ? `（${hiddenSelected} 张不在当前筛选中）` : ''}</span>
@@ -468,6 +523,10 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
     <p className="prompt-hint">点图片选择或取消选择，点右上角 ⊘ 按钮弃置或恢复（导出时跳过已弃置）；可在「搜索训练词」里查找后「选择搜索结果」批量选中；多选后「重跑所选」，翻页、切换分类和搜索不会丢失已选；点右上角放大按钮查看原图。每页 {PAGE_SIZE} 张，只加载小尺寸预览，不占用原图缓存。</p>
     {loadError && <p className="alert" role="alert">记录读取失败：{loadError}</p>}
     {actionError && <p className="alert" role="alert">{actionError}</p>}
+    {purging && <p className="subtle" role="status">正在永久清理当前训练集的已弃置图片…</p>}
+    {cleanupMessage && <p className="subtle" role="status">{cleanupMessage}</p>}
+    {cleanupError && <p className="alert" role="alert">{cleanupError}</p>}
+    {metadataLimited && <p className="prompt-hint">本次只展示前 {MAX_GROUPS} 条记录；清理仍覆盖当前训练集全部已弃置图片。</p>}
     {rerunMessage && <p className="subtle" role="status">{rerunMessage}</p>}
     {captionEdit && captionPlan && <div className="rerun-batch" role="group" aria-label="批量改训练词">
       <p><strong>批量改训练词</strong>：只改导出的 caption（内容标签部分），不重新生成、不付费。触发词、导出前缀和角色训练集的画风仍在导出时自动加在最前面。失败的条目没有图片，不处理。</p>
@@ -560,6 +619,7 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
       </div>
     </div>}
     {!groups && !loadError && <p className="subtle" role="status">正在读取训练集记录…</p>}
+    {groups && !visible.length && <p className="subtle" role="status">当前筛选下没有可查看的图片。</p>}
     {groups && <ul className="review-grid-tiles">{shown.map(tile => {
       const discarded = tile.index !== null && tile.job.discarded_images?.includes(tile.index) === true
       const preview = previews[tile.key]

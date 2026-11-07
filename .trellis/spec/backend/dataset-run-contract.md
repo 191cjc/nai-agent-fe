@@ -89,7 +89,8 @@ review only (operator restriction); no paid probes.
   restore one image of the owner's succeeded job (idempotent, Origin-checked,
   404 for foreign/missing jobs or indexes ≥ image_count). Marks live in
   `discarded_images(user_id, job_id, image_index)` and cascade with the job;
-  image files are never deleted by a mark.
+  image files are never deleted by a mark. Explicit permanent cleanup is a separate
+  current-set action under [Dataset Review and Cleanup](./dataset-review-contract.md).
 - `GenerationView.discarded_images` (sorted indexes) is present on every
   view; experiment pages batch the lookup (`GenerationManager.views`).
 - The viewer shows an 「已弃置」 badge, 「弃置」/「恢复」 and a 「只看未弃置」 toggle

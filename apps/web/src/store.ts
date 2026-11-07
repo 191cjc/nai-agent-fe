@@ -19,6 +19,7 @@ import { GPT_SIZES, NAI_SHAPE_SIZES, characterRequest, datasetItems, type Charac
 import { StyleRunStore } from './style-run-store'
 import { PromptSnapshotStore } from './prompt-snapshots'
 import { BalanceStore } from './balance-store'
+import { imagePurged } from './result-images'
 import { appendPromptText, compilePromptComments } from './prompt-weights'
 import {
   CHARACTER_SECTION_KEYS, SHARED_SECTION_KEYS, SECTION_LABELS, effectiveCharacterPrompt, sharedPrompt,
@@ -640,7 +641,12 @@ export class GenerationStore {
   }
 
   private async loadImages(job: GenerationView, epoch: number, operationToken: number, signal: AbortSignal): Promise<void> {
-    const missing = job.image_urls.flatMap((path, index) => this.images.some(image => image.index === index)
+    this.images = this.images.filter(image => {
+      if (!imagePurged(job, image.index)) return true
+      URL.revokeObjectURL(image.url)
+      return false
+    })
+    const missing = job.image_urls.flatMap((path, index) => imagePurged(job, index) || this.images.some(image => image.index === index)
       ? [] : [{ path, index }])
     const results = await Promise.allSettled(missing.map(image => this.api.image(image.path, signal)))
     if (epoch !== this.epoch || this.operation?.token !== operationToken) return
@@ -686,6 +692,15 @@ export class GenerationStore {
       this.submitUncertain = true
       this.error = '提交结果未知。请先检查历史记录，再决定是否重新提交。'
     }
+  }
+
+  /** Cleanup may target a dataset result resumed through the ordinary history UI. */
+  invalidateDatasetResult(experimentId: string): void {
+    const job = this.job
+    if (!job || this.busy || this.activeId !== null || job.parameters.experiment?.kind !== 'dataset'
+      || job.parameters.experiment.id !== experimentId
+      || (job.status !== 'succeeded' && job.status !== 'failed')) return
+    this.clearActiveResult()
   }
 
   suspendForLogout(): void {
@@ -951,7 +966,7 @@ export class AppStore {
       this.balance.reset()
     })
     this.balance = new BalanceStore(this.api)
-    this.savedResults = new SavedResultsStore(this.api)
+    this.savedResults = new SavedResultsStore(this.api, id => this.generation.invalidateDatasetResult(id))
     this.promptSnapshots = new PromptSnapshotStore(this.api)
     this.history = new HistoryStore(this.api)
     this.styleRuns = new StyleRunStore(this.api, () => { this.history.refresh(); this.balance.noteActivity() })

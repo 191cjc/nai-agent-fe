@@ -1,6 +1,7 @@
 import { ApiFailure, type GenerationRequest, type GenerationView, type WorkspaceApi } from './api'
 import { sanitizedPng } from './png-export'
 import { compilePromptComments } from './prompt-weights'
+import { imagePurged } from './result-images'
 
 const MAX_ZIP_BYTES = 0xffff_ffff - 64 * 1024 * 1024
 
@@ -196,13 +197,17 @@ export async function buildDatasetZip(
   let discarded = 0
   for (const [jobIndex, job] of jobs.entries()) {
     if (signal.aborted) throw new DOMException('Export cancelled.', 'AbortError')
-    if (job.status !== 'succeeded' || !job.image_urls.length) skipped += Math.max(1, job.parameters.sample_count)
+    if (job.status !== 'succeeded' || !job.image_urls.length) {
+      const purged = Array.from({ length: job.image_count }, (_value, index) => index).filter(index => imagePurged(job, index)).length
+      discarded += purged
+      skipped += Math.max(0, Math.max(1, job.parameters.sample_count) - purged)
+    }
     else {
       const caption = encoder.encode(datasetCaption(job.parameters, trigger, prefix, includeCharacterStyle, job.caption_override) + '\n')
       const marks = new Set(job.discarded_images ?? [])
       for (const [imageIndex, path] of job.image_urls.entries()) {
         // Review marks: discarded images never enter the dataset.
-        if (marks.has(imageIndex)) { discarded += 1; continue }
+        if (marks.has(imageIndex) || imagePurged(job, imageIndex)) { discarded += 1; continue }
         let png: Uint8Array
         try {
           const source = await api.image(path, signal)

@@ -263,7 +263,7 @@ def test_comment_source_round_trips_history_snapshots_restart_and_backup(databas
         assert JobStore(source).get(user, job_id).parameters.model_dump(mode="json") == expected
         assert PromptSnapshotStore(source).get(user, str(saved.id)) == saved
         with source.connect() as connection:
-            assert connection.execute("PRAGMA user_version").fetchone()[0] == 12
+            assert connection.execute("PRAGMA user_version").fetchone()[0] == 13
 
 
 @pytest.mark.parametrize(("source", "expected"), [

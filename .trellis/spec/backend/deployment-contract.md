@@ -153,6 +153,24 @@ Captured provider requests use current schema5; see [Database](./database-guidel
   In a disposable recovery drill, disable/stop copied runs before application
   lifespan; a restored scheduler must never reach real configured providers.
 
+## Dataset Purge Rollout (Schema 13)
+
+- Publish the schema-13-compatible API before the matching web bundle. Back up
+  SQLite privately and preserve result/reference storage; verify only allowed
+  metadata (schema, counts, statuses, sizes and checksums), never training content.
+- If paid jobs are active, stage first and let graceful shutdown stop new claims
+  and drain accepted workers. Temporarily extend the systemd stop deadline beyond
+  the provider deadline; the normal 65-second timeout can kill a long image call.
+  Preserve durable run status/cursor so unfinished runs resume after startup.
+  Do not stop/recreate runs, retry paid jobs, or use a forced process kill as a
+  deployment shortcut. Verify zero nonterminal jobs before migrating.
+- Take the final verified private backup after the drain. Migration 13 is
+  additive; after it commits, retain the compatible API during any web fallback.
+  Never restore the live database or start an older API that ignores purge intent.
+- Deployment verification may inspect health/OpenAPI/401/static assets and
+  private non-content metadata. Do not invoke cleanup or image/reference routes
+  against real datasets to test a release.
+
 ## Validation & Error Matrix
 
 | Condition | Required behavior |

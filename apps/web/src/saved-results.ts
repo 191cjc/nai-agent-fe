@@ -1,5 +1,6 @@
 import { makeAutoObservable, runInAction } from 'mobx'
-import { ApiFailure, errorText, type ExperimentRunState, type ExperimentSummary, type GenerationView, type RerunEdits, WorkspaceApi } from './api'
+import { ApiFailure, errorText, type ExperimentRunState, type ExperimentSummary, type GenerationView, type ImagePurgeResult, type RerunEdits, WorkspaceApi } from './api'
+import { allImagesPurged, imagePurged, retainedImageIndexes } from './result-images'
 
 type SavedSelection = { kind: 'generation' | 'experiment'; id: string }
 type PreloadStatus = 'idle' | 'reading' | 'loading' | 'completed' | 'cancelled' | 'capacity' | 'error'
@@ -38,6 +39,11 @@ export class SavedResultsStore {
   listLoading = false
   listError = ''
   selection: SavedSelection | null = null
+  /** A fresh lifetime even when the same saved set is explicitly reopened. */
+  selectionVersion = 0
+  /** Dataset opens use thumbnails; switching modes belongs to this selection. */
+  grid = false
+  purgeBusy = false
   summary: ExperimentSummary | null = null
   job: GenerationView | null = null
   groupOffset = 0
@@ -75,7 +81,10 @@ export class SavedResultsStore {
   private imageCacheBytes = 0
   private transientImage: TransientImage | null = null
 
-  constructor(private readonly api: WorkspaceApi) {
+  constructor(
+    private readonly api: WorkspaceApi,
+    private readonly onDatasetCleanup: (id: string) => void = () => {},
+  ) {
     makeAutoObservable(this, undefined, { autoBind: true })
   }
 
@@ -149,19 +158,30 @@ export class SavedResultsStore {
   async openExperiment(id: string): Promise<void> {
     this.close()
     this.selection = { kind: 'experiment', id }
-    await this.loadGroup(0)
+    this.summary = this.experiments.find(experiment => experiment.id === id) ?? null
+    this.grid = this.summary?.kind === 'dataset'
+    await this.loadGroup(0, 0, true)
   }
 
   get imageSlots(): number {
     return this.job?.status === 'succeeded' ? Math.max(1, this.job.image_urls.length) : 1
   }
 
+  get currentPurged(): boolean {
+    return this.job !== null && imagePurged(this.job, this.imageIndex)
+  }
+
+  get retainedIndexes(): number[] {
+    return this.job ? retainedImageIndexes(this.job) : []
+  }
+
   get canPrevious(): boolean {
-    return !this.loading && this.job !== null && (this.imageIndex > 0 || (this.selection?.kind === 'experiment' && this.groupOffset > 0))
+    return !this.loading && !this.purgeBusy && this.job !== null && (this.retainedIndexes.some(index => index < this.imageIndex)
+      || (this.selection?.kind === 'experiment' && this.groupOffset > 0))
   }
 
   get canNext(): boolean {
-    return !this.loading && this.job !== null && (this.imageIndex + 1 < this.imageSlots
+    return !this.loading && !this.purgeBusy && this.job !== null && (this.retainedIndexes.some(index => index > this.imageIndex)
       || (this.selection?.kind === 'experiment' && this.nextGroupOffset !== null))
   }
 
@@ -188,7 +208,7 @@ export class SavedResultsStore {
   /** An explicit, read-only pass bounded to the groups recorded at its start. */
   async preloadImages(): Promise<void> {
     const selection = this.selection
-    if (selection?.kind !== 'experiment' || this.preloading) return
+    if (selection?.kind !== 'experiment' || this.preloading || this.grid || this.purgeBusy) return
     const epoch = ++this.preloadEpoch
     const controller = new AbortController()
     this.preloadController = controller
@@ -220,7 +240,8 @@ export class SavedResultsStore {
         for (const job of page.items.slice(0, expectedGroups)) {
           if (!this.isCurrentPreload(epoch, selection.id, controller.signal)) return
           const expiresAt = job.result_expires_at
-          if (job.status !== 'succeeded' || job.image_urls.length === 0 || expiresAt === null
+          const indexes = retainedImageIndexes(job)
+          if (job.status !== 'succeeded' || indexes.length === 0 || expiresAt === null
             || !Number.isFinite(expiresAt) || expiresAt <= Date.now() / 1000) {
             runInAction(() => {
               this.preloadSkippedGroups += 1
@@ -228,7 +249,8 @@ export class SavedResultsStore {
             })
             continue
           }
-          for (const path of job.image_urls) {
+          for (const index of indexes) {
+            const path = job.image_urls[index]
             if (!this.isCurrentPreload(epoch, selection.id, controller.signal)) return
             runInAction(() => { this.preloadStatus = 'loading' })
             try {
@@ -300,7 +322,7 @@ export class SavedResultsStore {
   async toggleDiscard(): Promise<void> {
     const job = this.job
     const index = this.imageIndex
-    if (!job || job.status !== 'succeeded' || index >= job.image_urls.length || this.discardBusy) return
+    if (!job || job.status !== 'succeeded' || index >= job.image_urls.length || this.currentPurged || this.discardBusy || this.purgeBusy) return
     const discarded = !this.currentDiscarded
     const epoch = this.viewerEpoch
     this.discardBusy = true
@@ -338,7 +360,7 @@ export class SavedResultsStore {
   get canRerun(): boolean {
     const job = this.job
     return this.selection?.kind === 'experiment' && job?.parameters.experiment?.kind === 'dataset'
-      && (job.status === 'succeeded' || job.status === 'failed')
+      && (job.status === 'succeeded' || job.status === 'failed') && !allImagesPurged(job) && !this.currentPurged && !this.purgeBusy
   }
 
   /**
@@ -384,9 +406,12 @@ export class SavedResultsStore {
   }
 
   async move(direction: -1 | 1): Promise<void> {
+    const selection = this.selection
+    if (!selection || this.grid) return
     await this.step(direction)
     // In review mode keep going the same way past discarded images (bounded).
-    for (let hops = 0; this.hideDiscarded && this.currentDiscarded && hops < 2000; hops += 1) {
+    for (let hops = 0; this.selection === selection && !this.grid
+      && (this.currentPurged || (this.hideDiscarded && this.currentDiscarded)) && hops < 2000; hops += 1) {
       if (direction === -1 ? !this.canPrevious : !this.canNext) break
       await this.step(direction)
     }
@@ -394,8 +419,9 @@ export class SavedResultsStore {
 
   private async step(direction: -1 | 1): Promise<void> {
     if (direction === -1 ? !this.canPrevious : !this.canNext) return
-    const index = this.imageIndex + direction
-    if (index >= 0 && index < this.imageSlots) {
+    const indexes = this.retainedIndexes
+    const index = direction === 1 ? indexes.find(index => index > this.imageIndex) : [...indexes].reverse().find(index => index < this.imageIndex)
+    if (index !== undefined) {
       await this.loadGroup(this.groupOffset, index)
     } else if (direction === -1) {
       await this.loadGroup(this.groupOffset - 1, 'last')
@@ -406,8 +432,45 @@ export class SavedResultsStore {
 
   /** Opens one group/image of the current experiment, e.g. from the review grid. */
   async showGroup(offset: number, image = 0): Promise<void> {
-    if (this.selection?.kind !== 'experiment' || !Number.isSafeInteger(offset) || offset < 0) return
+    if (this.selection?.kind !== 'experiment' || !Number.isSafeInteger(offset) || offset < 0 || this.purgeBusy) return
+    this.grid = false
     await this.loadGroup(offset, image)
+  }
+
+  showGrid(): void {
+    if (this.selection?.kind !== 'experiment' || this.summary?.kind !== 'dataset' || this.purgeBusy) return
+    this.grid = true
+    this.clearViewerImages()
+  }
+
+  async showSingle(): Promise<void> {
+    const selection = this.selection
+    await this.showGroup(this.groupOffset, this.imageIndex)
+    if (this.selection === selection && !this.grid && this.currentPurged && this.canNext) await this.move(1)
+  }
+
+  /** One current-set mutation; late results cannot repopulate another selection/session. */
+  async purgeDiscardedImages(): Promise<ImagePurgeResult> {
+    const selection = this.selection
+    if (selection?.kind !== 'experiment' || this.summary?.kind !== 'dataset' || this.purgeBusy) {
+      throw new ApiFailure(0, 'invalid_state', '请先打开要清理的训练集。')
+    }
+    this.purgeBusy = true
+    this.clearViewerImages()
+    this.onDatasetCleanup(selection.id)
+    try {
+      return await this.api.purgeDiscardedImages(selection.id)
+    } finally {
+      // A resumed generation may finish while cleanup is in flight, including
+      // after this saved selection closes or is replaced.
+      this.onDatasetCleanup(selection.id)
+      if (this.selection === selection) {
+        this.clearViewerImages()
+        // Refresh even after a transport error: the server may already have purged files.
+        await Promise.all([this.loadGroup(this.groupOffset, this.requestedImage), this.loadExperiments()])
+        if (this.selection === selection) runInAction(() => { this.purgeBusy = false })
+      }
+    }
   }
 
   async retry(): Promise<void> {
@@ -415,7 +478,7 @@ export class SavedResultsStore {
     await this.loadGroup(this.groupOffset, this.requestedImage)
   }
 
-  private async loadGroup(offset: number, requestedImage: number | 'last' = 0): Promise<void> {
+  private async loadGroup(offset: number, requestedImage: number | 'last' = 0, preferGrid = false): Promise<void> {
     const selection = this.selection
     if (!selection) return
     const epoch = ++this.viewerEpoch
@@ -451,16 +514,19 @@ export class SavedResultsStore {
         job = await this.api.generation(selection.id, controller.signal)
       }
       if (epoch !== this.viewerEpoch) return
-      if (!job) throw new ApiFailure(404, 'not_found', '没有可查看的实验组。')
+      if (!job && summary?.kind !== 'dataset') throw new ApiFailure(404, 'not_found', '没有可查看的实验组。')
       runInAction(() => {
-        this.job = job
+        this.job = job ?? null
         this.summary = summary
+        if (preferGrid) this.grid = summary?.kind === 'dataset'
         this.nextGroupOffset = nextOffset
-        this.imageIndex = requestedImage === 'last' ? this.imageSlots - 1 : Math.min(requestedImage, this.imageSlots - 1)
+        const indexes = this.retainedIndexes
+        this.imageIndex = requestedImage === 'last' ? indexes.at(-1) ?? 0
+          : indexes.find(index => index >= requestedImage) ?? indexes[0] ?? 0
         this.loading = false
       })
-      await this.loadSelectedImage(epoch, controller.signal)
-      if (job.status === 'queued' || job.status === 'running') {
+      if (!this.grid) await this.loadSelectedImage(epoch, controller.signal)
+      if (!this.grid && (job?.status === 'queued' || job?.status === 'running')) {
         // Re-runs finish in the background; refresh this entry until it settles.
         setTimeout(() => { if (epoch === this.viewerEpoch) void this.retry() }, 5000)
       }
@@ -476,7 +542,7 @@ export class SavedResultsStore {
     this.pruneExpiredImages()
     const job = this.job
     const index = this.imageIndex
-    const path = job?.status === 'succeeded' ? job.image_urls[index] : undefined
+    const path = job?.status === 'succeeded' && !imagePurged(job, index) ? job.image_urls[index] : undefined
     if (!job || !path) return
     this.imageLoading = true
     try {
@@ -596,7 +662,7 @@ export class SavedResultsStore {
     this.image = null
   }
 
-  close(): void {
+  private clearViewerImages(): void {
     this.viewerEpoch += 1
     this.preloadEpoch += 1
     this.viewerController?.abort()
@@ -606,6 +672,23 @@ export class SavedResultsStore {
     this.preloadCacheEnabled = false
     this.releaseImage()
     for (const path of this.imageCache.keys()) this.removeCachedImage(path)
+    this.loading = false
+    this.imageLoading = false
+    this.preloadStatus = 'idle'
+    this.preloadGroupLimit = null
+    this.preloadProcessedGroups = 0
+    this.preloadProcessedImages = 0
+    this.preloadSkippedGroups = 0
+    this.preloadFailedImages = 0
+    this.preloadError = ''
+    this.preloadImageError = ''
+  }
+
+  close(): void {
+    this.clearViewerImages()
+    this.selectionVersion += 1
+    this.grid = false
+    this.purgeBusy = false
     this.selection = null
     this.summary = null
     this.job = null
@@ -617,14 +700,6 @@ export class SavedResultsStore {
     this.imageLoading = false
     this.error = ''
     this.imageError = ''
-    this.preloadStatus = 'idle'
-    this.preloadGroupLimit = null
-    this.preloadProcessedGroups = 0
-    this.preloadProcessedImages = 0
-    this.preloadSkippedGroups = 0
-    this.preloadFailedImages = 0
-    this.preloadError = ''
-    this.preloadImageError = ''
   }
 
   reset(): void {

@@ -27,6 +27,7 @@ This directory contains guidelines for frontend development. Fill in each file w
 | [Per-section Assistant](./section-assistant-contract.md) | Anchored advice/translation/search tabs, explicit current-section requests and stable validated append/replace | In use |
 | [Style Experiment Contract](./style-experiment-contract.md) | Exact Cartesian weights, sequential runs, seeds and result ownership | In use |
 | [Viewer Cache Contract](./viewer-cache-contract.md) | Bounded in-page PNG reuse, expiry, metadata and URL lifecycle | In use |
+| [Dataset Review and Cleanup](../backend/dataset-review-contract.md) | Default thumbnails, hidden discards, confirmed current-set purge and cache/export consistency | In use |
 | [Canvas Layout Contract](./canvas-layout-contract.md) | Main image canvas, collapsible prompt dock and persistent operation controls | In use |
 
 ---

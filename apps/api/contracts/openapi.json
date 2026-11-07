@@ -748,6 +748,27 @@
         "title": "DatasetRunCreate",
         "type": "object"
       },
+      "DiscardedImagesDeleted": {
+        "properties": {
+          "deleted_images": {
+            "default": 0,
+            "title": "Deleted Images",
+            "type": "integer"
+          },
+          "failed_images": {
+            "default": 0,
+            "title": "Failed Images",
+            "type": "integer"
+          },
+          "missing_images": {
+            "default": 0,
+            "title": "Missing Images",
+            "type": "integer"
+          }
+        },
+        "title": "DiscardedImagesDeleted",
+        "type": "object"
+      },
       "ExperimentContext": {
         "properties": {
           "id": {
@@ -1303,6 +1324,20 @@
               }
             ],
             "title": "Provider Request"
+          },
+          "purge_pending_images": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Purge Pending Images",
+            "type": "array"
+          },
+          "purged_images": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Purged Images",
+            "type": "array"
           },
           "result_expires_at": {
             "anyOf": [
@@ -3868,6 +3903,16 @@
             },
             "description": "Not Found"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -6344,6 +6389,102 @@
           }
         },
         "summary": "Set Experiment Captions"
+      }
+    },
+    "/api/style-experiments/{experiment_id}/discarded-images": {
+      "delete": {
+        "operationId": "delete_discarded_images_api_style_experiments__experiment_id__discarded_images_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "experiment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Experiment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "__Host-nai_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "  Host-Nai Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscardedImagesDeleted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Delete Discarded Images"
       }
     },
     "/api/style-experiments/{experiment_id}/name": {
