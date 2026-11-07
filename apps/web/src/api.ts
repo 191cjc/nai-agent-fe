@@ -651,16 +651,6 @@ export class WorkspaceApi {
     })
   }
 
-  rerunGeneration(jobId: string, discardIndex: number | null, edits: RerunEdits = {}): Promise<GenerationAccepted> {
-    return this.request(`/api/generations/${encodeURIComponent(jobId)}/rerun`, {
-      method: 'POST', body: JSON.stringify({
-        ...(discardIndex === null ? {} : { discard_index: discardIndex }),
-        ...(edits.prompt === undefined ? {} : { prompt: edits.prompt }),
-        ...(edits.style_prompt === undefined ? {} : { style_prompt: edits.style_prompt }),
-      }),
-    })
-  }
-
   deleteGeneration(id: string): Promise<void> {
     return this.request(`/api/generations/${encodeURIComponent(id)}`, { method: 'DELETE' })
   }

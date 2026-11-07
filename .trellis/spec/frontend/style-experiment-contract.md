@@ -222,3 +222,15 @@ zero reachability and near-limit bounds; do not run frontend helper tests.
   只改人物 when any multi-person tile is present; results that would be blank are
   skipped and counted. It edits the drafts only; nothing is sent until 「加入队列」.
 - `applyCaptionOperation` also collapses empty tags left by a removal (`a, , b` → `a, b`).
+
+## Single re-run through the server queue (2026-11-07)
+
+- The saved viewer's 「重跑（新种子）」 submits a one-item `POST /api/rerun-batches`
+  (same as the review grid), not `POST /api/generations/{id}/rerun`: a full live
+  admission queue no longer refuses it; it waits in the owner's run queue and shows in
+  the queue panel (`onRerunQueued`). `discard_index` is the shown kept image; the mark
+  is applied when the server submits.
+- The editor stays open while submitting and on any error. Its batch id is drawn when
+  it opens, reused after an unknown outcome and redrawn after a definite 4xx. Only an
+  accepted batch closes it. Multi-person groups show one box per person (`characters`).
+- The web client no longer calls the single re-run endpoint; the API keeps it.

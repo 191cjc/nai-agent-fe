@@ -239,8 +239,16 @@ export const SavedResultViewer = observer(({ saved, api, onClose, onUseSeed, can
   const viewerRef = useRef<HTMLDivElement>(null)
   const selection = saved.selection
   const [gridFor, setGridFor] = useState<string | null>(null)
-  // Single re-run editor: prefilled with this group's frozen item prompt and style.
-  const [rerunEdit, setRerunEdit] = useState<{ jobId: string; prompt: string; style: string } | null>(null)
+  // Single re-run editor: prefilled with this group's frozen item prompt, people and style.
+  // Stays open until the server queues it; `batchId` is reused after an unknown outcome.
+  const [rerunEdit, setRerunEdit] = useState<{ jobId: string; batchId: string; prompt: string; characters: string[]; style: string } | null>(null)
+  const [rerunIdError, setRerunIdError] = useState('')
+  function newRerunId(): string | null {
+    try { setRerunIdError(''); return crypto.randomUUID() } catch {
+      setRerunIdError('浏览器无法创建重跑编号，请通过 HTTPS 使用支持的浏览器。')
+      return null
+    }
+  }
   useEffect(() => {
     if (selection) viewerRef.current?.focus()
   }, [selection])
@@ -324,7 +332,12 @@ export const SavedResultViewer = observer(({ saved, api, onClose, onUseSeed, can
           {image && job && <UseAsReferenceButton key={`${job.id}:${image.index}`} api={api} jobId={job.id} index={image.index} />}
           {saved.canRerun && <button className="text-action" type="button" disabled={saved.rerunBusy}
             title="同提示词、同参考图与设置，随机新种子再生成 1 张（一次付费生成）"
-            onClick={() => setRerunEdit({ jobId: job?.id ?? '', prompt: job?.parameters.experiment?.item?.prompt ?? '', style: job?.parameters.style_prompt ?? '' })}>
+            onClick={() => {
+              const batchId = newRerunId()
+              if (!batchId || !job) return
+              const item = job.parameters.experiment?.item
+              setRerunEdit({ jobId: job.id, batchId, prompt: item?.prompt ?? '', characters: (item?.characters ?? []).map(person => person.prompt), style: job.parameters.style_prompt })
+            }}>
             <Dices size={15} aria-hidden="true" /> {saved.rerunBusy ? '正在提交...' : '重跑（新种子）'}</button>}
         </figcaption>
       </figure>
@@ -343,28 +356,44 @@ export const SavedResultViewer = observer(({ saved, api, onClose, onUseSeed, can
       {(saved.error || saved.imageError) && <p className="alert" role="alert">{saved.error || saved.imageError}</p>}
       {saved.discardError && <p className="alert" role="alert">弃置标记未保存：{saved.discardError}</p>}
       {rerunEdit && job && rerunEdit.jobId === job.id && saved.canRerun && <div className="rerun-batch" role="group" aria-label="重跑设置">
-        <p><strong>重跑 1 张</strong>（新随机种子，一次付费生成{image !== null && !saved.currentDiscarded ? '；当前图片会被标记弃置，可随时恢复' : ''}）。改过的训练词会成为新图的 caption{job.parameters.experiment?.item?.characters?.length ? '；多人条目只改共享场景' : ''}。</p>
-        <label className="field"><span>训练词</span>
-          <textarea rows={3} value={rerunEdit.prompt} maxLength={1000} spellCheck={false}
+        <p><strong>重跑 1 张</strong>（新随机种子，一次付费生成{image !== null && !saved.currentDiscarded ? '；开始生成时当前图片会被标记弃置，可随时恢复' : ''}）。改过的训练词会成为新图的 caption。会加入服务器队列（和训练集同一队列），满了也只是排队等待，提交后可以关闭页面。</p>
+        <label className="field"><span>{rerunEdit.characters.length ? '场景训练词' : '训练词'}</span>
+          <textarea rows={3} value={rerunEdit.prompt} maxLength={1000} spellCheck={false} disabled={saved.rerunBusy}
             onChange={event => setRerunEdit({ ...rerunEdit, prompt: event.target.value })} /></label>
+        {rerunEdit.characters.map((text, person) => <label key={person} className="field"><span>人物 {person + 1}（位置不变）</span>
+          <textarea rows={2} value={text} maxLength={1000} spellCheck={false} disabled={saved.rerunBusy}
+            onChange={event => setRerunEdit({ ...rerunEdit, characters: rerunEdit.characters.map((value, at) => at === person ? event.target.value : value) })} /></label>)}
         <label className="field"><span>画风</span>
-          <textarea rows={3} value={rerunEdit.style} maxLength={3000} spellCheck={false}
+          <textarea rows={3} value={rerunEdit.style} maxLength={3000} spellCheck={false} disabled={saved.rerunBusy}
             onChange={event => setRerunEdit({ ...rerunEdit, style: event.target.value })} /></label>
         <div className="rerun-batch-actions">
-          <button type="button" disabled={saved.rerunBusy || !rerunEdit.prompt.trim() || !rerunEdit.style.trim()} onClick={() => {
-            const item = job.parameters.experiment?.item?.prompt
+          <button type="button" disabled={saved.rerunBusy || !rerunEdit.prompt.trim() || !rerunEdit.style.trim() || rerunEdit.characters.some(text => !text.trim())} onClick={() => {
+            const item = job.parameters.experiment?.item
+            const people = (item?.characters ?? []).map(person => person.prompt)
             const edits: RerunEdits = {
-              ...(rerunEdit.prompt !== item ? { prompt: rerunEdit.prompt } : {}),
+              ...(rerunEdit.prompt !== item?.prompt ? { prompt: rerunEdit.prompt } : {}),
+              ...(rerunEdit.characters.some((text, at) => text !== people[at]) ? { characters: rerunEdit.characters } : {}),
               ...(rerunEdit.style !== job.parameters.style_prompt ? { style_prompt: rerunEdit.style } : {}),
             }
-            setRerunEdit(null)
-            void saved.rerunCurrent(edits)
-          }}><Dices size={14} aria-hidden="true" /> 提交重跑</button>
-          <button className="secondary" type="button" onClick={() => setRerunEdit(null)}>取消</button>
+            const submitted = rerunEdit
+            void saved.rerunCurrent(edits, submitted.batchId).then(result => {
+              if (result === null || result === 'unknown') return
+              if (result === 'refused') {
+                // Not accepted: a later submission is a new batch.
+                const batchId = newRerunId()
+                if (batchId) setRerunEdit(current => current && current.batchId === submitted.batchId ? { ...current, batchId } : current)
+                return
+              }
+              setRerunEdit(current => current?.batchId === submitted.batchId ? null : current)
+              onRerunQueued?.(result)
+            })
+          }}><Dices size={14} aria-hidden="true" /> {saved.rerunBusy ? '正在加入队列...' : '提交重跑'}</button>
+          <button className="secondary" type="button" disabled={saved.rerunBusy} onClick={() => setRerunEdit(null)}>取消</button>
         </div>
       </div>}
+      {rerunIdError && <p className="alert" role="alert">{rerunIdError}</p>}
       {saved.rerunMessage && <p className="subtle" role="status">{saved.rerunMessage}</p>}
-      {saved.rerunError && <p className="alert" role="alert">重跑未提交：{saved.rerunError}</p>}
+      {saved.rerunError && <p className="alert" role="alert">{saved.rerunError.startsWith('提交结果未知') ? '' : '重跑未加入队列：'}{saved.rerunError}</p>}
       {job && (job.discarded_images?.length ?? 0) > 0 && <p className="subtle">本组已弃置 {job.discarded_images?.length} / {job.image_urls.length} 张（导出时跳过；可点「恢复」撤销）。</p>}
       <div className="saved-result-actions"><span className="prompt-hint">私有保存 7 天</span><button type="button" className="text-action" disabled={saved.loading || saved.imageLoading} onClick={() => void saved.retry()}>
         <RefreshCw size={15} aria-hidden="true" /> 刷新保存记录

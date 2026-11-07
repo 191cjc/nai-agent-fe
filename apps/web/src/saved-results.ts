@@ -1,5 +1,5 @@
 import { makeAutoObservable, runInAction } from 'mobx'
-import { ApiFailure, errorText, type ExperimentSummary, type GenerationView, type RerunEdits, WorkspaceApi } from './api'
+import { ApiFailure, errorText, type ExperimentRunState, type ExperimentSummary, type GenerationView, type RerunEdits, WorkspaceApi } from './api'
 
 type SavedSelection = { kind: 'generation' | 'experiment'; id: string }
 type PreloadStatus = 'idle' | 'reading' | 'loading' | 'completed' | 'cancelled' | 'capacity' | 'error'
@@ -343,28 +343,41 @@ export class SavedResultsStore {
 
   /**
    * One paid generation: same frozen prompt/settings/references, one sample, new random
-   * seed. The shown image is marked discarded so the export keeps only the replacement.
+   * seed. Submitted as a one-item server re-run batch (like the review grid), so it waits
+   * in the owner's run queue instead of being refused when the live admission queue is
+   * full. The shown image is marked discarded when the server submits the re-run.
+   * `batchId` is reused after an unknown outcome so a retry cannot queue it twice.
+   * Resolves to the accepted run, 'refused' (definite 4xx: draw a new id) or 'unknown'.
    */
-  async rerunCurrent(edits: RerunEdits = {}): Promise<void> {
+  async rerunCurrent(edits: RerunEdits, batchId: string): Promise<ExperimentRunState | 'refused' | 'unknown' | null> {
     const job = this.job
-    if (!job || !this.canRerun || this.rerunBusy) return
+    const selection = this.selection
+    if (!job || !selection || !this.canRerun || this.rerunBusy) return null
     const index = job.status === 'succeeded' && this.imageIndex < job.image_urls.length
       && !this.currentDiscarded ? this.imageIndex : null
     const epoch = this.viewerEpoch
+    const name = `${(this.summary?.name || '训练集').slice(0, 72)} · 重跑`
     this.rerunBusy = true
     this.rerunError = ''
     this.rerunMessage = ''
     try {
-      await this.api.rerunGeneration(job.id, index, edits)
-      if (epoch !== this.viewerEpoch || this.job?.id !== job.id) return
-      // Reload this group so the discard mark and the new following entry are visible.
-      await this.loadGroup(this.groupOffset, this.imageIndex)
-      runInAction(() => {
-        const changed = [edits.prompt !== undefined && '新训练词', edits.style_prompt !== undefined && '新画风'].filter(Boolean).join('、')
-        this.rerunMessage = `已提交重跑（${changed || '同提示词'}、新随机种子）${index !== null ? '，原图已标记弃置（可恢复）' : ''}。新图会排在本条之后，按 → 查看。`
+      const run = await this.api.createRerunBatch({
+        id: batchId, experiment_id: selection.id, name,
+        items: [{ job_id: job.id, ...(index !== null ? { discard_index: index } : {}), ...edits }],
       })
+      runInAction(() => {
+        if (epoch !== this.viewerEpoch || this.job?.id !== job.id) return
+        const changed = [edits.prompt !== undefined && '新训练词', edits.characters !== undefined && '新人物', edits.style_prompt !== undefined && '新画风'].filter(Boolean).join('、')
+        this.rerunMessage = `已加入服务器队列（${changed || '同提示词'}、新随机种子）${run.queue_position ? `，前面还有 ${run.queue_position} 个任务` : '，马上开始'}${index !== null ? '；开始生成时原图会标记弃置（可恢复）' : ''}。可以关闭页面，进度见「实验与训练集队列」；完成后新图排在本条之后，点「刷新保存记录」后按 → 查看。`
+      })
+      return run
     } catch (error) {
-      runInAction(() => { this.rerunError = errorText(error) })
+      const definite = error instanceof ApiFailure && error.status >= 400 && error.status < 500
+      runInAction(() => {
+        this.rerunError = definite ? errorText(error)
+          : `提交结果未知：${errorText(error)} 请先在「实验与训练集队列」核对；不修改内容直接再点「提交重跑」不会重复排队。`
+      })
+      return definite ? 'refused' : 'unknown'
     } finally {
       runInAction(() => { this.rerunBusy = false })
     }
