@@ -15,12 +15,12 @@
   "branch": "feat/native-character-prompts",
   "base_branch": "main",
   "worktree_path": null,
-  "commit": null,
+  "commit": "02c5dab92cb539d6745eb4ca073cce0b3fc70069",
   "pr_url": null,
   "subtasks": [],
   "children": [],
   "parent": null,
   "relatedFiles": [],
-  "notes": "Implementation and independent source review complete; final lint/type-check and isolated env-free /novelai/ locked build passed. See verification.md. Local uncommitted changes; no deployment. Interactive operator UI acceptance remains under the no-browser-testing restriction.",
+  "notes": "Reviewed implementation published frontend-only at https://www.firesoul.cn/novelai/ as 20261110T135850Z-02c5dab. Public static hashes and health verified; API release/PID 2882060, Nginx and all 234 prior shared assets unchanged. No backend/service/task operations. See deployment.md; interactive operator acceptance remains.",
   "meta": {}
 }

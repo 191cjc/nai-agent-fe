@@ -16,11 +16,14 @@ Final static verification and remaining operator acceptance are recorded in
 ## Authorized frontend-only publication
 
 - [x] Operator explicitly authorized immediate frontend-only publication.
-- [ ] Capture current static/API release and API PID; retain old static assets.
-- [ ] Commit only reviewed task/source/spec files, excluding unrelated work.
-- [ ] Build from exact committed web inputs with locked HTTPS dependencies and
+- [x] Capture current static/API release and API PID; retain old static assets.
+- [x] Commit only reviewed task/source/spec files, excluding unrelated work.
+- [x] Build from exact committed web inputs with locked HTTPS dependencies and
   a clean environment, using `/novelai/` as the production base.
-- [ ] Publish new shared assets before atomically switching only the static web
+- [x] Publish new shared assets before atomically switching only the static web
   release pointer. Do not change/restart API, Nginx, private state or active runs.
-- [ ] Verify public page/assets, retained assets and health; verify unchanged
+- [x] Verify public page/assets, retained assets and health; verify unchanged
   API release/PID and record publication evidence.
+
+Frontend-only publication completed; see `deployment.md`. Interactive operator
+acceptance remains; no unrelated task was archived.

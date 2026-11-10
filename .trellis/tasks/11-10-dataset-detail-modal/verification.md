@@ -51,12 +51,13 @@ Final reviewed/built source SHA-256:
 
 ## Remaining operator acceptance
 
-No frontend/helper automated tests, browser automation, real dataset content
-inspection, production operations or paid requests were performed. Static
+The implementation gate performed no frontend/helper automated tests, browser
+automation, real dataset content inspection, production operations or paid
+requests. Static
 source review supports the behavior; it is not interactive browser validation.
 
 Operator UI acceptance: open detail on a filtered later grid page, navigate or
 edit it, close by X/Escape/backdrop, and confirm retained grid/page/filter/
 selection/scroll. Also check narrow-screen scrolling, focus return, and Escape
-in a nested reference preview. The changes are local and uncommitted; no site
-publish or API restart was performed.
+in a nested reference preview. Subsequent operator-authorized frontend-only
+publication is recorded in `deployment.md`; the API was not restarted.
