@@ -5,6 +5,12 @@ import { allImagesPurged, imagePurged, retainedImageIndexes } from './result-ima
 type SavedSelection = { kind: 'generation' | 'experiment'; id: string }
 type PreloadStatus = 'idle' | 'reading' | 'loading' | 'completed' | 'cancelled' | 'capacity' | 'error'
 
+/** Accepted detail mutations for the still-mounted review grid of this selection. */
+export type DatasetReviewChange =
+  | { kind: 'caption'; jobId: string; caption: string | null }
+  | { kind: 'discard'; jobId: string; index: number; discarded: boolean }
+  | { kind: 'rerun'; jobId: string; run: ExperimentRunState }
+
 interface SavedImage {
   url: string
   filename: string
@@ -80,12 +86,23 @@ export class SavedResultsStore {
   private readonly imageCache = new Map<string, CachedImage>()
   private imageCacheBytes = 0
   private transientImage: TransientImage | null = null
+  private readonly reviewListeners = new Set<(change: DatasetReviewChange) => void>()
 
   constructor(
     private readonly api: WorkspaceApi,
     private readonly onDatasetCleanup: (id: string) => void = () => {},
   ) {
-    makeAutoObservable(this, undefined, { autoBind: true })
+    makeAutoObservable<SavedResultsStore, 'reviewListeners'>(this, { reviewListeners: false }, { autoBind: true })
+  }
+
+  subscribeReviewChanges(listener: (change: DatasetReviewChange) => void): () => void {
+    this.reviewListeners.add(listener)
+    return () => { this.reviewListeners.delete(listener) }
+  }
+
+  private notifyReviewChange(selection: SavedSelection | null, change: DatasetReviewChange): void {
+    if (selection !== this.selection || selection?.kind !== 'experiment' || this.summary?.kind !== 'dataset') return
+    this.reviewListeners.forEach(listener => listener(change))
   }
 
   async loadExperiments(offset = this.listOffset): Promise<void> {
@@ -321,6 +338,7 @@ export class SavedResultsStore {
   /** Marks or restores the shown image on the server; the file itself is kept. */
   async toggleDiscard(): Promise<void> {
     const job = this.job
+    const selection = this.selection
     const index = this.imageIndex
     if (!job || job.status !== 'succeeded' || index >= job.image_urls.length || this.currentPurged || this.discardBusy || this.purgeBusy) return
     const discarded = !this.currentDiscarded
@@ -330,6 +348,7 @@ export class SavedResultsStore {
     try {
       await this.api.setImageDiscarded(job.id, index, discarded)
       runInAction(() => {
+        this.notifyReviewChange(selection, { kind: 'discard', jobId: job.id, index, discarded })
         if (epoch !== this.viewerEpoch || this.job?.id !== job.id) return
         const marks = new Set(this.job.discarded_images ?? [])
         if (discarded) marks.add(index)
@@ -337,20 +356,22 @@ export class SavedResultsStore {
         this.job = { ...this.job, discarded_images: [...marks].sort((left, right) => left - right) }
       })
     } catch (error) {
-      runInAction(() => { this.discardError = errorText(error) })
+      runInAction(() => { if (epoch === this.viewerEpoch) this.discardError = errorText(error) })
     } finally {
-      runInAction(() => { this.discardBusy = false })
+      runInAction(() => { if (this.selection === selection) this.discardBusy = false })
     }
   }
 
   /** Save (string) or clear (null) the shown training-set group's caption override; throws on failure. */
   async setCaption(caption: string | null): Promise<void> {
     const job = this.job
+    const selection = this.selection
     const experimentId = job?.parameters.experiment?.id
     if (!job || job.parameters.experiment?.kind !== 'dataset' || !experimentId) return
     const epoch = this.viewerEpoch
     await this.api.setCaptions(experimentId, [{ job_id: job.id, caption }])
     runInAction(() => {
+      this.notifyReviewChange(selection, { kind: 'caption', jobId: job.id, caption })
       if (epoch !== this.viewerEpoch || this.job?.id !== job.id) return
       this.job = { ...this.job, caption_override: caption }
     })
@@ -388,20 +409,22 @@ export class SavedResultsStore {
         items: [{ job_id: job.id, ...(index !== null ? { discard_index: index } : {}), ...edits }],
       })
       runInAction(() => {
+        this.notifyReviewChange(selection, { kind: 'rerun', jobId: job.id, run })
         if (epoch !== this.viewerEpoch || this.job?.id !== job.id) return
         const changed = [edits.prompt !== undefined && '新训练词', edits.characters !== undefined && '新人物', edits.style_prompt !== undefined && '新画风'].filter(Boolean).join('、')
         this.rerunMessage = `已加入服务器队列（${changed || '同提示词'}、新随机种子）${run.queue_position ? `，前面还有 ${run.queue_position} 个任务` : '，马上开始'}${index !== null ? '；开始生成时原图会标记弃置（可恢复）' : ''}。可以关闭页面，进度见「实验与训练集队列」；完成后新图排在本条之后，点「刷新保存记录」后按 → 查看。`
       })
-      return run
+      return this.selection === selection ? run : null
     } catch (error) {
       const definite = error instanceof ApiFailure && error.status >= 400 && error.status < 500
       runInAction(() => {
+        if (epoch !== this.viewerEpoch) return
         this.rerunError = definite ? errorText(error)
           : `提交结果未知：${errorText(error)} 请先在「实验与训练集队列」核对；不修改内容直接再点「提交重跑」不会重复排队。`
       })
-      return definite ? 'refused' : 'unknown'
+      return this.selection === selection ? definite ? 'refused' : 'unknown' : null
     } finally {
-      runInAction(() => { this.rerunBusy = false })
+      runInAction(() => { if (this.selection === selection) this.rerunBusy = false })
     }
   }
 
@@ -686,6 +709,7 @@ export class SavedResultsStore {
 
   close(): void {
     this.clearViewerImages()
+    this.reviewListeners.clear()
     this.selectionVersion += 1
     this.grid = false
     this.purgeBusy = false
@@ -700,6 +724,11 @@ export class SavedResultsStore {
     this.imageLoading = false
     this.error = ''
     this.imageError = ''
+    this.discardBusy = false
+    this.discardError = ''
+    this.rerunBusy = false
+    this.rerunError = ''
+    this.rerunMessage = ''
   }
 
   reset(): void {

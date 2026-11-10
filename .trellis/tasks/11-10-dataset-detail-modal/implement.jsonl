@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/workspace-contract.md", "reason": "Protected viewer ownership, keyboard actions and frontend static validation"}
+{"file": ".trellis/spec/frontend/viewer-cache-contract.md", "reason": "Image/thumbnail URL bounds, selection lifecycle and cleanup"}
+{"file": ".trellis/spec/backend/dataset-review-contract.md", "reason": "Dataset defaults, purge/discard semantics and strict privacy/static-only verification"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Reuse existing detail/dialog implementation and narrow change ownership"}

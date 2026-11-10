@@ -7,6 +7,7 @@ import { translatePrompt } from './prompt-zh'
 import { contentCaption } from './dataset-export'
 import { datasetItemZh } from './PromptGloss'
 import { allImagesPurged, imagePurged, retainedImageIndexes } from './result-images'
+import type { DatasetReviewChange } from './saved-results'
 
 /** Tiles per page: bounds preview requests and Blob memory (~60 × 30 KB). */
 const PAGE_SIZE = 60
@@ -132,7 +133,19 @@ export function queuedRerunSources(runs: readonly ExperimentRunState[], experime
   return queued
 }
 
-export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClose, onPurge }: {
+function applyDetailChange(groups: GenerationView[], change: Exclude<DatasetReviewChange, { kind: 'rerun' }>): GenerationView[] {
+  return groups.map(group => {
+    if (group.id !== change.jobId) return group
+    if (change.kind === 'caption') return { ...group, caption_override: change.caption }
+    if (imagePurged(group, change.index)) return group
+    const marks = new Set(group.discarded_images ?? [])
+    if (change.discarded) marks.add(change.index)
+    else marks.delete(change.index)
+    return { ...group, discarded_images: [...marks].sort((left, right) => left - right) }
+  })
+}
+
+export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClose, onPurge, subscribeReviewChanges }: {
   api: WorkspaceApi
   experimentId: string
   /** Training-set name, used to label its re-run batches in the queue. */
@@ -144,6 +157,8 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
   onClose: () => void
   /** Clears this selection's saved-viewer caches and refreshes its metadata/list. */
   onPurge: () => Promise<ImagePurgeResult>
+  /** Selection-owned detail changes, including successful writes after the dialog closes. */
+  subscribeReviewChanges: (listener: (change: DatasetReviewChange) => void) => () => void
 }) {
   const [groups, setGroups] = useState<GenerationView[] | null>(null)
   const [loadError, setLoadError] = useState('')
@@ -162,6 +177,10 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
   const [submitting, setSubmitting] = useState(false)
   // Not-yet-submitted sources of this set's server-side re-run batches (by source job id).
   const [queued, setQueued] = useState<ReadonlyMap<string, number>>(new Map())
+  // Accepted detail re-runs can already have submitted while the grid snapshot is unchanged.
+  // Keep a conservative replacement floor until the next explicit metadata refresh.
+  const [detailReplacements, setDetailReplacements] = useState<ReadonlyMap<string, number>>(new Map())
+  const replacementCountsRef = useRef<ReadonlyMap<string, number>>(new Map())
   // Bulk training-caption editor (training only, never generates).
   const [captionEdit, setCaptionEdit] = useState<{ scope: 'selected' | 'visible' | 'all'; kind: CaptionOperation['kind']; find: string; text: string } | null>(null)
   const [captionBusy, setCaptionBusy] = useState(false)
@@ -185,7 +204,43 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
   // Metadata only (no image bytes): bounded pages in server order.
   useEffect(() => {
     const controller = new AbortController()
+    const pendingChanges: Exclude<DatasetReviewChange, { kind: 'rerun' }>[] = []
+    let metadataPending = true
+    let queueSnapshot: ExperimentRunState[] = []
+    const acceptedRuns = new Map<string, ExperimentRunState>()
+    const updateQueued = () => {
+      const runs = new Map(queueSnapshot.map(run => [run.id, run]))
+      acceptedRuns.forEach((run, id) => {
+        const snapshot = runs.get(id)
+        if (!snapshot || snapshot.updated_at < run.updated_at
+          || (snapshot.updated_at === run.updated_at && Number(snapshot.next_ordinal) < Number(run.next_ordinal))) runs.set(id, run)
+      })
+      setQueued(queuedRerunSources([...runs.values()], experimentId))
+    }
+    const unsubscribe = subscribeReviewChanges(change => {
+      if (controller.signal.aborted) return
+      if (change.kind === 'rerun') {
+        if (!acceptedRuns.has(change.run.id)) {
+          const sources = new Map<string, number>()
+          for (const item of change.run.rerun_items ?? [{ job_id: change.jobId }]) sources.set(item.job_id, (sources.get(item.job_id) ?? 0) + 1)
+          const known = queuedRerunSources(queueSnapshot.filter(run => run.id === change.run.id), experimentId)
+          setDetailReplacements(currentCounts => {
+            const next = new Map(currentCounts)
+            sources.forEach((count, id) => next.set(id,
+              Math.max(0, Math.max(next.get(id) ?? 0, replacementCountsRef.current.get(id) ?? 0) - (known.get(id) ?? 0)) + count))
+            return next
+          })
+        }
+        acceptedRuns.set(change.run.id, change.run)
+        updateQueued()
+      } else {
+        // A read started before this write must not overwrite its accepted result.
+        if (metadataPending) pendingChanges.push(change)
+        setGroups(currentGroups => currentGroups ? applyDetailChange(currentGroups, change) : null)
+      }
+    })
     setGroups(null)
+    setDetailReplacements(new Map())
     setLoadError('')
     setMetadataLimited(false)
     void (async () => {
@@ -197,16 +252,24 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
         offset = result.next_offset
       }
       if (!controller.signal.aborted) {
-        setGroups(loaded)
+        setGroups(pendingChanges.reduce(applyDetailChange, loaded))
+        metadataPending = false
+        pendingChanges.length = 0
         setMetadataLimited(offset !== null)
       }
-    })().catch(error => { if (!controller.signal.aborted) setLoadError(errorText(error)) })
+    })().catch(error => {
+      if (!controller.signal.aborted) {
+        metadataPending = false
+        pendingChanges.length = 0
+        setLoadError(errorText(error))
+      }
+    })
     // Best effort: without the queue, quick picks just cannot exclude batched sources.
     void api.queuedExperimentRuns(controller.signal)
-      .then(runs => { if (!controller.signal.aborted) setQueued(queuedRerunSources(runs, experimentId)) })
+      .then(runs => { if (!controller.signal.aborted) { queueSnapshot = runs; updateQueued() } })
       .catch(() => undefined)
-    return () => controller.abort()
-  }, [api, experimentId, reload])
+    return () => { controller.abort(); unsubscribe() }
+  }, [api, experimentId, reload, subscribeReviewChanges])
 
   const tiles = useMemo<Tile[]>(() => (groups ?? []).flatMap((job, offset): Tile[] => {
     const base = { offset, job, category: categoryOf(job) }
@@ -242,8 +305,10 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
   const replaced = useMemo(() => {
     const counts = new Map(reruns)
     queued.forEach((count, id) => counts.set(id, (counts.get(id) ?? 0) + count))
+    detailReplacements.forEach((count, id) => counts.set(id, Math.max(counts.get(id) ?? 0, count)))
     return counts
-  }, [reruns, queued])
+  }, [reruns, queued, detailReplacements])
+  useEffect(() => { replacementCountsRef.current = replaced }, [replaced])
   const queuedCount = [...queued.values()].reduce((sum, count) => sum + count, 0)
   // A reload drops selections whose tile no longer exists (e.g. an image expired).
   useEffect(() => {
@@ -408,6 +473,7 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
     setActionError('')
     try {
       const run = await api.createRerunBatch({ id, experiment_id: experimentId, items, name })
+      if (!mounted.current) return
       selectKeys(sources.map(tile => tile.key), false)
       setBatch(null)
       onQueued?.(run)
@@ -481,7 +547,7 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
     }
   }
 
-  return <section ref={scrollRef} className="review-grid" aria-label="网格检查" aria-busy={purging}>
+  return <section ref={scrollRef} className="review-grid" tabIndex={-1} aria-label="网格检查" aria-busy={purging}>
     <div className="review-grid-toolbar">
       <label className="field review-grid-filter"><span>分类</span>
         <select value={category} onChange={event => { setCategory(event.target.value); setPage(0) }}>

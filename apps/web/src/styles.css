@@ -491,6 +491,13 @@ h1, h2, h3 { letter-spacing: 0; }
 .saved-experiment-body > p { margin: 9px 0; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 .saved-experiment-item .text-action { margin-top: 5px; }
 .saved-results .subtle, .saved-results .experiment-result-heading { overflow-wrap: anywhere; }
+.saved-detail-dialog { width: min(1360px, calc(100vw - 24px)); overflow: hidden; }
+.saved-detail-content { display: flex; flex-direction: column; gap: 8px; max-height: calc(100dvh - 26px); padding: 0 clamp(10px, 2vw, 24px) 12px; overflow-y: auto; overscroll-behavior: contain; }
+.saved-detail-content > .canvas-toolbar { position: sticky; top: 0; z-index: 2; flex-wrap: wrap; padding: 6px 0; background: #22252f; }
+.saved-detail-content .saved-viewer-toolbar-actions { flex-wrap: wrap; flex-shrink: 1; min-width: 0; max-width: 100%; }
+.saved-detail-content > .canvas-figure { flex: 0 0 auto; height: max(220px, 55dvh); }
+.saved-detail-content .canvas-caption { flex-wrap: wrap; justify-content: flex-start; padding: 8px 0; }
+.saved-detail-content > .canvas-metadata { flex: 0 0 auto; max-height: none; padding: 4px 0; overflow: visible; }
 .saved-viewer-toolbar-actions { display: flex; flex-shrink: 0; align-items: center; gap: 10px; }
 .saved-preload-button { min-height: 32px; }
 .saved-preload-button > svg { flex-shrink: 0; }

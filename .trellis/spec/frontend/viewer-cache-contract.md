@@ -180,6 +180,37 @@ acceptance; do not issue paid requests for cache verification.
   [Dataset Review and Cleanup](../backend/dataset-review-contract.md).
 - Key review instances by set ID plus the store's per-open `selectionVersion`,
   so reopening the same ID resets defaults and invalidates old async UI handlers.
+- Keep that keyed `ReviewGrid` mounted throughout the dataset selection.
+  `saved.grid` controls the detail dialog's visibility, not the grid's lifetime:
+  opening/closing detail preserves page, filters, selection, editors, scroll and
+  grid-owned preview URLs. Ordinary saved generations and style experiments
+  retain inline detail. Explicit refresh, changed visible paths and full
+  selection teardown still follow the existing invalidation rules.
+- Render the existing dataset detail in a body-portaled native modal dialog.
+  Close/X, Escape and backdrop call `saved.showGrid()`, not `saved.close()`;
+  detail images/preload are released independently of grid previews. Guard
+  cancel/backdrop handlers by `event.target === event.currentTarget`, including
+  nested reference-preview portals. Restore connected opener focus with
+  `preventScroll`, or focus the retained grid when the opener was removed.
+- `SavedResultsStore.subscribeReviewChanges(listener): () => void` bridges
+  accepted detail caption/discard/rerun mutations into the retained grid.
+  Notifications check the captured selection object, independently of the
+  current detail `viewerEpoch`: a successful write still updates its original
+  grid after detail navigation/close, but never a replaced selection. Clear
+  listeners on full close/reset and unsubscribe with the grid metadata effect.
+- Apply caption/discard events as targeted job/slot field patches, preserving
+  unrelated grid changes. Buffer events while initial metadata is pending so
+  an older read cannot erase an accepted write. Merge accepted reruns with the
+  initial queue snapshot by run ID, retaining the newer `updated_at` / cursor,
+  before deriving pending source counts. Preserve accepted source replacement
+  counts until explicit refresh for conservative quick-pick exclusion; the
+  displayed pending count still follows the queue's `next_ordinal`.
+  Keep the bound subscription identity stable; dialog visibility must not
+  invalidate either metadata or thumbnail effects.
+- Reject late rerun callbacks after selection replacement/full close/session
+  teardown, including the grid's own accepted batch callback after unmount.
+  Closing only the detail dialog retains selection ownership and still permits
+  accepted queue updates.
 - 「重跑全部待替换」: after one confirm showing the paid count, submits one
   rerun per discarded image and per failed group not yet replaced
   (`pendingReruns`: wanted − existing groups whose `rerun_of` names it),
@@ -187,3 +218,19 @@ acceptance; do not issue paid requests for cache verification.
   ≤120 waits); any other API error stops; a network error stops as
   "outcome unknown" and asks for a refresh before continuing. Stop cancels
   between submissions.
+
+### Detail dialog validation
+
+| Condition | Required behavior |
+| --- | --- |
+| Open/close detail on a filtered later page | Same grid instance, scroll, selection and preview URLs; no grid refetch |
+| Accepted caption/discard after detail closes or changes job | Patch original job in the retained selection only |
+| Accepted write races with initial metadata | Replay targeted patch over accepted metadata |
+| Rerun acceptance overlaps initial queue read | Merge by run ID without double counting |
+| Escape in nested reference preview | Close preview, preserve parent detail dialog |
+| Full close/replacement/logout/401/dispose | Unmount grid, revoke owned URLs and reject late handlers |
+
+Review these source paths with ESLint/TypeScript and a fresh env-free locked
+production build. Continue the operator restriction on frontend/helper/browser
+automated tests and real private dataset probes; interactive UI acceptance
+belongs to the operator.

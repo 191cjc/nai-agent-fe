@@ -1,4 +1,5 @@
-import { Suspense, useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { observer } from 'mobx-react-lite'
 import { ArrowLeft, ArrowRight, Ban, CheckSquare, Dices, Download, FlaskConical, Images, LayoutGrid, Layers, Pencil, RefreshCw, RotateCcw, Trash2, UserRound, X } from 'lucide-react'
 import { ApiFailure, errorText, MAX_EXPERIMENT_NAME, type ExperimentRunState, type ExperimentSummary, type RerunEdits, type WorkspaceApi } from './api'
@@ -228,6 +229,36 @@ function UseAsReferenceButton({ api, jobId, index }: { api: WorkspaceApi; jobId:
   </>
 }
 
+/** Native modality leaves the review page and its preview ownership untouched. */
+function DatasetDetailDialog({ onClose, children }: { onClose: () => void; children: ReactNode }) {
+  const dialogRef = useRef<HTMLDialogElement>(null)
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
+  useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const fallback = document.querySelector<HTMLElement>('#saved-result-viewer .review-grid')
+    const dialog = dialogRef.current
+    dialog?.showModal()
+    dialog?.querySelector<HTMLElement>('.experiment-image-viewer')?.focus({ preventScroll: true })
+    return () => {
+      dialog?.close()
+      if (opener?.isConnected) opener.focus({ preventScroll: true })
+      else if (fallback?.isConnected) fallback.focus({ preventScroll: true })
+    }
+  }, [])
+  return createPortal(<dialog ref={dialogRef} className="snapshot-dialog saved-detail-dialog saved-results" aria-labelledby="saved-detail-title"
+    onCancel={event => {
+      // A reference preview can itself be a nested, body-portaled native dialog.
+      if (event.target !== event.currentTarget || event.defaultPrevented) return
+      event.preventDefault()
+      closeRef.current()
+    }}
+    onKeyDown={event => { if (event.key === 'Escape') event.stopPropagation() }}
+    onClick={event => { if (event.target === event.currentTarget) closeRef.current() }}>
+    <div className="saved-detail-content">{children}</div>
+  </dialog>, document.body)
+}
+
 export const SavedResultViewer = observer(({ saved, api, onClose, onUseSeed, canSave, onRerunQueued }: {
   saved: SavedResultsStore
   api: WorkspaceApi
@@ -283,29 +314,27 @@ export const SavedResultViewer = observer(({ saved, api, onClose, onUseSeed, can
     viewerRef.current?.focus({ preventScroll: true })
   }
 
-  return <section id="saved-result-viewer" className="canvas-view saved-results" aria-labelledby="saved-result-title">
-    <div className="canvas-toolbar">
-      <div className="canvas-title"><FlaskConical size={16} aria-hidden="true" /><h2 id="saved-result-title">{isExperiment ? isDataset ? '已保存的训练集' : '已保存的画风对比' : '已保存的图片'}</h2>
-        {job && <span className={`status status-${job.status}`}>{jobStatus(job.status)}</span>}
+  const toolbar = (inGrid: boolean, inDialog = false) => <div className="canvas-toolbar">
+      <div className="canvas-title"><FlaskConical size={16} aria-hidden="true" /><h2 id={inDialog ? 'saved-detail-title' : 'saved-result-title'}>{inDialog ? '训练集图片详情' : isExperiment ? isDataset ? '已保存的训练集' : '已保存的画风对比' : '已保存的图片'}</h2>
+        {!inGrid && job && <span className={`status status-${job.status}`}>{jobStatus(job.status)}</span>}
       </div>
       <div className="saved-viewer-toolbar-actions">
-        {datasetSelection && <button className="text-action" type="button" aria-pressed={grid} disabled={saved.purgeBusy || saved.loading}
-          title="一屏查看多张小预览，可多选重跑、按按钮弃置；适合筛训练集" onClick={() => { if (grid) void saved.showSingle(); else saved.showGrid() }}>
-          <LayoutGrid size={15} aria-hidden="true" /> {grid ? '单张查看' : '缩略图'}</button>}
-        {isExperiment && !grid && <button className="text-action saved-preload-button" type="button" aria-describedby="saved-preload-help"
+        {datasetSelection && <button className="text-action" type="button" aria-pressed={inGrid} disabled={saved.purgeBusy || (inGrid && saved.loading)}
+          title="一屏查看多张小预览，可多选重跑、按按钮弃置；适合筛训练集" onClick={() => { if (inGrid) void saved.showSingle(); else saved.showGrid() }}>
+          <LayoutGrid size={15} aria-hidden="true" /> {inGrid ? '单张查看' : '缩略图'}</button>}
+        {isExperiment && !inGrid && <button className="text-action saved-preload-button" type="button" aria-describedby="saved-preload-help"
           onClick={() => { if (saved.preloading) saved.cancelPreload(); else void saved.preloadImages() }}>
           {saved.preloading ? <X size={15} aria-hidden="true" /> : <Images size={15} aria-hidden="true" />}
           {saved.preloading ? '取消加载' : '加载全部图片'}
         </button>}
-        {!grid && <label className="history-select saved-review-toggle"><input type="checkbox" checked={saved.hideDiscarded}
+        {!inGrid && <label className="history-select saved-review-toggle"><input type="checkbox" checked={saved.hideDiscarded}
           onChange={event => saved.setHideDiscarded(event.target.checked)} /> 只看未弃置</label>}
-        <button className="icon-button" type="button" title="关闭历史图片" aria-label="关闭历史图片" onClick={onClose}><X size={18} /></button>
+        <button className="icon-button" type="button" title={inDialog ? '关闭详情，返回缩略图' : '关闭历史图片'} aria-label={inDialog ? '关闭详情，返回缩略图' : '关闭历史图片'}
+          onClick={inDialog ? saved.showGrid : onClose}><X size={18} /></button>
       </div>
     </div>
-    {grid ? <Suspense fallback={<p className="subtle" role="status">正在打开网格检查…</p>}>
-      <ReviewGrid key={`${selection.id}:${saved.selectionVersion}`} api={api} experimentId={selection.id} setName={saved.summary?.name} onQueued={onRerunQueued} onClose={() => void saved.showSingle()}
-        onPurge={saved.purgeDiscardedImages} onOpen={(offset, image) => void saved.showGroup(offset, image)} />
-    </Suspense> : <>
+
+  const detail = <>
       <figure className="canvas-figure">
         <div className="experiment-image-viewer" role="group" aria-label="已保存图片切换" aria-describedby="saved-navigation-help"
           tabIndex={0} ref={viewerRef} onKeyDown={event => {
@@ -382,6 +411,7 @@ export const SavedResultViewer = observer(({ saved, api, onClose, onUseSeed, can
             }
             const submitted = rerunEdit
             void saved.rerunCurrent(edits, submitted.batchId).then(result => {
+              if (saved.selection !== selection || !canSave()) return
               if (result === null || result === 'unknown') return
               if (result === 'refused') {
                 // Not accepted: a later submission is a new batch.
@@ -426,6 +456,16 @@ export const SavedResultViewer = observer(({ saved, api, onClose, onUseSeed, can
         {job.error_code && <p className="alert" role="alert">{errorText(new ApiFailure(0, job.error_code, '生成失败，请检查服务状态。'))}</p>}
       </>}
     </div>
-    </>}
+    </>
+
+  return <section id="saved-result-viewer" className="canvas-view saved-results" aria-labelledby="saved-result-title">
+    {toolbar(datasetSelection)}
+    {datasetSelection && <Suspense fallback={<p className="subtle" role="status">正在打开网格检查…</p>}>
+      <ReviewGrid key={`${selection.id}:${saved.selectionVersion}`} api={api} experimentId={selection.id} setName={saved.summary?.name} onQueued={onRerunQueued} onClose={() => void saved.showSingle()}
+        subscribeReviewChanges={saved.subscribeReviewChanges} onPurge={saved.purgeDiscardedImages} onOpen={(offset, image) => void saved.showGroup(offset, image)} />
+    </Suspense>}
+    {datasetSelection ? !grid && <DatasetDetailDialog key={`${selection.id}:${saved.selectionVersion}`} onClose={saved.showGrid}>
+      {toolbar(false, true)}{detail}
+    </DatasetDetailDialog> : detail}
   </section>
 })
