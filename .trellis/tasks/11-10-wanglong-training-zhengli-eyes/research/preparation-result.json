@@ -1,0 +1,21 @@
+{
+  "completed_at": 1794291959.0086827,
+  "jobs": [
+    {
+      "job": "char_wanglong_gpt_1110",
+      "sources": [
+        {
+          "changed": false,
+          "discarded": 0,
+          "expected": 134,
+          "jobs": 134,
+          "purged": 0,
+          "run_id": "2bfd3586-5c15-49ab-abe9-91fa52caa083",
+          "written": 134
+        }
+      ],
+      "written": 134
+    }
+  ],
+  "state": "prepared"
+}

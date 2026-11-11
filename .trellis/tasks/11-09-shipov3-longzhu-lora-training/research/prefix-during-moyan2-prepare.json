@@ -1,0 +1,38 @@
+{
+  "current_job": "char_longzhu_gpt_1109",
+  "jobs": [
+    {
+      "exit_code": 0,
+      "final_artifacts": [
+        {
+          "bytes": 170602108,
+          "name": "aoqishipov3.safetensors",
+          "sha256": "c79e6a959d37e112ea41c0f4f22a3fa0ca87e24c5a7d5a71893a1d249da32c1b"
+        }
+      ],
+      "finished_at": 1794204809.4351912,
+      "name": "style_shipov3_1109",
+      "progress": {
+        "checkpoint_count": 6,
+        "latest_checkpoint_epoch": 10,
+        "total_epochs": 12
+      },
+      "started_at": 1794199532.4753869,
+      "state": "succeeded"
+    },
+    {
+      "final_artifacts": [],
+      "name": "char_longzhu_gpt_1109",
+      "progress": {
+        "checkpoint_count": 0,
+        "latest_checkpoint_epoch": 0,
+        "total_epochs": 12
+      },
+      "started_at": 1794204810.1809726,
+      "state": "training"
+    }
+  ],
+  "operation": "aoqi_training_1109_v3",
+  "state": "running",
+  "updated_at": 1794205020.2043936
+}

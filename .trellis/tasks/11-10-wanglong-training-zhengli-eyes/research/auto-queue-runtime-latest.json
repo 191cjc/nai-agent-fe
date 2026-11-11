@@ -1,0 +1,60 @@
+{
+  "observed_at": "2026-11-10T09:37:48.516807+00:00",
+  "dispatcher": {
+    "jobs": {
+      "bojiaqiu": {
+        "state": "waiting_generation"
+      },
+      "siling": {
+        "bootstrapped": true,
+        "state": "waiting_generation"
+      },
+      "zhengli": {
+        "state": "waiting_generation"
+      }
+    },
+    "updated_at": 1794303209.9861498
+  },
+  "timer": {
+    "NextElapseUSecMonotonic": "infinity",
+    "LastTriggerUSec": "Tue 2026-11-10 17:32:14 CST",
+    "ActiveState": "active",
+    "SubState": "running",
+    "UnitFileState": "enabled"
+  },
+  "service": {
+    "MainPID": "3835683",
+    "Result": "success",
+    "ExecMainStatus": "0",
+    "ActiveState": "activating",
+    "SubState": "start"
+  },
+  "local_preparation_metadata": {
+    "identity": {
+      "job": "char_siling_gpt_1110",
+      "lane": "gpt",
+      "operation": "aoqi_auto_1110_siling",
+      "owner": "48fd7397-53cc-422a-8bac-69293871848c",
+      "remote_root": "/hy-tmp/aoqi_auto_1110_siling",
+      "role": "siling",
+      "run": "11fde849-209e-4fd0-85d1-15f14a2c875a",
+      "trigger": "aoqisiling"
+    },
+    "successful_images": 133,
+    "stage": {
+      "state": "incremental_transferring",
+      "updated_at": 1794303211.6214647,
+      "plan_sha256": "1fc2eded267a3d2c6653c768cde146ee8c392d457345ffe8631cb39712c36ce8"
+    },
+    "local_model_weight_files": 0
+  },
+  "remote_upload_metadata": {
+    "operation": "aoqi_auto_1110_siling",
+    "png_files": 30,
+    "caption_files": 30,
+    "dataset_bytes": 51404672,
+    "ready": false,
+    "accepted": false
+  },
+  "interpretation": "First automatic pass is uploading completed Siling snapshot. Dataset readiness and training acceptance are still pending. Other two fixed sources wait for completed generation. All weights remain remote; no completion claim."
+}

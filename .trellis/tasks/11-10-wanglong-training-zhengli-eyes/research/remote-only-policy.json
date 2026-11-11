@@ -1,0 +1,8 @@
+{
+  "local_backup_enabled": false,
+  "reason": "operator_requires_remote_weights_only",
+  "remote_state": "running",
+  "state": "local_workflow_stopped_remote_training_continues",
+  "stopped_local_workflow_pid": 3782546,
+  "updated_at": 1794293702.2681477
+}

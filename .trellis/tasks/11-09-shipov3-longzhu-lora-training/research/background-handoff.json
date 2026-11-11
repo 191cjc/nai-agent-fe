@@ -1,0 +1,24 @@
+{
+  "checked_at": 1794198243.7361135,
+  "handoff_launch.json": {
+    "code_sha256": "ca15ab14e2b4777965d879084919d053f10865218ef7927f809d329997bd9f95",
+    "launched_at": 1794198173.7189672,
+    "pid": 3418498,
+    "pid_start_ticks": 812721800,
+    "state": "handoff_launched"
+  },
+  "handoff_status.json": {
+    "pid": 3418498,
+    "state": "waiting_upload",
+    "updated_at": 1794198173.7538617
+  },
+  "stage_status.json": {
+    "current_job": "style_shipov3_1109",
+    "plan_sha256": "61ecfcfca617cc94d0b79ee16d79dfb37f870259f44a704accf036703dd90486",
+    "state": "incremental_transferring",
+    "updated_at": 1794197105.6916268
+  },
+  "handoff_alive": true,
+  ".handoff.lock_held": true,
+  ".transfer.lock_held": true
+}

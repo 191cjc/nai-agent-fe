@@ -1,0 +1,42 @@
+[
+  {
+    "name": "common.py",
+    "bytes": 5538,
+    "sha256": "c46d9c4b854e9f1baf372eb124011b522ecd11e7457d3ccf22aadf119b64460f"
+  },
+  {
+    "name": "prepare.py",
+    "bytes": 11535,
+    "sha256": "29c93d058e616e2a5a26094ae72f8916df42f717fd8d6c43d8784a00d5bafd9b"
+  },
+  {
+    "name": "remote_train.py",
+    "bytes": 17291,
+    "sha256": "0ffec1592eeea1ee19b2bdb74b0929aaa3e96282f86d93b1ea56a430a17d0f02"
+  },
+  {
+    "name": "ops.py",
+    "bytes": 15802,
+    "sha256": "fb7e4171c346ed1ce14f2daf1d3dfdd9171203c588e72fb8e264fc1abb634df3"
+  },
+  {
+    "name": "test_pipeline.py",
+    "bytes": 9976,
+    "sha256": "fc20db3c1a81e60a3570ede2c21f24daab4498c74d1a7255673e44c69a3af133"
+  },
+  {
+    "name": "test_controller.py",
+    "bytes": 13286,
+    "sha256": "83a1d0e1ab6346984adb4113424cd3d62ad55677aea37a3d8bbc08a3d645ad10"
+  },
+  {
+    "name": "test_ops.py",
+    "bytes": 6628,
+    "sha256": "951ae7b025ca2b34122dcc0cd02bef8ce1c28534513995090da129fc159c24f0"
+  },
+  {
+    "name": "README.md",
+    "bytes": 4883,
+    "sha256": "24b9b794dea455fbe32c204f82a7095c789cf7ebab69a1987b1a6038b519c73a"
+  }
+]

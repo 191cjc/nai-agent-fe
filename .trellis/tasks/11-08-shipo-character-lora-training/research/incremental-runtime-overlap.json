@@ -1,0 +1,33 @@
+{
+  "before": {
+    "at": 1794141849.9001467,
+    "training_state": "running",
+    "current_job": "char_xingjiang_gpt_1108",
+    "gpu_utilization_and_memory_mib": "96, 12946",
+    "new_dataset_bytes": 536577801,
+    "ready_jobs": [
+      "char_nuoya_gpt_1108",
+      "char_xingjiang_gpt_1108",
+      "char_zhengli_gpt_1108",
+      "char_chaoshen_gpt_1108",
+      "char_shikong_gpt_1108",
+      "char_weileita_gpt_1108"
+    ]
+  },
+  "after": {
+    "at": 1794141859.965133,
+    "training_state": "running",
+    "current_job": "char_xingjiang_gpt_1108",
+    "gpu_utilization_and_memory_mib": "100, 12946",
+    "new_dataset_bytes": 536577801,
+    "ready_jobs": [
+      "char_nuoya_gpt_1108",
+      "char_xingjiang_gpt_1108",
+      "char_zhengli_gpt_1108",
+      "char_chaoshen_gpt_1108",
+      "char_shikong_gpt_1108",
+      "char_weileita_gpt_1108"
+    ]
+  },
+  "upload_bytes_added": 0
+}

@@ -1,0 +1,10 @@
+{
+  "operation": "aoqi_training_1108",
+  "action": "stop_style_for_operator_queue_change",
+  "controller_pid": 3484,
+  "trainer_pid": 3516,
+  "controller_stopped": true,
+  "trainer_group_remaining": 0,
+  "forced_process_count": 0,
+  "stopped_at": 1794137496.1348543
+}

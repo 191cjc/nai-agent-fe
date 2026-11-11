@@ -1,0 +1,52 @@
+{
+  "observed_at": "2026-11-10T10:09:15.159442+00:00",
+  "dispatcher": {
+    "jobs": {
+      "an": {
+        "source": {
+          "state": "running",
+          "successful_images": 0
+        },
+        "state": "waiting_generation"
+      },
+      "bojiaqiu": {
+        "source": {
+          "state": "running",
+          "successful_images": 0
+        },
+        "state": "waiting_generation"
+      },
+      "siling": {
+        "accepted": true,
+        "bootstrapped": true,
+        "controller_pid": 5749,
+        "source": {
+          "state": "completed",
+          "successful_images": 133
+        },
+        "state": "training"
+      },
+      "yinzhi": {
+        "source": {
+          "state": "running",
+          "successful_images": 0
+        },
+        "state": "waiting_generation"
+      },
+      "zhengli": {
+        "bootstrapped": true,
+        "source": {
+          "state": "completed",
+          "successful_images": 129
+        },
+        "state": "ready"
+      }
+    },
+    "launch_block": null,
+    "state": "active",
+    "updated_at": 1794305344.2104704
+  },
+  "timer": "NextElapseUSecMonotonic=3month 3d 23h 50min 48.502835s\nLastTriggerUSec=Tue 2026-11-10 18:09:00 CST\nActiveState=active\nSubState=waiting\nUnitFileState=enabled\n",
+  "service": "MainPID=0\nResult=success\nExecMainStatus=0\nActiveState=inactive\nSubState=dead\n",
+  "verification": "First five-run pass observed all exact roles; no launch block/poll error; original live controller identity preserved and Zhengli remained ready. Added Yinzhi and An wait for completed generation. No weights downloaded or runtime states manually rewritten."
+}

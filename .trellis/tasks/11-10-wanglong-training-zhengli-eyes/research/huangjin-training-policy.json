@@ -1,0 +1,7 @@
+{
+  "state": "remote_training_only",
+  "local_backup_enabled": false,
+  "local_workflow_running": false,
+  "updated_at": 1794297419.2960925,
+  "reason": "operator clarified to train Huangjin; all weights stay remote"
+}

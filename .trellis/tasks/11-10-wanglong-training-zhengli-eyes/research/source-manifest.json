@@ -1,0 +1,45 @@
+{
+  "operation": "aoqi_training_1110_wanglong",
+  "files": [
+    {
+      "name": "common.py",
+      "bytes": 9636,
+      "sha256": "1c17c49abc8ed57860b39df6558795eb9b2a74b528ce2f81651382d0c02ff30e"
+    },
+    {
+      "name": "prepare.py",
+      "bytes": 15643,
+      "sha256": "58330e288346b64592be6906c3857808c41be7378e8f98a6817863714348f08f"
+    },
+    {
+      "name": "remote_train.py",
+      "bytes": 22151,
+      "sha256": "4d2f086deaa0f3d387c964710c70fee49da4eb77fad49ede3a6db109239d0343"
+    },
+    {
+      "name": "ops.py",
+      "bytes": 21984,
+      "sha256": "aebba3a8c21569436861a17bf2d6be79e1ee4f5add301db64d3ba269c186356d"
+    },
+    {
+      "name": "test_pipeline.py",
+      "bytes": 14347,
+      "sha256": "04971e32c0f5832aab7c9eaa74c13ab7a4d63a2dea1262793cfde51ff83c998f"
+    },
+    {
+      "name": "test_controller.py",
+      "bytes": 22116,
+      "sha256": "198433578ce205dbcf71c3359a27bb5ad643ba1fed5553e4707964757adcc36e"
+    },
+    {
+      "name": "test_ops.py",
+      "bytes": 12499,
+      "sha256": "9472746ef682d1eb407a77d5c1d4ef494f1258170c9f2974a17da4c8bdec1876"
+    },
+    {
+      "name": "README.md",
+      "bytes": 3635,
+      "sha256": "2047c304c58f3197c270e7c7bff64820ab696daff4308516586fb350b5fc9b80"
+    }
+  ]
+}

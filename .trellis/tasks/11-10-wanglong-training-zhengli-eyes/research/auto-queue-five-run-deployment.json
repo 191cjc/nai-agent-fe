@@ -1,0 +1,57 @@
+{
+  "deployed_at": "2026-11-10T10:07:27.758575+00:00",
+  "checks": {
+    "tests_passed": 53,
+    "independent_seconds": 7.115,
+    "ruff": "passed",
+    "compile": "passed",
+    "release": "passed",
+    "systemd_verify": "passed; unrelated existing tat_agent PIDFile warning",
+    "type_checker": "not configured"
+  },
+  "promotion": {
+    "dispatch_sha256": "69f9b5da26140f4d061a707682ba1517a962701af64d67197d331660477801a1",
+    "run_count": 5,
+    "specs": [
+      {
+        "role": "siling",
+        "run": "11fde849-209e-4fd0-85d1-15f14a2c875a",
+        "trigger": "aoqisiling"
+      },
+      {
+        "role": "zhengli",
+        "run": "16dd3f0f-1a8a-4a03-abe6-569f462051d6",
+        "trigger": "aoqizhengli"
+      },
+      {
+        "role": "bojiaqiu",
+        "run": "916a6dd9-74fe-4e69-b876-a7a1725ea275",
+        "trigger": "aoqibojiaqiu"
+      },
+      {
+        "role": "yinzhi",
+        "run": "5e49840f-5865-4c1c-9e03-247b1d3acd03",
+        "trigger": "aoqiyinzhi"
+      },
+      {
+        "role": "an",
+        "run": "354f7cbc-4781-4b86-93d2-a300492fb932",
+        "trigger": "aoqian"
+      }
+    ],
+    "promoted_files": [
+      "dispatch.py",
+      "release.json",
+      "test_dispatch.py",
+      "README.md",
+      "aoqi-auto-1110-gpt.timer"
+    ],
+    "templates_unchanged": true,
+    "original_operation_fingerprints_unchanged": true,
+    "active_service_stopped": false
+  },
+  "service_before": "MainPID=0\nActiveState=inactive\nSubState=dead\n",
+  "service_after": "MainPID=0\nActiveState=inactive\nSubState=dead\n",
+  "timer_after": "LastTriggerUSec=Tue 2026-11-10 17:32:14 CST\nActiveState=active\nSubState=waiting\nUnitFileState=enabled\n",
+  "note": "Existing in-memory tick retains its three-run scope; next scheduled tick loads five. No service/controller/trainer stopped and no runtime state rewritten."
+}

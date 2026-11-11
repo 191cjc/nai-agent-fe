@@ -877,3 +877,35 @@ Diagnosed missing advice key503, added optional HTTPS endpoint/model wiring, and
 ### Next Steps
 
 - Operator retry of advice/translation and actual model compatibility/quality acceptance; keep broader task in_progress without archiving.
+
+
+## Session 28: 启动识破画风及三角色 LoRA 后台流水线
+<!-- trellis-session: v=2 fp=3fe7c2b50ed21f44 -->
+
+**Date**: 2026-11-08
+**Task**: 启动识破画风及三角色 LoRA 后台流水线
+**Branch**: `feat/native-character-prompts`
+
+### Summary
+
+操作人批准开始；清理 i-1:56541 的131个旧LoRA权重，保留底模；四份数据快照885对已准备，独立25项合成测试和Ruff/编译通过，后台上传及自动串行训练/最终备份流程已启动。任务保持进行中。
+
+### Main Changes
+
+- 隔离流水线位于 /home/ubuntu/lora-kit/aoqi_training_1108；目标顺序479张画风、132张星降、136张诺雅、138张正理；只检查元数据。
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] 25项合成测试、Ruff、py_compile通过；旧权重删除清单和底模前后SHA已验证。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 通过 ops.py status 或本机 stage_status.json/workflow_status.json/remote_status.json 查看元数据；上传校验后自动训练和最终权重备份；全部完成前不要归档任务。

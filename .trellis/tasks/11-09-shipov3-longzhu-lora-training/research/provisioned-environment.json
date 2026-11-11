@@ -1,0 +1,15 @@
+{
+  "checked_at": 1794197966.611253,
+  "gpu": "NVIDIA GeForce RTX 3090, 24576, 1, 0",
+  "disk_free_bytes": 46257127424,
+  "torch": "2.9.1+cu128",
+  "cuda_available": true,
+  "cuda_version": "12.8",
+  "cuda_matmul_ok": true,
+  "accelerate": "1.15.0",
+  "diffusers": "0.40.0",
+  "transformers": "5.17.0",
+  "bitsandbytes": "0.50.2",
+  "base_bytes": 7105349958,
+  "base_verified_marker": true
+}

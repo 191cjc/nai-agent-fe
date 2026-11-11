@@ -1,0 +1,430 @@
+--- reviewed-v3/common.py
++++ wanglong-1110/common.py
+@@ -11,27 +11,18 @@
+ import time
+ from pathlib import Path
+ 
+-OPERATION = "aoqi_training_1109_v3"
+-SEED = 20261109
++OPERATION = "aoqi_training_1110_wanglong"
++SEED = 20261110
+ PREFIX = "masterpiece, best quality, newest, absurdres, highres"
+ DEFAULT_BASE = "/hy-tmp/models/NoobAI-XL-v1.1.safetensors"
+ DEFAULT_TRAIN_ROOT = "/hy-tmp/sd-scripts"
++# Shared with the reviewed November 9 operations; never derive this from OPERATION.
++GPU_LOCK_NAME = ".aoqi_training_1109_v3.gpu.lock"
+ JOBS = [
+     {
+-        "name": "style_shipov3_1109", "trigger": "aoqishipov3", "mode": "style", "repeats": 1,
+-        "runs": [
+-            ["30a96ebe-76a8-4ab7-aedf-5781a03465cc", 99],
+-            ["b34417b3-e174-4b15-82e7-04e743b73f65", 82],
+-            ["302b6079-2d92-45dc-be11-c3d1da29fd71", 89],
+-            ["5f814c35-225d-401a-9de6-961bc07e39b0", 193],
+-            ["05670d0d-d553-4216-b8f9-14ccd70f5cb0", 96],
+-            ["248684e0-33c7-4669-94a2-f6861d7fda38", 96],
+-        ],
+-    },
+-    {
+-        "name": "char_longzhu_gpt_1109", "trigger": "aoqilongzhu",
++        "name": "char_wanglong_gpt_1110", "trigger": "aoqiwanglong",
+         "mode": "character", "repeats": 3,
+-        "runs": [["190849e1-ced3-449d-9c24-9c0406b68046", 132]],
++        "runs": [["2bfd3586-5c15-49ab-abe9-91fa52caa083", 134]],
+     },
+ ]
+ 
+@@ -240,7 +231,7 @@
+     for key in ("version", "operation", "plan_sha256"):
+         if queue[key] != default[key]:
+             fail("queue_identity_mismatch")
+-    # This batch always trains style followed by Longzhu. No deferral, reorder,
++    # This operation trains only the approved Wanglong run. No deferral, reorder,
+     # missing job or duplicate entry may silently change the approved batch.
+     if queue != default:
+         fail("queue_jobs_mismatch")
+--- reviewed-v3/remote_train.py
++++ wanglong-1110/remote_train.py
+@@ -20,6 +20,7 @@
+ from common import (  # noqa: E402
+     DEFAULT_BASE,
+     DEFAULT_TRAIN_ROOT,
++    GPU_LOCK_NAME,
+     JOBS,
+     OPERATION,
+     OperationError,
+@@ -298,7 +299,7 @@
+     )
+     with (
+         lock_context as operation_lock,
+-        exclusive_lock(root.parent / f".{OPERATION}.gpu.lock") as gpu_lock,
++        exclusive_lock(root.parent / GPU_LOCK_NAME) as gpu_lock,
+     ):
+         operation_fd = (
+             operation_lock if isinstance(operation_lock, int) else operation_lock.fileno()
+--- reviewed-v3/ops.py
++++ wanglong-1110/ops.py
+@@ -526,12 +526,13 @@
+                            "workflow", "background")
+     )
+     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parent)
+-    parser.add_argument("--remote-root", default="/hy-tmp/aoqi_training_1109_v3")
++    parser.add_argument("--remote-root", default="/hy-tmp/aoqi_training_1110_wanglong")
+     parser.add_argument("--host", default="root@i-1.gpushare.com")
+     parser.add_argument("--port", type=int, default=15571)
+     parser.add_argument("--key", type=Path, default=Path("/home/ubuntu/.ssh/gpushare_ed25519"))
+     parser.add_argument(
+-        "--backup-root", type=Path, default=Path("/home/ubuntu/lora-output/aoqi_training_1109_v3")
++        "--backup-root", type=Path,
++        default=Path("/home/ubuntu/lora-output/aoqi_training_1110_wanglong"),
+     )
+     parser.add_argument("--base", default=DEFAULT_BASE)
+     parser.add_argument("--train-root", default=DEFAULT_TRAIN_ROOT)
+--- reviewed-v3/test_pipeline.py
++++ wanglong-1110/test_pipeline.py
+@@ -117,11 +117,13 @@
+     def test_pair_preserving_shuffle_reproducible_and_mixed(self):
+         job = {
+             **common.JOBS[0],
+-            "runs": [[run, 5] for run, _expected in common.JOBS[0]["runs"]],
++            "runs": [[f"synthetic-run-{number}", 5] for number in range(6)],
+         }
+         identities = {}
+         for run, _expected in job["runs"]:
+-            identities[self.add_source(run, 5, override=f"fixture-for-{run}")] = run
++            identities[self.add_source(
++                run, 5, reference=True, override=f"fixture-for-{run}"
++            )] = run
+         manifests = []
+         for destination in (self.root / "a", self.root / "b"):
+             prepare.export_job(self.connection, self.images, destination, "synthetic-owner", job)
+@@ -169,7 +171,34 @@
+                 self.connection, self.images, self.root / "out", "synthetic-owner", job
+             )
+ 
+-    def test_both_prepared_upfront_and_relaunch_is_content_blind(self):
++    def test_fixed_wanglong_selection_and_output_identity(self):
++        self.assertEqual(common.OPERATION, "aoqi_training_1110_wanglong")
++        self.assertEqual(common.SEED, 20261110)
++        self.assertEqual(common.JOBS, [{
++            "name": "char_wanglong_gpt_1110", "trigger": "aoqiwanglong",
++            "mode": "character", "repeats": 3,
++            "runs": [["2bfd3586-5c15-49ab-abe9-91fa52caa083", 134]],
++        }])
++        job = common.JOBS[0]
++        source = self.add_source(job["runs"][0][0], 134, reference=True)
++        self.add_source("synthetic-unrelated-run", 3, reference=True)
++        self.connection.execute(
++            "INSERT INTO generation_jobs VALUES(?,?,?,?, 'failed',2)",
++            (str(uuid.uuid4()), "synthetic-owner", json.dumps({
++                "experiment": {"id": job["runs"][0][0]}
++            }), 4),
++        )
++        self.connection.commit()
++        destination = self.root / "exact"
++        result = prepare.prepare(destination, self.db, self.images)
++        self.assertEqual(result["jobs"][0]["written"], 134)
++        self.assertFalse(result["jobs"][0]["sources"][0]["changed"])
++        manifest = common.verified_dataset(destination, job)
++        self.assertEqual({entry["job_id"] for entry in manifest["entries"]}, {source})
++        self.assertEqual(common.dataset_directory(destination, job).name, "3_aoqiwanglong")
++        self.assertEqual(common.final_name(job), "aoqiwanglong.safetensors")
++
++    def test_snapshot_prepared_upfront_and_relaunch_is_content_blind(self):
+         for job in common.JOBS:
+             for run, _expected in job["runs"]:
+                 self.add_source(run, reference=job["mode"] == "character")
+@@ -178,8 +207,8 @@
+         summary = prepare.prepare(destination, self.db, self.images)
+         self.assertEqual(common.sha256(self.db), source_hash)
+         self.assertEqual(len(summary["jobs"]), len(common.JOBS))
+-        self.assertEqual(summary["jobs"][0]["written"], 6)
+-        # Source deletion after the two-job snapshot does not cause a re-export.
++        self.assertEqual(summary["jobs"][0]["written"], 1)
++        # Source deletion after the snapshot does not cause a re-export.
+         with contextlib.closing(sqlite3.connect(self.db)) as connection:
+             connection.execute("DELETE FROM generation_jobs")
+             connection.commit()
+@@ -194,16 +223,17 @@
+             common.verify_prepared(destination)
+ 
+     def test_explicit_extension_exports_only_new_jobs_and_preserves_old_bytes(self):
+-        for job in common.JOBS:
++        original_jobs = common.JOBS[:]
++        synthetic_extra = {
++            **common.JOBS[0], "name": "synthetic_extension",
++            "trigger": "syntheticextension", "runs": [["synthetic-extension-run", 1]],
++        }
++        extended_jobs = [*original_jobs, synthetic_extra]
++        for job in extended_jobs:
+             for run, _expected in job["runs"]:
+                 self.add_source(run, reference=job["mode"] == "character")
+         destination = self.root / "extend"
+-        original_jobs = common.JOBS[:1]
+-        with (
+-            mock.patch.object(common, "JOBS", original_jobs),
+-            mock.patch.object(prepare, "JOBS", original_jobs),
+-        ):
+-            prepare.prepare(destination, self.db, self.images)
++        prepare.prepare(destination, self.db, self.images)
+         old_hashes = {
+             path.relative_to(destination): common.sha256(path)
+             for path in (destination / "jobs").rglob("*") if path.is_file()
+@@ -214,18 +244,22 @@
+             for run, _expected in job["runs"]:
+                 self.connection.execute("DELETE FROM style_experiment_runs WHERE id=?", (run,))
+         self.connection.commit()
+-        with mock.patch.object(prepare, "export_job", wraps=prepare.export_job) as export:
++        with (
++            mock.patch.object(common, "JOBS", extended_jobs),
++            mock.patch.object(prepare, "JOBS", extended_jobs),
++            mock.patch.object(prepare, "export_job", wraps=prepare.export_job) as export,
++        ):
+             result = prepare.extend(destination, self.db, self.images)
+-        self.assertEqual(result["state"], "extended")
+-        self.assertEqual([call.args[-1] for call in export.call_args_list], common.JOBS[1:])
+-        for relative, digest in old_hashes.items():
+-            self.assertEqual(common.sha256(destination / relative), digest)
+-        stamp = common.verify_prepared(destination)
+-        self.assertEqual(stamp["previous_plan_sha256"], old_plan_hash)
+-        self.assertEqual(len(stamp["jobs"]), len(common.JOBS))
+-        self.assertEqual(
+-            prepare.extend(destination, self.db, self.images)["state"], "already_prepared"
+-        )
++            self.assertEqual(result["state"], "extended")
++            self.assertEqual([call.args[-1] for call in export.call_args_list], [synthetic_extra])
++            for relative, digest in old_hashes.items():
++                self.assertEqual(common.sha256(destination / relative), digest)
++            stamp = common.verify_prepared(destination)
++            self.assertEqual(stamp["previous_plan_sha256"], old_plan_hash)
++            self.assertEqual(len(stamp["jobs"]), len(extended_jobs))
++            self.assertEqual(
++                prepare.extend(destination, self.db, self.images)["state"], "already_prepared"
++            )
+ 
+     def test_extension_refuses_changed_prefix_or_running_local_workflow(self):
+         destination = self.root / "bad-extend"
+--- reviewed-v3/test_controller.py
++++ wanglong-1110/test_controller.py
+@@ -67,7 +67,7 @@
+         result = self.run_controller()
+         self.assertEqual(result["state"], "completed")
+         self.assertEqual([common.final_name(job) for job in common.JOBS],
+-                         ["aoqishipov3.safetensors", "aoqilongzhu.safetensors"])
++                         ["aoqiwanglong.safetensors"])
+         self.assertEqual(self.events.read_text().splitlines(), [job["name"] for job in common.JOBS])
+         for job, stage in zip(common.JOBS, result["jobs"], strict=True):
+             self.assertEqual(stage["exit_code"], 0)
+@@ -92,15 +92,12 @@
+         })
+         return queue
+ 
+-    def test_incremental_first_role_runs_while_later_data_missing_then_waits(self):
++    def test_single_role_waits_for_complete_verified_dataset(self):
+         self.enable_incremental()
+-        remote_train.verify_job(self.root, common.JOBS[0])
+-        missing = []
+-        for job in common.JOBS[1:]:
+-            directory = common.dataset_directory(self.root, job)
+-            holding = self.train_root / (job["name"] + "-pending")
+-            directory.rename(holding)
+-            missing.append((job, directory, holding))
++        job = common.JOBS[0]
++        directory = common.dataset_directory(self.root, job)
++        holding = self.train_root / "synthetic-pending"
++        directory.rename(holding)
+         errors, results = [], []
+ 
+         def run():
+@@ -117,17 +114,23 @@
+                 status_path = self.root / "status.json"
+                 if status_path.exists():
+                     state = common.read_json(status_path)
+-                    if state["jobs"][1]["state"] == "waiting_data":
++                    if state["jobs"][0]["state"] == "waiting_data":
+                         break
+                 time.sleep(.01)
+-            self.assertEqual(state["jobs"][0]["state"], "succeeded", errors)
+-            self.assertEqual(state["jobs"][1]["state"], "waiting_data")
+-            self.assertEqual(self.events.read_text().splitlines(), [common.JOBS[0]["name"]])
+-            self.assertFalse(missing[0][1].exists())
++            self.assertEqual(state["jobs"][0]["state"], "waiting_data", errors)
++            self.assertFalse(self.events.exists())
++            directory.mkdir()
++            for path in holding.glob("*.png"):
++                path.rename(directory / path.name)
++            with self.assertRaisesRegex(common.OperationError, "dataset_file_missing"):
++                remote_train.verify_job(self.root, job)
++            self.assertFalse(common.readiness_path(self.root, job).exists())
++            self.assertFalse(self.events.exists())
+         finally:
+-            for job, directory, holding in missing:
+-                holding.rename(directory)
+-                remote_train.verify_job(self.root, job)
++            directory.mkdir(exist_ok=True)
++            for path in holding.iterdir():
++                path.rename(directory / path.name)
++            remote_train.verify_job(self.root, job)
+             thread.join(timeout=10)
+         self.assertFalse(thread.is_alive())
+         self.assertEqual(errors, [])
+@@ -170,7 +173,7 @@
+ 
+     def test_killed_receiver_child_keeps_dataset_lock(self):
+         self.enable_incremental()
+-        job = common.JOBS[1]
++        job = common.JOBS[0]
+         bin_directory = self.train_root / "receiver-bin"
+         bin_directory.mkdir()
+         child_record = self.train_root / "receiver-child.pid"
+@@ -185,7 +188,7 @@
+             "import sys",
+             f"sys.path.insert(0,{str(Path(remote_train.__file__).parent)!r})",
+             "import remote_train",
+-            f"remote_train.receive_dataset({str(self.root)!r},remote_train.JOBS[1],",
++            f"remote_train.receive_dataset({str(self.root)!r},remote_train.JOBS[0],",
+             f" ['--server','-r','.',{str(common.dataset_directory(self.root, job))!r}])",
+         ])
+         env = {**os.environ, "PATH": str(bin_directory) + os.pathsep + os.environ["PATH"]}
+@@ -211,13 +214,13 @@
+                 process.wait(timeout=5)
+ 
+ 
+-    def test_queue_config_rejects_unknown_reordered_or_unpinned_jobs(self):
++    def test_queue_config_rejects_duplicate_unknown_deferred_or_unpinned_jobs(self):
+         default = common.runtime_queue(self.root)
+         cases = [
+-            {**default, "active_jobs": list(reversed(default["active_jobs"]))},
++            {**default, "active_jobs": default["active_jobs"] * 2},
+             {**default, "active_jobs": [*default["active_jobs"], "unknown"]},
+             {**default, "plan_sha256": "0" * 64},
+-            {**default, "deferred_jobs": [common.JOBS[1]["name"]]},
++            {**default, "deferred_jobs": [common.JOBS[0]["name"]]},
+             {**default, "active_jobs": default["active_jobs"][:-1]},
+         ]
+         for queue in cases:
+@@ -229,7 +232,7 @@
+ 
+ 
+ 
+-    def test_nonzero_exit_even_with_final_stops_later_roles_and_no_retry(self):
++    def test_nonzero_exit_even_with_final_fails_and_no_retry(self):
+         def factory(job, output):
+             return self.fake_command(job, output, exit_code=7 if job == common.JOBS[0] else 0)
+ 
+@@ -238,7 +241,7 @@
+         status = common.read_json(self.root / "status.json")
+         self.assertEqual(
+             [stage["state"] for stage in status["jobs"]],
+-            ["failed", "pending"],
++            ["failed"],
+         )
+         self.assertEqual(status["jobs"][0]["exit_code"], 7)
+         self.assertEqual(len(self.events.read_text().splitlines()), 1)
+@@ -285,6 +288,14 @@
+         self.assertEqual(json.loads(result.stdout)["code"], "operation_locked")
+         self.assertFalse((self.root / "status.json").exists())
+ 
++    def test_reviewed_family_gpu_lock_blocks_training_before_acceptance(self):
++        self.assertEqual(common.GPU_LOCK_NAME, ".aoqi_training_1109_v3.gpu.lock")
++        with common.exclusive_lock(self.root.parent / common.GPU_LOCK_NAME):
++            with self.assertRaisesRegex(common.OperationError, "operation_locked"):
++                self.run_controller(lambda *_: self.fail("shared GPU lock bypassed"))
++        self.assertFalse(self.events.exists())
++        self.assertFalse((self.root / "status.json").exists())
++
+     def test_uncertain_prior_stage_never_retrains(self):
+         state = {
+             "operation": common.OPERATION,
+@@ -332,7 +343,7 @@
+                 with common.exclusive_lock(self.root / ".controller.lock"):
+                     self.fail("surviving trainer lost operation lock")
+             with self.assertRaisesRegex(common.OperationError, "operation_locked"):
+-                with common.exclusive_lock(self.root.parent / f".{common.OPERATION}.gpu.lock"):
++                with common.exclusive_lock(self.root.parent / common.GPU_LOCK_NAME):
+                     self.fail("surviving trainer lost GPU lock")
+         finally:
+             if process.poll() is None:
+@@ -352,7 +363,7 @@
+             self.run_controller(lambda *_: self.fail("changed completed stage launched"))
+ 
+     def test_training_flags_and_independent_base(self):
+-        for job, expected_stem in zip(common.JOBS, ("aoqishipov3", "aoqilongzhu"), strict=True):
++        for job, expected_stem in zip(common.JOBS, ("aoqiwanglong",), strict=True):
+             command = remote_train.train_command(self.root, job, self.base, self.train_root)
+             self.assertEqual(command[command.index("--output_name") + 1], expected_stem)
+             self.assertEqual(
+@@ -360,7 +371,21 @@
+             )
+             self.assertNotIn("--cache_text_encoder_outputs", command)
+             self.assertNotIn("--network_weights", command)
+-            self.assertEqual(command[command.index("--max_train_epochs") + 1], "12")
++            expected = {
++                "--resolution": "1024,1024", "--min_bucket_reso": "512",
++                "--max_bucket_reso": "2048", "--train_batch_size": "4",
++                "--max_train_epochs": "12", "--save_every_n_epochs": "2",
++                "--network_dim": "32", "--network_alpha": "16",
++                "--optimizer_type": "AdamW", "--learning_rate": "1e-4",
++                "--unet_lr": "1e-4", "--lr_scheduler": "cosine",
++                "--lr_warmup_steps": "70", "--min_snr_gamma": "5",
++                "--save_precision": "fp16", "--seed": "42", "--keep_tokens": "1",
++            }
++            for flag, value in expected.items():
++                self.assertEqual(command[command.index(flag) + 1], value)
++            for flag in ("--network_train_unet_only", "--enable_bucket",
++                         "--bucket_no_upscale", "--gradient_checkpointing", "--sdpa"):
++                self.assertIn(flag, command)
+             self.assertIn("--shuffle_caption", command)
+ 
+     def test_staging_sentinel_blocks_launch(self):
+--- reviewed-v3/test_ops.py
++++ wanglong-1110/test_ops.py
+@@ -80,7 +80,7 @@
+             result = ops.backup(self.args, status)
+             self.assertEqual(len(result["jobs"]), len(common.JOBS))
+             self.assertEqual([entry["name"] for entry in result["jobs"]],
+-                             ["aoqishipov3.safetensors", "aoqilongzhu.safetensors"])
++                             ["aoqiwanglong.safetensors"])
+             self.assertEqual(
+                 sum(name.endswith(".safetensors") for name in copies), len(common.JOBS)
+             )
+@@ -130,7 +130,7 @@
+ 
+     def test_incremental_uploader_excludes_ready_data_and_metadata(self):
+         queue = self.fixture.enable_incremental()
+-        ready = queue["active_jobs"][:1]
++        ready = []
+         transferred = []
+ 
+         def fake_transfer(_args, files, _category, job=None):
+@@ -152,10 +152,19 @@
+             mock.patch.object(ops, "backup", return_value={"jobs": []}),
+         ):
+             result = ops.upload_pending(self.args)
+-        self.assertEqual(transferred, queue["active_jobs"][1:])
++        self.assertEqual(transferred, queue["active_jobs"])
+         self.assertEqual(result["ready_jobs"], queue["active_jobs"])
+ 
+-    def test_incremental_workflow_starts_before_blocked_later_upload(self):
++        with (
++            mock.patch.object(ops, "readiness", return_value=list(ready)),
++            mock.patch.object(ops, "transfer_files") as transfer,
++            mock.patch.object(ops, "remote") as remote,
++        ):
++            self.assertEqual(ops.upload_pending(self.args)["ready_jobs"], ready)
++        transfer.assert_not_called()
++        remote.assert_not_called()
++
++    def test_incremental_workflow_starts_before_pending_upload(self):
+         queue = self.fixture.enable_incremental()
+         common.atomic_json(self.root / "stage_status.json", {
+             "state": "metadata_staged", "plan_sha256": queue["plan_sha256"],
+@@ -181,7 +190,7 @@
+ 
+     def test_real_rsync_receiver_scopes_transfer_then_refuses_ready_rewrite(self):
+         self.fixture.enable_incremental()
+-        job = common.JOBS[1]
++        job = common.JOBS[0]
+         destination = common.dataset_directory(self.root, job)
+         source = self.fixture.train_root / "sending"
+         shutil.copytree(destination, source)

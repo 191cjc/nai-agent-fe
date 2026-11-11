@@ -1,0 +1,38 @@
+{
+  "base": "/hy-tmp/models/NoobAI-XL-v1.1.safetensors",
+  "base_sha256": "6681e8e4b134c81f16533acedb0d406d7e5e366e1624b4105178c64d00b05d51",
+  "controller_alive": true,
+  "controller_pid": 5749,
+  "controller_start_ticks": 45618455,
+  "created_at": 1794304299.8662293,
+  "current_job": "char_siling_gpt_1110",
+  "jobs": [
+    {
+      "elapsed_seconds": 62,
+      "name": "char_siling_gpt_1110",
+      "pid": 5754,
+      "pid_start_ticks": 45621243,
+      "progress": {
+        "checkpoint_count": 0,
+        "latest_checkpoint_epoch": 0,
+        "total_epochs": 12
+      },
+      "started_at": 1794304329.2404523,
+      "state": "training",
+      "waiting_since": 1794304325.494502
+    }
+  ],
+  "operation": "aoqi_auto_1110_siling",
+  "queue": {
+    "active_jobs": [
+      "char_siling_gpt_1110"
+    ],
+    "deferred_jobs": [],
+    "operation": "aoqi_auto_1110_siling",
+    "plan_sha256": "1fc2eded267a3d2c6653c768cde146ee8c392d457345ffe8631cb39712c36ce8",
+    "version": 1
+  },
+  "state": "running",
+  "train_root": "/hy-tmp/sd-scripts",
+  "updated_at": 1794304389.2496371
+}

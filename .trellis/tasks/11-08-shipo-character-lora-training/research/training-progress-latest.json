@@ -1,0 +1,54 @@
+{
+  "checked_at": 1794145335.1233587,
+  "current_job": "char_zhengli_gpt_1108",
+  "jobs": [
+    {
+      "name": "char_xingjiang_gpt_1108",
+      "state": "succeeded",
+      "started_at": 1794141160.0378752,
+      "finished_at": 1794142677.316915,
+      "latest_checkpoint_epoch": 10
+    },
+    {
+      "name": "char_nuoya_gpt_1108",
+      "state": "succeeded",
+      "started_at": 1794142677.5800116,
+      "finished_at": 1794144278.7522078,
+      "latest_checkpoint_epoch": 10
+    },
+    {
+      "name": "char_zhengli_gpt_1108",
+      "state": "training",
+      "started_at": 1794144278.978733,
+      "finished_at": null,
+      "latest_checkpoint_epoch": 6
+    },
+    {
+      "name": "char_weileita_gpt_1108",
+      "state": "pending",
+      "started_at": null,
+      "finished_at": null,
+      "latest_checkpoint_epoch": 0
+    },
+    {
+      "name": "char_shikong_gpt_1108",
+      "state": "pending",
+      "started_at": null,
+      "finished_at": null,
+      "latest_checkpoint_epoch": 0
+    },
+    {
+      "name": "char_chaoshen_gpt_1108",
+      "state": "pending",
+      "started_at": null,
+      "finished_at": null,
+      "latest_checkpoint_epoch": 0
+    }
+  ],
+  "verified_local_backup_jobs": [
+    "char_xingjiang_gpt_1108",
+    "char_nuoya_gpt_1108"
+  ],
+  "estimated_remaining_training_minutes": 75.5,
+  "estimated_training_finish_asia_shanghai": "2026-11-08T22:57:44.264529+08:00"
+}

@@ -1,0 +1,295 @@
+{
+  "checked_at": 1794196803.0324183,
+  "files": {
+    "library/dataset.py": {
+      "sha256": "54573efcf3ab5c4fa3bf2c2502d46f610cb88f8047409e82a4e970983ee1da79",
+      "source": [
+        {
+          "line": 277,
+          "source": "        self.reso_to_id = {}"
+        },
+        {
+          "line": 278,
+          "source": "        self.buckets = []  # \u524d\u51e6\u7406\u6642\u306f (image_key, image, original size, crop left/top)\u3001\u5b66\u7fd2\u6642\u306f image_key"
+        },
+        {
+          "line": 279,
+          "source": ""
+        },
+        {
+          "line": 280,
+          "source": "    def add_image(self, reso, image_or_info):"
+        },
+        {
+          "line": 281,
+          "source": "        bucket_id = self.reso_to_id[reso]"
+        },
+        {
+          "line": 282,
+          "source": "        self.buckets[bucket_id].append(image_or_info)"
+        },
+        {
+          "line": 283,
+          "source": ""
+        },
+        {
+          "line": 284,
+          "source": "    def shuffle(self):"
+        },
+        {
+          "line": 285,
+          "source": "        for bucket in self.buckets:"
+        },
+        {
+          "line": 286,
+          "source": "            random.shuffle(bucket)"
+        },
+        {
+          "line": 287,
+          "source": ""
+        },
+        {
+          "line": 288,
+          "source": "    def sort(self):"
+        },
+        {
+          "line": 289,
+          "source": "        # \u89e3\u50cf\u5ea6\u9806\u306b\u30bd\u30fc\u30c8\u3059\u308b\uff08\u8868\u793a\u6642\u3001\u30e1\u30bf\u30c7\u30fc\u30bf\u683c\u7d0d\u6642\u306e\u898b\u6804\u3048\u3092\u3088\u304f\u3059\u308b\u305f\u3081\u3060\u3051\uff09\u3002buckets\u3082\u5165\u308c\u66ff\u3048\u3066reso_to_id\u3082\u632f\u308a\u76f4\u3059"
+        },
+        {
+          "line": 535,
+          "source": "        return min_bucket_reso, max_bucket_reso"
+        },
+        {
+          "line": 536,
+          "source": ""
+        },
+        {
+          "line": 537,
+          "source": "    def set_seed(self, seed):"
+        },
+        {
+          "line": 538,
+          "source": "        self.seed = seed"
+        },
+        {
+          "line": 539,
+          "source": ""
+        },
+        {
+          "line": 540,
+          "source": "    def set_current_epoch(self, epoch):"
+        },
+        {
+          "line": 541,
+          "source": "        if not self.current_epoch == epoch:  # epoch\u304c\u5207\u308a\u66ff\u308f\u3063\u305f\u3089\u30d0\u30b1\u30c4\u3092\u30b7\u30e3\u30c3\u30d5\u30eb\u3059\u308b"
+        },
+        {
+          "line": 542,
+          "source": "            if epoch > self.current_epoch:"
+        },
+        {
+          "line": 543,
+          "source": "                logger.info(\"epoch is incremented. current_epoch: {}, epoch: {}\".format(self.current_epoch, epoch))"
+        },
+        {
+          "line": 544,
+          "source": "                num_epochs = epoch - self.current_epoch"
+        },
+        {
+          "line": 545,
+          "source": "                for _ in range(num_epochs):"
+        },
+        {
+          "line": 546,
+          "source": "                    self.current_epoch += 1"
+        },
+        {
+          "line": 547,
+          "source": "                    self.shuffle_buckets()"
+        },
+        {
+          "line": 548,
+          "source": "                # self.current_epoch seem to be set to 0 again in the next epoch. it may be caused by skipped_dataloader?"
+        },
+        {
+          "line": 549,
+          "source": "            else:"
+        },
+        {
+          "line": 550,
+          "source": "                logger.warning(\"epoch is not incremented. current_epoch: {}, epoch: {}\".format(self.current_epoch, epoch))"
+        },
+        {
+          "line": 551,
+          "source": "                self.current_epoch = epoch"
+        },
+        {
+          "line": 552,
+          "source": ""
+        },
+        {
+          "line": 553,
+          "source": "    def set_current_step(self, step):"
+        },
+        {
+          "line": 554,
+          "source": "        self.current_step = step"
+        },
+        {
+          "line": 555,
+          "source": ""
+        },
+        {
+          "line": 556,
+          "source": "    def set_max_train_steps(self, max_train_steps):"
+        },
+        {
+          "line": 557,
+          "source": "        self.max_train_steps = max_train_steps"
+        },
+        {
+          "line": 825,
+          "source": "        self.shuffle_buckets()"
+        },
+        {
+          "line": 826,
+          "source": "        self._length = len(self.buckets_indices)"
+        },
+        {
+          "line": 827,
+          "source": ""
+        },
+        {
+          "line": 828,
+          "source": "    def shuffle_buckets(self):"
+        },
+        {
+          "line": 829,
+          "source": "        # set random seed for this epoch"
+        },
+        {
+          "line": 830,
+          "source": "        random.seed(self.seed + self.current_epoch)"
+        },
+        {
+          "line": 831,
+          "source": ""
+        },
+        {
+          "line": 832,
+          "source": "        random.shuffle(self.buckets_indices)"
+        },
+        {
+          "line": 833,
+          "source": "        self.bucket_manager.shuffle()"
+        },
+        {
+          "line": 834,
+          "source": ""
+        },
+        {
+          "line": 835,
+          "source": "    def verify_bucket_reso_steps(self, min_steps: int):"
+        },
+        {
+          "line": 836,
+          "source": "        assert self.bucket_reso_steps is None or self.bucket_reso_steps % min_steps == 0, ("
+        },
+        {
+          "line": 837,
+          "source": "            f\"bucket_reso_steps is {self.bucket_reso_steps}. it must be divisible by {min_steps}.\\n\""
+        },
+        {
+          "line": 838,
+          "source": "            + f\"bucket_reso_steps\u304c{self.bucket_reso_steps}\u3067\u3059\u3002{min_steps}\u3067\u5272\u308a\u5207\u308c\u308b\u5fc5\u8981\u304c\u3042\u308a\u307e\u3059\""
+        },
+        {
+          "line": 839,
+          "source": "        )"
+        }
+      ]
+    },
+    "train_network.py": {
+      "sha256": "aedf05aab40e5ec7fff182f8ade7537a474bd65cb41dbc2ac7cdc11b89f5d488",
+      "source": [
+        {
+          "line": 1180,
+          "source": "        # strategies are set here because they cannot be referenced in another process. Copy them with the dataset"
+        },
+        {
+          "line": 1181,
+          "source": "        # some strategies can be None"
+        },
+        {
+          "line": 1182,
+          "source": "        train_dataset_group.set_current_strategies()"
+        },
+        {
+          "line": 1183,
+          "source": "        if val_dataset_group is not None:"
+        },
+        {
+          "line": 1184,
+          "source": "            val_dataset_group.set_current_strategies()"
+        },
+        {
+          "line": 1185,
+          "source": ""
+        },
+        {
+          "line": 1186,
+          "source": "        # DataLoader\u306e\u30d7\u30ed\u30bb\u30b9\u6570\uff1a0 \u306f persistent_workers \u304c\u4f7f\u3048\u306a\u3044\u306e\u3067\u6ce8\u610f"
+        },
+        {
+          "line": 1187,
+          "source": "        n_workers = min(args.max_data_loader_n_workers, os.cpu_count())  # cpu_count or max_data_loader_n_workers"
+        },
+        {
+          "line": 1188,
+          "source": ""
+        },
+        {
+          "line": 1189,
+          "source": "        train_dataloader = torch.utils.data.DataLoader("
+        },
+        {
+          "line": 1190,
+          "source": "            train_dataset_group,"
+        },
+        {
+          "line": 1191,
+          "source": "            batch_size=1,"
+        },
+        {
+          "line": 1192,
+          "source": "            shuffle=True,"
+        },
+        {
+          "line": 1193,
+          "source": "            collate_fn=collator,"
+        },
+        {
+          "line": 1194,
+          "source": "            num_workers=n_workers,"
+        },
+        {
+          "line": 1195,
+          "source": "            persistent_workers=args.persistent_data_loader_workers,"
+        },
+        {
+          "line": 1196,
+          "source": "        )"
+        },
+        {
+          "line": 1197,
+          "source": ""
+        },
+        {
+          "line": 1198,
+          "source": "        val_dataloader = torch.utils.data.DataLoader("
+        }
+      ]
+    }
+  }
+}

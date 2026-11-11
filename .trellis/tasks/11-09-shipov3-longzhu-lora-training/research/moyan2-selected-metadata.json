@@ -1,0 +1,18 @@
+{
+  "checked_at": 1794204383.925283,
+  "name": "gpt\u672b\u708e2",
+  "run_id": "4bb3a579-ce50-424d-8ffd-3e126cd12f7e",
+  "created_at": 1794125038,
+  "updated_at": 1794131189,
+  "status": "completed",
+  "total_generation_jobs": 138,
+  "successful_generation_jobs": 127,
+  "failed_generation_jobs": 11,
+  "usable_images": 127,
+  "discarded_images": 0,
+  "purged_images": 0,
+  "missing_retained_files": 0,
+  "source_bytes": 357021125,
+  "trigger": "aoqimoyan",
+  "final_name": "aoqimoyan.safetensors"
+}

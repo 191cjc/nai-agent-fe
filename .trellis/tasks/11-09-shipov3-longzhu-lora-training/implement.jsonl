@@ -1,0 +1,5 @@
+{"file":".trellis/spec/backend/lora-training-contract.md","reason":"Verified incremental export/readiness/immutable data/concurrent upload/training contracts"}
+{"file":".trellis/spec/backend/dataset-run-contract.md","reason":"Style dataset caption/export behavior and source privacy"}
+{"file":".trellis/spec/backend/character-dataset-contract.md","reason":"Character caption traits and style handling"}
+{"file":".trellis/spec/backend/dataset-review-contract.md","reason":"Owner scoped overrides/discards and pending/completed purge exclusion"}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Synthetic-only tests and private diagnostics"}

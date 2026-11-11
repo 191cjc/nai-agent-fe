@@ -1,0 +1,65 @@
+{
+  "checked_at": "2026-11-09T16:08:03.610707+08:00",
+  "all_jobs_succeeded": true,
+  "operations": [
+    {
+      "operation": "aoqi_training_1109_v3",
+      "state": "completed",
+      "backup_completed_at": 1794208042.2179456,
+      "jobs": [
+        {
+          "job": "style_shipov3_1109",
+          "state": "succeeded",
+          "exit_code": 0,
+          "started_at": 1794199532.4753869,
+          "finished_at": 1794204809.4351912,
+          "local_backup": {
+            "bytes": 170602108,
+            "job": "style_shipov3_1109",
+            "name": "aoqishipov3.safetensors",
+            "path": "/home/ubuntu/lora-output/aoqi_training_1109_v3/style_shipov3_1109/aoqishipov3.safetensors",
+            "sha256": "c79e6a959d37e112ea41c0f4f22a3fa0ca87e24c5a7d5a71893a1d249da32c1b"
+          },
+          "local_hash_verified": true
+        },
+        {
+          "job": "char_longzhu_gpt_1109",
+          "state": "succeeded",
+          "exit_code": 0,
+          "started_at": 1794204810.1809726,
+          "finished_at": 1794207928.1821728,
+          "local_backup": {
+            "bytes": 170545236,
+            "job": "char_longzhu_gpt_1109",
+            "name": "aoqilongzhu.safetensors",
+            "path": "/home/ubuntu/lora-output/aoqi_training_1109_v3/char_longzhu_gpt_1109/aoqilongzhu.safetensors",
+            "sha256": "197ba7989775cd3ffd899adcc9fe8b8cf45c63ffd7b322498bfe0b50236b4f17"
+          },
+          "local_hash_verified": true
+        }
+      ]
+    },
+    {
+      "operation": "aoqi_training_1109_moyan2",
+      "state": "completed",
+      "backup_completed_at": 1794211068.1676114,
+      "jobs": [
+        {
+          "job": "char_moyan2_gpt_1109",
+          "state": "succeeded",
+          "exit_code": 0,
+          "started_at": 1794208002.4892163,
+          "finished_at": 1794210975.8946052,
+          "local_backup": {
+            "bytes": 170545060,
+            "job": "char_moyan2_gpt_1109",
+            "name": "aoqimoyan.safetensors",
+            "path": "/home/ubuntu/lora-output/aoqi_training_1109_moyan2/char_moyan2_gpt_1109/aoqimoyan.safetensors",
+            "sha256": "d9e9c8ba99a77999d88109e031d3e34f47b95e77cc08f8d411f081dc06799e5b"
+          },
+          "local_hash_verified": true
+        }
+      ]
+    }
+  ]
+}

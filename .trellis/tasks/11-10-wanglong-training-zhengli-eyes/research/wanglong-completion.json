@@ -1,0 +1,14 @@
+{
+  "state": "verified_completed",
+  "operation": "aoqi_training_1110_wanglong",
+  "exit_code": 0,
+  "artifact_count": 6,
+  "final": {
+    "bytes": 170545284,
+    "name": "aoqiwanglong.safetensors",
+    "sha256": "233c88496fdb182c220df7725fbbffe9f59954d27623e3f9034f5fa47a64c3ef"
+  },
+  "finished_at": 1794295957.0383334,
+  "verification": "all_recorded_remote_artifact_sizes_and_sha256_revalidated",
+  "local_backup_enabled": false
+}

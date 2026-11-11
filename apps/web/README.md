@@ -48,3 +48,9 @@ and an optional rotated style pool. Captions contain only content tags: no
 style and no trait tags. 「根据参考图建议角色特征」 sends the selected reference
 images to the configured AI advice provider on explicit request (paid). See
 `../../.trellis/spec/backend/character-dataset-contract.md`.
+
+For new style and character LoRA training, prefix the trigger word with `aoqi`
+by direct concatenation: `shipo` becomes `aoqishipo`, and `ciyuan` becomes
+`aoqiciyuan`. Do not insert a space, underscore or hyphen between `aoqi` and
+the original trigger. Use the complete trigger in both exported training
+captions and prompts that use the trained LoRA.

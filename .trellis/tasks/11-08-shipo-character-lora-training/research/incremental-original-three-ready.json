@@ -1,0 +1,9 @@
+{
+  "state": "original_three_ready",
+  "ready_jobs": [
+    "char_xingjiang_gpt_1108",
+    "char_nuoya_gpt_1108",
+    "char_zhengli_gpt_1108"
+  ],
+  "verified_at": 1794141101.7042475
+}

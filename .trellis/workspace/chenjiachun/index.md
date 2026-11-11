@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 27
-- **Last Active**: 2026-10-20
+- **Total Sessions**: 28
+- **Last Active**: 2026-11-08
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~879 | Active |
+| `journal-1.md` | ~911 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 28 | 2026-11-08 | 启动识破画风及三角色 LoRA 后台流水线 | - | `feat/native-character-prompts` |
 | 27 | 2026-10-20 | Restore advice configuration from AiQQ | `d55b939`, `a9696ba` | `feat/native-character-prompts` |
 | 26 | 2026-10-20 | Per-section AI translation released | `0b5c002`, `4637ab6` | `feat/native-character-prompts` |
 | 25 | 2026-10-20 | Full-height prompt drawer | `38c443b`, `926f6f6` | `feat/native-character-prompts` |

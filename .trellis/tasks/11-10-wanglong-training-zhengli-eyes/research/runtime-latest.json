@@ -1,0 +1,73 @@
+{
+  "base": "/hy-tmp/models/NoobAI-XL-v1.1.safetensors",
+  "base_sha256": "6681e8e4b134c81f16533acedb0d406d7e5e366e1624b4105178c64d00b05d51",
+  "controller_alive": false,
+  "controller_pid": 1209,
+  "controller_start_ticks": 44396786,
+  "created_at": 1794292084.6631722,
+  "current_job": null,
+  "finished_at": 1794295957.0383334,
+  "jobs": [
+    {
+      "artifacts": [
+        {
+          "bytes": 170545284,
+          "name": "aoqiwanglong-000002.safetensors",
+          "sha256": "8e7f97895cbbd379fe442444737e5f6ad027e1620651d70146c1894a997c65a7"
+        },
+        {
+          "bytes": 170545284,
+          "name": "aoqiwanglong-000004.safetensors",
+          "sha256": "6f7c6ec0355a36dcff5c57b9df18629571334996bd41179ee418afb6eed24269"
+        },
+        {
+          "bytes": 170545284,
+          "name": "aoqiwanglong-000006.safetensors",
+          "sha256": "ae02cd5f0c6111b51ba86160dc3654205c4f9c2c599212fe077c6883b307411a"
+        },
+        {
+          "bytes": 170545284,
+          "name": "aoqiwanglong-000008.safetensors",
+          "sha256": "1d68b38e284e0c883abc4d47ae780b0999b122b63451506685bca64b2ff28aea"
+        },
+        {
+          "bytes": 170545284,
+          "name": "aoqiwanglong-000010.safetensors",
+          "sha256": "fbf008e7982b5748781c4384940452f075ab4712354e95f4fb7d901255a30c99"
+        },
+        {
+          "bytes": 170545284,
+          "name": "aoqiwanglong.safetensors",
+          "sha256": "233c88496fdb182c220df7725fbbffe9f59954d27623e3f9034f5fa47a64c3ef"
+        }
+      ],
+      "elapsed_seconds": 3039,
+      "exit_code": 0,
+      "finished_at": 1794295957.0376413,
+      "name": "char_wanglong_gpt_1110",
+      "pid": 1613,
+      "pid_start_ticks": 44480137,
+      "progress": {
+        "checkpoint_count": 6,
+        "latest_checkpoint_epoch": 10,
+        "total_epochs": 12
+      },
+      "started_at": 1794292918.174699,
+      "state": "succeeded",
+      "waiting_since": 1794292107.104424
+    }
+  ],
+  "operation": "aoqi_training_1110_wanglong",
+  "queue": {
+    "active_jobs": [
+      "char_wanglong_gpt_1110"
+    ],
+    "deferred_jobs": [],
+    "operation": "aoqi_training_1110_wanglong",
+    "plan_sha256": "2a38a7ff1f9954e2e04dfcc21d187def921cc774c9e8119aa0bc6b410e978a77",
+    "version": 1
+  },
+  "state": "completed",
+  "train_root": "/hy-tmp/sd-scripts",
+  "updated_at": 1794295957.0378077
+}

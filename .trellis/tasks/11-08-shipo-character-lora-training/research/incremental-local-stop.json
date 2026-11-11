@@ -1,0 +1,23 @@
+{
+  "action": "stop_all_upload_barrier_workflow_for_incremental_switch",
+  "operation": "aoqi_training_1108",
+  "before": [
+    {
+      "pid": 3186640,
+      "start_ticks": 806764541,
+      "comm": "python3"
+    },
+    {
+      "pid": 3186661,
+      "start_ticks": 806764911,
+      "comm": "rsync"
+    },
+    {
+      "pid": 3186662,
+      "start_ticks": 806764912,
+      "comm": "ssh"
+    }
+  ],
+  "remaining": [],
+  "stopped_at": 1794140167.3632956
+}

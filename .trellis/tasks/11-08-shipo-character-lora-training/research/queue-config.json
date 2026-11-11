@@ -1,0 +1,16 @@
+{
+  "active_jobs": [
+    "char_xingjiang_gpt_1108",
+    "char_nuoya_gpt_1108",
+    "char_zhengli_gpt_1108",
+    "char_weileita_gpt_1108",
+    "char_shikong_gpt_1108",
+    "char_chaoshen_gpt_1108"
+  ],
+  "deferred_jobs": [
+    "style_shipo_1108"
+  ],
+  "operation": "aoqi_training_1108",
+  "plan_sha256": "76cb35992d885487e7e804db6d31a88cfc2d7a356bf382dacd1e2f1d0f274af9",
+  "version": 1
+}

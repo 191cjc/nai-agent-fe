@@ -1,0 +1,12 @@
+{
+  "operation": "aoqi_training_1110_huangjin",
+  "files": {
+    "common.py": "05b983fc2c7f315627051c55c36bf477f138642e92540183072f23cd3d21f320",
+    "prepare.py": "58330e288346b64592be6906c3857808c41be7378e8f98a6817863714348f08f",
+    "remote_train.py": "4d2f086deaa0f3d387c964710c70fee49da4eb77fad49ede3a6db109239d0343",
+    "ops.py": "01be8343a284f2836f513e0df0071875c3c928461ff201e017a5ac2c5465b618",
+    "test_pipeline.py": "4f11b5fa6c941fe5a8bdf59f3ff1e10dfc239af15d9c9d317c4875ee9cddeb10",
+    "test_controller.py": "f68bdb933d653d57ee3840194f90b7427a6335bef90517030abd5c6a4a585030",
+    "test_ops.py": "c6b43b32e7d913767b800bf7752fc3aa75e87d15783b901876315689f0231d13"
+  }
+}

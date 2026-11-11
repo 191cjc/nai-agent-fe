@@ -1,0 +1,9 @@
+{"file": ".trellis/spec/backend/dataset-run-contract.md", "reason": "Training-set discard, rerun, export, history, and cover contracts"}
+{"file": ".trellis/spec/backend/image-retention-contract.md", "reason": "Private storage, original expiry, safe filesystem operations, and previews"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Additive schema migration, readiness, and SQLite privacy"}
+{"file": ".trellis/spec/backend/api-contract.md", "reason": "Authenticated API, typed errors, and reviewed OpenAPI snapshot"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Frozen offline tests, Ruff, lock and API checks"}
+{"file": ".trellis/spec/frontend/workspace-contract.md", "reason": "Same-origin client, protected state, and frontend verification constraints"}
+{"file": ".trellis/spec/frontend/viewer-cache-contract.md", "reason": "Image cache ownership, preview paging, and session invalidation"}
+{"file": ".trellis/tasks/11-07-dataset-review-cleanup/research/source-findings.md", "reason": "Source-backed affected paths, privacy boundary, and index/storage pitfalls"}
+{"file": ".trellis/spec/backend/dataset-review-contract.md", "reason": "Cross-layer review defaults, irreversible purge, stable indexes, partial failure and retry contract"}

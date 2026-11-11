@@ -1,0 +1,124 @@
+{
+  "recorded_at": "2026-11-10T09:32:57.666395+00:00",
+  "source_root": "/home/ubuntu/lora-kit/aoqi_auto_1110_gpt",
+  "source": {
+    "release": {
+      "dispatch_sha256": "c52e575b4ceffbe4a960422e158186164e883619aa31e41a816d7168a0e5aa72",
+      "templates": {
+        "common.py": "b252554a3ff3addd9ffc13eea379d84afdb464124cf278ea61b5ba557af226b2",
+        "ops.py": "d2e2eeb2c9cbf8ed6599d07b75f1ec2d4642bbb9c160f3ca30279268d0f10d08",
+        "prepare.py": "58330e288346b64592be6906c3857808c41be7378e8f98a6817863714348f08f",
+        "remote_train.py": "b0320acb503d9c81f35210e67725f79712dcdfc25053df5e2b175298c6800b24"
+      }
+    },
+    "files": {
+      "dispatch.py": {
+        "bytes": 22286,
+        "sha256": "c52e575b4ceffbe4a960422e158186164e883619aa31e41a816d7168a0e5aa72"
+      },
+      "release.json": {
+        "bytes": 457,
+        "sha256": "f60f671e55350cea57cfd01f15c363fde7561b68c1727c6a92ba54b98f440dcf"
+      },
+      "README.md": {
+        "bytes": 6171,
+        "sha256": "440079ddb936fff30bf34104f7cce9747804cc45e8b9ce70e1b6f60e61cd0cae"
+      },
+      "aoqi-auto-1110-gpt.service": {
+        "bytes": 563,
+        "sha256": "c1ff4b1e42f2b8e93d57791b27e6ea2a2a3750578c69b1b82871810ccfc0f0b7"
+      },
+      "aoqi-auto-1110-gpt.timer": {
+        "bytes": 217,
+        "sha256": "aa27afc68d59125f29fb9e998cb81f21bf991c805c2c64a6f1ad85feeb2f4925"
+      },
+      "test_support.py": {
+        "bytes": 779,
+        "sha256": "45843f61288b4e62ba9cb565b75913123161abc01ca309ab592c9d5a1a0e9be9"
+      },
+      "test_pipeline.py": {
+        "bytes": 14375,
+        "sha256": "77cb4b1fbf53a8eb99d78255395b993287b1ddc42bd89d3872f698a03fb23e04"
+      },
+      "test_controller.py": {
+        "bytes": 23001,
+        "sha256": "de32265fa4d316af3a1a3514d9879d711ee705384fd7142082c4a5b952980565"
+      },
+      "test_ops.py": {
+        "bytes": 5611,
+        "sha256": "e018d7839db3f5b48f7b80d6574e9454dc075975a06bdcbdc5710507e375abc2"
+      },
+      "test_predecessor.py": {
+        "bytes": 5090,
+        "sha256": "ee81f022b0489a43a223c80eee28cc63bf133cb47984c95671dff01473c40016"
+      },
+      "test_dispatch.py": {
+        "bytes": 15153,
+        "sha256": "8653e9aea54c46f002a408d0531904fa7fe7f2b6d25abfd09050b74c693e31a5"
+      },
+      "templates/common.py": {
+        "bytes": 9387,
+        "sha256": "b252554a3ff3addd9ffc13eea379d84afdb464124cf278ea61b5ba557af226b2"
+      },
+      "templates/prepare.py": {
+        "bytes": 15643,
+        "sha256": "58330e288346b64592be6906c3857808c41be7378e8f98a6817863714348f08f"
+      },
+      "templates/remote_train.py": {
+        "bytes": 28681,
+        "sha256": "b0320acb503d9c81f35210e67725f79712dcdfc25053df5e2b175298c6800b24"
+      },
+      "templates/ops.py": {
+        "bytes": 9102,
+        "sha256": "d2e2eeb2c9cbf8ed6599d07b75f1ec2d4642bbb9c160f3ca30279268d0f10d08"
+      }
+    }
+  },
+  "checks": {
+    "independent_suite": {
+      "passed": 50,
+      "seconds": 6.006
+    },
+    "additional_cli_lock_regression": {
+      "passed": 1,
+      "seconds": 0.052
+    },
+    "ruff": "passed E,F,I,UP,B py312 100 columns",
+    "compile": "passed",
+    "unchanged_exporter": "passed",
+    "release_pins": "passed",
+    "systemd_verify": "passed; unrelated preexisting tat_agent PIDFile legacy path warning",
+    "type_checker": "not configured"
+  },
+  "units": {
+    "timer": {
+      "NextElapseUSecMonotonic": "infinity",
+      "LastTriggerUSec": "Tue 2026-11-10 17:32:14 CST",
+      "Id": "aoqi-auto-1110-gpt.timer",
+      "LoadState": "loaded",
+      "ActiveState": "active",
+      "SubState": "running",
+      "UnitFileState": "enabled"
+    },
+    "service": {
+      "MainPID": "3835683",
+      "Result": "success",
+      "ExecMainStartTimestamp": "Tue 2026-11-10 17:32:14 CST",
+      "ExecMainStatus": "0",
+      "Id": "aoqi-auto-1110-gpt.service",
+      "LoadState": "loaded",
+      "ActiveState": "activating",
+      "SubState": "start"
+    }
+  },
+  "interval": "OnBootSec=30s; OnUnitInactiveSec=60s; AccuracySec=1s",
+  "policy": {
+    "weights": "remote_only",
+    "private_content_inspected": false,
+    "exact_run_count": 3,
+    "source_root_owner": "root:root",
+    "source_root_mode": "0700",
+    "private_service_log_mode": "0600"
+  },
+  "service_user_ssh_preflight": "passed using existing explicit known_hosts and StrictHostKeyChecking=yes; GPU 0%, 1 MiB / 24576 MiB before activation"
+}

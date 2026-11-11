@@ -1,0 +1,28 @@
+{
+  "checked_at": 1794201822.4719033,
+  "gpu": {
+    "name": "NVIDIA GeForce RTX 3090",
+    "utilization_percent": 100,
+    "memory_used_mib": 12724,
+    "memory_total_mib": 24576
+  },
+  "style_started_at": 1794199532.4753869,
+  "style_ready_at": 1794199519.2748091,
+  "character_ready_at": 1794200091.2666624,
+  "style_checkpoint_epochs": [
+    2,
+    4
+  ],
+  "style_checkpoint_mtimes": [
+    1794200700.931014,
+    1794201520.2337286
+  ],
+  "style_checkpoint_bytes": 170602108,
+  "workflow_pid": 3425855,
+  "controller_pid": 7882,
+  "style_trainer_pid": 8436,
+  "character_state": "pending",
+  "backed_up_final_jobs": 0,
+  "character_upload_overlapped_style_training": true,
+  "seconds_per_epoch_observed": 409.65135729312897
+}

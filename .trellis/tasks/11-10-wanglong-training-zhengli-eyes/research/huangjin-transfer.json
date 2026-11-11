@@ -1,0 +1,19 @@
+{
+  "state": "verified_staged",
+  "operation": "aoqi_training_1110_huangjin",
+  "trigger": "aoqihuangjin",
+  "remote_root": "/hy-tmp/aoqi_training_1110_huangjin",
+  "png_files": 123,
+  "caption_files": 123,
+  "transfer_bytes": 206024328,
+  "plan_sha256": "8320c7e3d74fc560d43a5b969405eebc9a87faea8836491f366eb06de5cf13a9",
+  "training_state": "not_started",
+  "model_files": 0,
+  "staged": {
+    "plan_sha256": "8320c7e3d74fc560d43a5b969405eebc9a87faea8836491f366eb06de5cf13a9",
+    "state": "verified",
+    "verified_at": 1794296959.2321794
+  },
+  "local_backup_enabled": false,
+  "local_backup_files": 0
+}

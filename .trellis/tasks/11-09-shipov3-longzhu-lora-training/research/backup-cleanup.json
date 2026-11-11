@@ -1,0 +1,46 @@
+{
+  "state": "deleted_by_operator_request",
+  "completed_at": "2026-11-09T16:11:55.888628+08:00",
+  "scope": "Only the three final model backups and checksum sidecars on the project server for the 15571 batch",
+  "removed_files": [
+    {
+      "path": "/home/ubuntu/lora-output/aoqi_training_1109_v3/char_longzhu_gpt_1109/REMOTE_SHA256SUMS.txt",
+      "bytes": 575
+    },
+    {
+      "path": "/home/ubuntu/lora-output/aoqi_training_1109_v3/char_longzhu_gpt_1109/SHA256SUMS.txt",
+      "bytes": 90
+    },
+    {
+      "path": "/home/ubuntu/lora-output/aoqi_training_1109_v3/char_longzhu_gpt_1109/aoqilongzhu.safetensors",
+      "bytes": 170545236
+    },
+    {
+      "path": "/home/ubuntu/lora-output/aoqi_training_1109_v3/style_shipov3_1109/REMOTE_SHA256SUMS.txt",
+      "bytes": 575
+    },
+    {
+      "path": "/home/ubuntu/lora-output/aoqi_training_1109_v3/style_shipov3_1109/SHA256SUMS.txt",
+      "bytes": 90
+    },
+    {
+      "path": "/home/ubuntu/lora-output/aoqi_training_1109_v3/style_shipov3_1109/aoqishipov3.safetensors",
+      "bytes": 170602108
+    },
+    {
+      "path": "/home/ubuntu/lora-output/aoqi_training_1109_moyan2/char_moyan2_gpt_1109/REMOTE_SHA256SUMS.txt",
+      "bytes": 563
+    },
+    {
+      "path": "/home/ubuntu/lora-output/aoqi_training_1109_moyan2/char_moyan2_gpt_1109/SHA256SUMS.txt",
+      "bytes": 88
+    },
+    {
+      "path": "/home/ubuntu/lora-output/aoqi_training_1109_moyan2/char_moyan2_gpt_1109/aoqimoyan.safetensors",
+      "bytes": 170545060
+    }
+  ],
+  "removed_bytes": 511694385,
+  "training_server_outputs_preserved": true,
+  "backup_preference": "Do not recreate these backups or automatically back up later LoRAs unless the operator asks."
+}

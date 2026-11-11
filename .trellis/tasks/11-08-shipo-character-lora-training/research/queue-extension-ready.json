@@ -1,0 +1,32 @@
+{
+  "active_jobs": [
+    "char_xingjiang_gpt_1108",
+    "char_nuoya_gpt_1108",
+    "char_zhengli_gpt_1108",
+    "char_weileita_gpt_1108",
+    "char_shikong_gpt_1108",
+    "char_chaoshen_gpt_1108"
+  ],
+  "added_dataset_bytes": 536577801,
+  "archived_local_records": [
+    "stage_status.json",
+    "workflow_status.json",
+    "remote_status.json",
+    "workflow_launch.json"
+  ],
+  "dataset_bytes": 1779481621,
+  "deferred_jobs": [
+    "style_shipo_1108"
+  ],
+  "image_counts": {
+    "char_chaoshen_gpt_1108": 94,
+    "char_nuoya_gpt_1108": 136,
+    "char_shikong_gpt_1108": 114,
+    "char_weileita_gpt_1108": 134,
+    "char_xingjiang_gpt_1108": 132,
+    "char_zhengli_gpt_1108": 138,
+    "style_shipo_1108": 479
+  },
+  "preserved_original_manifest_count": 4,
+  "state": "ready_for_revised_background"
+}

@@ -1,0 +1,29 @@
+{
+  "checked_at": 1794204807.8857684,
+  "dataset_bytes": 205855585,
+  "images": 127,
+  "job": "char_moyan2_gpt_1109",
+  "manifest_sha256": "2b3df855281ca487aea76ceae2addc6ffddfa63e1dc25c5276a80944d2853832",
+  "operation": "aoqi_training_1109_moyan2",
+  "plan_sha256": "324a84bee7f31602a7467047d44cee0c2ea38786affa645f1e440d7a3926b0d5",
+  "queue": {
+    "active_jobs": [
+      "char_moyan2_gpt_1109"
+    ],
+    "deferred_jobs": [],
+    "operation": "aoqi_training_1109_moyan2",
+    "plan_sha256": "324a84bee7f31602a7467047d44cee0c2ea38786affa645f1e440d7a3926b0d5",
+    "version": 1
+  },
+  "sources": [
+    {
+      "changed": false,
+      "discarded": 0,
+      "expected": 127,
+      "jobs": 127,
+      "purged": 0,
+      "run_id": "4bb3a579-ce50-424d-8ffd-3e126cd12f7e",
+      "written": 127
+    }
+  ]
+}

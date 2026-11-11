@@ -1,0 +1,11 @@
+{
+  "captured_at": 1794137901.2409847,
+  "files": {
+    "plan.json": "aa902c7524b7bdf39818b04e069dbd4d6dae6b314c7de247eff95a14b9c455f3",
+    "prepared.json": "ba841b4669f64c0d9a92d828da643df10f2556cff7640e8dfba0f37dc332bf2f",
+    "jobs/char_nuoya_gpt_1108/dataset_manifest.json": "4ba6ecf3e7e988f96a5cf217bb5c5cb232989fbb96e9328fda3a4f9832ab9474",
+    "jobs/char_xingjiang_gpt_1108/dataset_manifest.json": "c99e456e38de5c56632c98ca6d33b645572a5e861097f7f18b06610ef91a9d80",
+    "jobs/char_zhengli_gpt_1108/dataset_manifest.json": "20dda6e69799b91c0100acd94deafe8e4ff9fd5e68554a4923529d289c36e0bc",
+    "jobs/style_shipo_1108/dataset_manifest.json": "2485d16e2e619e53340c7ecc2ff14dd688dc0f673b2b66a13cd389a236b4e338"
+  }
+}

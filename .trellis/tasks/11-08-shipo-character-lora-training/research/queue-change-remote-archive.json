@@ -1,0 +1,10 @@
+{
+  "operation": "aoqi_training_1108",
+  "state": "stopped_style_status_archived",
+  "archive": "/hy-tmp/aoqi_training_1108/status.operator_deferred_style.json",
+  "sha256": "93e160d34478b227daa1a2c6cba315b10fbec6ca16034fa5fac227de85aaaf12",
+  "active_character_states_verified": "pending",
+  "locks_verified_free": true,
+  "archived_at": 1794138188.6334178,
+  "style_checkpoint_count": 1
+}

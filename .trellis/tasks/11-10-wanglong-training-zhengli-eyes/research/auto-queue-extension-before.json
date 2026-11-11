@@ -1,0 +1,25 @@
+{
+  "observed_at": "2026-11-10T09:49:01.800769+00:00",
+  "immutable_fingerprints": {
+    "templates": {
+      "common.py": "b252554a3ff3addd9ffc13eea379d84afdb464124cf278ea61b5ba557af226b2",
+      "ops.py": "d2e2eeb2c9cbf8ed6599d07b75f1ec2d4642bbb9c160f3ca30279268d0f10d08",
+      "prepare.py": "58330e288346b64592be6906c3857808c41be7378e8f98a6817863714348f08f",
+      "remote_train.py": "b0320acb503d9c81f35210e67725f79712dcdfc25053df5e2b175298c6800b24"
+    },
+    "operations": {
+      "siling": {
+        "common.py": "b252554a3ff3addd9ffc13eea379d84afdb464124cf278ea61b5ba557af226b2",
+        "frozen.py": "4e74cbbb12a44f2c04df83b7bab28ae6d9be2be4ee5437226ab497e97da8ca76",
+        "remote_train.py": "b0320acb503d9c81f35210e67725f79712dcdfc25053df5e2b175298c6800b24",
+        "ops.py": "d2e2eeb2c9cbf8ed6599d07b75f1ec2d4642bbb9c160f3ca30279268d0f10d08",
+        "prepare.py": "58330e288346b64592be6906c3857808c41be7378e8f98a6817863714348f08f",
+        "initialized.json": "786d7d20bdbeac9623a692c2318fe7c8ad268b6c75d9dd08d8b0a06b0c1cb908",
+        "plan.json": "1fc2eded267a3d2c6653c768cde146ee8c392d457345ffe8631cb39712c36ce8",
+        "prepared.json": "12d86dbb1cc58f5c0e733823fb2f9d02222467e6a21abe5923c64780946c8442",
+        "snapshot.json": "3fa0c78a4bd77223439cde32ef6de72a93b618dfd243df84578696e843ae7b82",
+        "jobs/char_siling_gpt_1110/dataset_manifest.json": "b998e9d7818f8026485050291f0505a17f5ab9eba256091a3f6f7a40e557a17c"
+      }
+    }
+  }
+}

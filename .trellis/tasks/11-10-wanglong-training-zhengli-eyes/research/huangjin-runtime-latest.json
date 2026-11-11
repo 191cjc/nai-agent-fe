@@ -1,0 +1,37 @@
+{
+  "base": "/hy-tmp/models/NoobAI-XL-v1.1.safetensors",
+  "base_sha256": "6681e8e4b134c81f16533acedb0d406d7e5e366e1624b4105178c64d00b05d51",
+  "controller_alive": true,
+  "controller_pid": 3873,
+  "controller_start_ticks": 44912542,
+  "created_at": 1794297242.2302282,
+  "current_job": "char_huangjin_gpt_1110",
+  "jobs": [
+    {
+      "elapsed_seconds": 154,
+      "name": "char_huangjin_gpt_1110",
+      "pid": 3878,
+      "pid_start_ticks": 44914808,
+      "progress": {
+        "checkpoint_count": 0,
+        "latest_checkpoint_epoch": 0,
+        "total_epochs": 12
+      },
+      "started_at": 1794297264.8918793,
+      "state": "training"
+    }
+  ],
+  "operation": "aoqi_training_1110_huangjin",
+  "queue": {
+    "active_jobs": [
+      "char_huangjin_gpt_1110"
+    ],
+    "deferred_jobs": [],
+    "operation": "aoqi_training_1110_huangjin",
+    "plan_sha256": "8320c7e3d74fc560d43a5b969405eebc9a87faea8836491f366eb06de5cf13a9",
+    "version": 1
+  },
+  "state": "running",
+  "train_root": "/hy-tmp/sd-scripts",
+  "updated_at": 1794297414.9076314
+}

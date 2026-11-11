@@ -1,0 +1,21 @@
+{
+  "completed_at": 1794296122.0671258,
+  "jobs": [
+    {
+      "job": "char_huangjin_gpt_1110",
+      "sources": [
+        {
+          "changed": false,
+          "discarded": 0,
+          "expected": 123,
+          "jobs": 123,
+          "purged": 0,
+          "run_id": "d97531fa-5be1-4eba-9081-2e424b5e6bce",
+          "written": 123
+        }
+      ],
+      "written": 123
+    }
+  ],
+  "state": "prepared"
+}

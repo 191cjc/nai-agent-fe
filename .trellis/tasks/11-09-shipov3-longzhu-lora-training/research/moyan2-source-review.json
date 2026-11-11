@@ -1,0 +1,21 @@
+{
+  "accepted_prefix_unchanged_files": 14,
+  "checked_at": 1794205206.4685383,
+  "compilation": "pass 8 Python files",
+  "independent_review": "pass",
+  "plan_sha256": "324a84bee7f31602a7467047d44cee0c2ea38786affa645f1e440d7a3926b0d5",
+  "ruff": "pass E,F,I,UP,B py312 line100",
+  "source_hashes": {
+    "README.md": "22b6f4dee4aea40be7afc1457836212cf638bb9bba83725c73ecf441fb8d0cc1",
+    "common.py": "26b6604ba17050e5cf1e34597e23c474f27cd68d3650c9289c9a3ec8d299c523",
+    "ops.py": "88c6b8bdc92f5de1170a7fbd6947c2484ba67bcbc627597bee5a6b03a7e4a4d6",
+    "prepare.py": "58330e288346b64592be6906c3857808c41be7378e8f98a6817863714348f08f",
+    "remote_train.py": "ae05426fe7eb6390b3e39fa74a602ed4f3e3c871919891e2a10ed9620af53116",
+    "test_controller.py": "3b9de20e7458370865b16c42204189526a751084d8fc55f0fe0c583b731bfbc8",
+    "test_ops.py": "794a68f0d6ede0bcbd8d9a72cfcf471e74b08d83732cfec953fc920c101f569a",
+    "test_pipeline.py": "a918766fd8c02c1f8fa6d7f90e30270e1a0d55f090eee1294084c7f0e6644dec",
+    "test_predecessor.py": "5a8475d9587646c9849a853e1db092f82fbb7f0dedcc2ac5fc6d9fe2865044da"
+  },
+  "synthetic_tests": 39,
+  "type_checker": "not configured"
+}

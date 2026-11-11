@@ -1,0 +1,10 @@
+{
+  "timestamp": "2026-11-08T09:26:03.785728+00:00",
+  "deleted_weights": 131,
+  "deleted_files": 152,
+  "deleted_bytes": 22341625805,
+  "free_after_bytes": 38901731328,
+  "base_model_sha256": "6681e8e4b134c81f16533acedb0d406d7e5e366e1624b4105178c64d00b05d51",
+  "base_model_preserved": true,
+  "source_datasets_unchanged": true
+}

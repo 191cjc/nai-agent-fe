@@ -1,0 +1,89 @@
+{
+  "checked_at": 1794197087.0750947,
+  "plan_sha256": "61ecfcfca617cc94d0b79ee16d79dfb37f870259f44a704accf036703dd90486",
+  "jobs": [
+    {
+      "job": "style_shipov3_1109",
+      "images": 655,
+      "seed": 20261109,
+      "manifest_sha256": "cf6034f773c40f1ac20ee951ba0ce72cd594f250662b99cf1c7854f16b4947d8",
+      "dataset_bytes": 813434003,
+      "source_counts": [
+        {
+          "changed": false,
+          "discarded": 1,
+          "expected": 99,
+          "jobs": 100,
+          "purged": 0,
+          "run_id": "30a96ebe-76a8-4ab7-aedf-5781a03465cc",
+          "written": 99
+        },
+        {
+          "changed": false,
+          "discarded": 18,
+          "expected": 82,
+          "jobs": 100,
+          "purged": 0,
+          "run_id": "b34417b3-e174-4b15-82e7-04e743b73f65",
+          "written": 82
+        },
+        {
+          "changed": false,
+          "discarded": 6,
+          "expected": 89,
+          "jobs": 95,
+          "purged": 0,
+          "run_id": "302b6079-2d92-45dc-be11-c3d1da29fd71",
+          "written": 89
+        },
+        {
+          "changed": false,
+          "discarded": 3,
+          "expected": 193,
+          "jobs": 196,
+          "purged": 0,
+          "run_id": "5f814c35-225d-401a-9de6-961bc07e39b0",
+          "written": 193
+        },
+        {
+          "changed": false,
+          "discarded": 4,
+          "expected": 96,
+          "jobs": 100,
+          "purged": 0,
+          "run_id": "05670d0d-d553-4216-b8f9-14ccd70f5cb0",
+          "written": 96
+        },
+        {
+          "changed": false,
+          "discarded": 4,
+          "expected": 96,
+          "jobs": 100,
+          "purged": 0,
+          "run_id": "248684e0-33c7-4669-94a2-f6861d7fda38",
+          "written": 96
+        }
+      ],
+      "largest_consecutive_source_group": 4
+    },
+    {
+      "job": "char_longzhu_gpt_1109",
+      "images": 132,
+      "seed": 20261109,
+      "manifest_sha256": "2258bc194ab1d4e2873056d5ab922948849a1b7e4ba2268d0483e0bf697e73a5",
+      "dataset_bytes": 182466939,
+      "source_counts": [
+        {
+          "changed": false,
+          "discarded": 0,
+          "expected": 132,
+          "jobs": 132,
+          "purged": 0,
+          "run_id": "190849e1-ced3-449d-9c24-9c0406b68046",
+          "written": 132
+        }
+      ],
+      "largest_consecutive_source_group": 132
+    }
+  ]
+}

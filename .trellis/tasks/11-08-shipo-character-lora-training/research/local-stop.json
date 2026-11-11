@@ -1,0 +1,23 @@
+{
+  "timestamp": "2026-11-08T09:21:01.214440+00:00",
+  "target_host": "i-1.gpushare.com",
+  "target_port": 56541,
+  "action": "stopped_old_controller_group",
+  "members": [
+    {
+      "pid": 2882365,
+      "start_ticks": "799130514",
+      "comm": "python3"
+    },
+    {
+      "pid": 2882382,
+      "start_ticks": "799130731",
+      "comm": "lora_job.sh"
+    },
+    {
+      "pid": 3150520,
+      "start_ticks": "805868304",
+      "comm": "sleep"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "state": "verified_completed",
+  "operation": "aoqi_training_1110_huangjin",
+  "finished_at": 1794300103.9947574,
+  "exit_code": 0,
+  "artifact_count": 6,
+  "final": {
+    "bytes": 170545012,
+    "name": "aoqihuangjin.safetensors",
+    "sha256": "70e96467dfd1f5812b4c88e674b6eeb27e5bf29029d3ff51c78e550044ef8a66"
+  },
+  "prepared_sha256": "c0e53caebde8d95fa23a56e037eb52c04009844ea71630f2ce0a408a9e1fbabe",
+  "local_backup_enabled": false
+}

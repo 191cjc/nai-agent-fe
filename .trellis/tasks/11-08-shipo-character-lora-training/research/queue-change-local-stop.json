@@ -1,0 +1,8 @@
+{
+  "pid": 3156866,
+  "operation": "aoqi_training_1108",
+  "action": "stop_workflow_for_queue_change",
+  "start_ticks": 806017551,
+  "stopped": true,
+  "at": 1794137459.8471792
+}

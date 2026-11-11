@@ -1,0 +1,7 @@
+{"file":".trellis/spec/backend/lora-training-contract.md","reason":"Private exporter, immutable readiness, shared GPU locks and final backup"}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Synthetic-only checks and no private diagnostics"}
+{"file":".trellis/tasks/11-10-wanglong-training-zhengli-eyes/research/environment.md","reason":"Verified host, source identity and narrow adaptation boundary"}
+{"file": ".trellis/tasks/11-10-wanglong-training-zhengli-eyes/research/huangjin-staging.md", "reason": "Exact Huangjin staging-only identity, scope and privacy boundary"}
+{"file": ".trellis/tasks/11-10-wanglong-training-zhengli-eyes/research/auto-queue-inputs.md", "reason": "Fixed three-run automatic export/upload/train scope and runtime inputs"}
+{"file": ".trellis/tasks/11-10-wanglong-training-zhengli-eyes/research/auto-queue-reuse.md", "reason": "Reviewed source reuse and GPU/predecessor/resume hazards; current design.md selects locked readiness uploads"}
+{"file": ".trellis/tasks/11-10-wanglong-training-zhengli-eyes/research/auto-queue-added-inputs.md", "reason": "Operator-authorized Yinzhi/An fixed inputs and source-only five-run extension boundary"}

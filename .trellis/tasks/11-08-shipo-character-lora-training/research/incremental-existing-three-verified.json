@@ -1,0 +1,20 @@
+{
+  "verified_at": 1794140485.9835765,
+  "existing_character_snapshots": [
+    {
+      "job": "char_xingjiang_gpt_1108",
+      "verified_pairs": 132,
+      "all_checksums_match": true
+    },
+    {
+      "job": "char_nuoya_gpt_1108",
+      "verified_pairs": 136,
+      "all_checksums_match": true
+    },
+    {
+      "job": "char_zhengli_gpt_1108",
+      "verified_pairs": 138,
+      "all_checksums_match": true
+    }
+  ]
+}

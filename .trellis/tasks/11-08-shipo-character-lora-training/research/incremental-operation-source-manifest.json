@@ -1,0 +1,19 @@
+{
+  "reviewed_at": 1794141067.1746197,
+  "checks": {
+    "synthetic_tests": 41,
+    "ruff": "pass",
+    "compilation": "pass",
+    "type_checker": "not_configured"
+  },
+  "sha256": {
+    "README.md": "5a0639bf8218722bb95869c30abcea6979e43149647ce800d1b9ad1ddfa8bf39",
+    "common.py": "c7deac3d82510973ae919be947c0746a908d1e71668d00277c145bf47837cbcc",
+    "ops.py": "421b1746e4bc5d7846166a729c073f8967b8d8200e04455610ae4534c731bf7e",
+    "prepare.py": "58330e288346b64592be6906c3857808c41be7378e8f98a6817863714348f08f",
+    "remote_train.py": "26bd98997dfdbf0636547e804db048fdc16b68eba407e9c22a151f7ac3c58b8b",
+    "test_controller.py": "bbb67565a884da99332ff63100fc50987175b8289a560343a4e0c0d0b266a87e",
+    "test_ops.py": "19ddc80fc67fb09995b730078c1ffc9931f9741c128d921516f6bcd47c9ca6fe",
+    "test_pipeline.py": "10022ed582b91c22d655e5d0570c2e9dc0dfa1e1374a22d4d50e62b8cbea4b8d"
+  }
+}

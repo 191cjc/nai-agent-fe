@@ -1,0 +1,43 @@
+{
+  "timestamp": "2026-11-08T09:22:00.596542+00:00",
+  "target_job": "/hy-tmp/char_nuoya_gpt_aoqi_1107",
+  "members": [
+    {
+      "pid": 706,
+      "start_ticks": "43251141",
+      "comm": "train_template."
+    },
+    {
+      "pid": 708,
+      "start_ticks": "43251142",
+      "comm": "accelerate"
+    },
+    {
+      "pid": 773,
+      "start_ticks": "43251489",
+      "comm": "python3.11"
+    },
+    {
+      "pid": 822,
+      "start_ticks": "43258228",
+      "comm": "pt_data_worker"
+    },
+    {
+      "pid": 823,
+      "start_ticks": "43258244",
+      "comm": "pt_data_worker"
+    },
+    {
+      "pid": 824,
+      "start_ticks": "43258260",
+      "comm": "pt_data_worker"
+    },
+    {
+      "pid": 825,
+      "start_ticks": "43258276",
+      "comm": "pt_data_worker"
+    }
+  ],
+  "action": "stopped_old_remote_trainer",
+  "forced_pids": []
+}

@@ -1,0 +1,3 @@
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Synthetic-only verification and privacy in diagnostics"}
+{"file":".trellis/spec/backend/dataset-review-contract.md","reason":"Exclude pending and completed purges without resurrecting source images"}
+{"file":".trellis/tasks/11-08-shipo-character-lora-training/research/training-environment.md","reason":"Review cleanup boundary, shuffle evidence, process identity and serial training completion"}

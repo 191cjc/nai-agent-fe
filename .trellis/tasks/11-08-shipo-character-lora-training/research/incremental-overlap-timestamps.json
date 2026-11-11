@@ -1,0 +1,47 @@
+{
+  "checked_at": 1794141930.759229,
+  "training_started_at": 1794141160.0378752,
+  "training_checkpoint_metadata": [
+    {
+      "name": "aoqixingjiang_noobai-000002.safetensors",
+      "mtime": 1794141471.196072,
+      "bytes": 170545140
+    },
+    {
+      "name": "aoqixingjiang_noobai-000004.safetensors",
+      "mtime": 1794141710.7476928,
+      "bytes": 170545140
+    }
+  ],
+  "readiness_metadata": [
+    {
+      "job": "char_nuoya_gpt_1108",
+      "verified_at_mtime": 1794141101.5041769
+    },
+    {
+      "job": "char_xingjiang_gpt_1108",
+      "verified_at_mtime": 1794141101.2601786
+    },
+    {
+      "job": "char_zhengli_gpt_1108",
+      "verified_at_mtime": 1794141101.7001755
+    },
+    {
+      "job": "char_chaoshen_gpt_1108",
+      "verified_at_mtime": 1794141797.9923725
+    },
+    {
+      "job": "char_shikong_gpt_1108",
+      "verified_at_mtime": 1794141793.1201332
+    },
+    {
+      "job": "char_weileita_gpt_1108",
+      "verified_at_mtime": 1794141788.3478966
+    }
+  ],
+  "last_extra_ready_at": 1794141797.9923725,
+  "training_started_before_extra_uploads_finished": true,
+  "checkpoint_written_before_extra_uploads_finished": true,
+  "current_job": "char_xingjiang_gpt_1108",
+  "state": "running"
+}

@@ -1,0 +1,30 @@
+{
+  "background_lock_held": true,
+  "checked_at": 1794205390.42475,
+  "predecessor": {
+    "code": "predecessor_in_progress",
+    "state": "waiting"
+  },
+  "remote_status": {
+    "operation": "aoqi_training_1109_moyan2",
+    "queue": {
+      "active_jobs": [
+        "char_moyan2_gpt_1109"
+      ],
+      "deferred_jobs": [],
+      "operation": "aoqi_training_1109_moyan2",
+      "plan_sha256": "324a84bee7f31602a7467047d44cee0c2ea38786affa645f1e440d7a3926b0d5",
+      "version": 1
+    },
+    "state": "not_started"
+  },
+  "stage_status": {
+    "current_job": "char_moyan2_gpt_1109",
+    "plan_sha256": "324a84bee7f31602a7467047d44cee0c2ea38786affa645f1e440d7a3926b0d5",
+    "state": "incremental_transferring",
+    "updated_at": 1794205274.994201
+  },
+  "workflow_alive": true,
+  "workflow_pid": 3446399,
+  "workflow_start_ticks": 813431787
+}

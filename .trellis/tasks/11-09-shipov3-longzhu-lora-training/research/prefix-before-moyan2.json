@@ -1,0 +1,20 @@
+{
+  "checked_at": 1794204383.9264522,
+  "source_root": "/home/ubuntu/lora-kit/aoqi_training_1109_v3",
+  "files": {
+    "common.py": "4fd63326422f57e7d3f437664aa70920f7d12ae24734f8dc0f968a212e62ca9a",
+    "remote_train.py": "26bd98997dfdbf0636547e804db048fdc16b68eba407e9c22a151f7ac3c58b8b",
+    "ops.py": "de086ea0da9e28f0681c092c83f3b4de8228722d42c514b70c3ede26156a1443",
+    "prepare.py": "58330e288346b64592be6906c3857808c41be7378e8f98a6817863714348f08f",
+    "README.md": "d9b25418eeb75c464efee0d4cd1b55c39078440c81937b4927d34b3f1285b8be",
+    "test_pipeline.py": "2c694870f47f170a643c205948d0a854e0e0306984aedf0ff78e387a97aa008e",
+    "test_controller.py": "d7798822c8c907ade185f70b8cb926362504c2faf03bf6048512bf355bf1eea4",
+    "test_ops.py": "84c207b8e6b26a4adb139061940fa05e602477024ea265ac368b7a74128200c7",
+    "plan.json": "61ecfcfca617cc94d0b79ee16d79dfb37f870259f44a704accf036703dd90486",
+    "prepared.json": "478facd5712084f36b1d5cb68d6c5f2379c0cfe5798acd86a81f310250008cfc",
+    "queue.json": "231f3aabadcf33f7fb2e70dd88478c92c4e8357d8ea72e93776ede0460a48c11",
+    "incremental.json": "48a8abd2182742a15207e7d518a7b85a2b9afc6f135922c1d7c6b70026605391",
+    "jobs/style_shipov3_1109/dataset_manifest.json": "cf6034f773c40f1ac20ee951ba0ce72cd594f250662b99cf1c7854f16b4947d8",
+    "jobs/char_longzhu_gpt_1109/dataset_manifest.json": "2258bc194ab1d4e2873056d5ab922948849a1b7e4ba2268d0483e0bf697e73a5"
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "base": "/hy-tmp/models/NoobAI-XL-v1.1.safetensors",
+  "base_sha256": "6681e8e4b134c81f16533acedb0d406d7e5e366e1624b4105178c64d00b05d51",
+  "controller_alive": true,
+  "controller_pid": 7882,
+  "controller_start_ticks": 34975037,
+  "created_at": 1794197867.17927,
+  "current_job": "style_shipov3_1109",
+  "jobs": [
+    {
+      "name": "style_shipov3_1109",
+      "progress": {
+        "checkpoint_count": 0,
+        "latest_checkpoint_epoch": 0,
+        "total_epochs": 12
+      },
+      "state": "waiting_data",
+      "waiting_since": 1794197892.743542
+    },
+    {
+      "name": "char_longzhu_gpt_1109",
+      "progress": {
+        "checkpoint_count": 0,
+        "latest_checkpoint_epoch": 0,
+        "total_epochs": 12
+      },
+      "state": "pending"
+    }
+  ],
+  "operation": "aoqi_training_1109_v3",
+  "queue": {
+    "active_jobs": [
+      "style_shipov3_1109",
+      "char_longzhu_gpt_1109"
+    ],
+    "deferred_jobs": [],
+    "operation": "aoqi_training_1109_v3",
+    "plan_sha256": "61ecfcfca617cc94d0b79ee16d79dfb37f870259f44a704accf036703dd90486",
+    "version": 1
+  },
+  "state": "running",
+  "train_root": "/hy-tmp/sd-scripts",
+  "updated_at": 1794198238.0575755
+}

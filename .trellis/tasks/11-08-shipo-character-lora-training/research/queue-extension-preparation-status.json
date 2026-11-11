@@ -1,0 +1,218 @@
+{
+  "added_jobs": [
+    {
+      "job": "char_weileita_gpt_1108",
+      "sources": [
+        {
+          "changed": false,
+          "discarded": 0,
+          "expected": 134,
+          "jobs": 134,
+          "purged": 0,
+          "run_id": "b832d415-1488-4aab-879c-9f3f464bddb2",
+          "written": 134
+        }
+      ],
+      "written": 134
+    },
+    {
+      "job": "char_shikong_gpt_1108",
+      "sources": [
+        {
+          "changed": false,
+          "discarded": 0,
+          "expected": 114,
+          "jobs": 114,
+          "purged": 0,
+          "run_id": "748af765-72f8-41ec-91cb-b6f6571dde83",
+          "written": 114
+        }
+      ],
+      "written": 114
+    },
+    {
+      "job": "char_chaoshen_gpt_1108",
+      "sources": [
+        {
+          "changed": false,
+          "discarded": 0,
+          "expected": 94,
+          "jobs": 94,
+          "purged": 0,
+          "run_id": "77cf8b27-5270-407d-b08f-ea88281246ae",
+          "written": 94
+        }
+      ],
+      "written": 94
+    }
+  ],
+  "completed_at": 1794138498.2088335,
+  "jobs": [
+    {
+      "job": "style_shipo_1108",
+      "sources": [
+        {
+          "changed": false,
+          "discarded": 3,
+          "expected": 97,
+          "jobs": 100,
+          "purged": 0,
+          "run_id": "0755bcbb-0110-4d89-9c74-eb436569dae0",
+          "written": 97
+        },
+        {
+          "changed": false,
+          "discarded": 4,
+          "expected": 95,
+          "jobs": 99,
+          "purged": 0,
+          "run_id": "63013341-506f-4d11-8097-d1e45632a6e6",
+          "written": 95
+        },
+        {
+          "changed": false,
+          "discarded": 13,
+          "expected": 87,
+          "jobs": 100,
+          "purged": 0,
+          "run_id": "a1b5ea28-d100-4584-bd0f-d94466852a1a",
+          "written": 87
+        },
+        {
+          "changed": false,
+          "discarded": 2,
+          "expected": 98,
+          "jobs": 100,
+          "purged": 0,
+          "run_id": "60e5db07-05b6-4061-a60b-ccc60af56ca7",
+          "written": 98
+        },
+        {
+          "changed": false,
+          "discarded": 23,
+          "expected": 77,
+          "jobs": 100,
+          "purged": 0,
+          "run_id": "b87e3356-4630-4a51-8285-acd5114d1627",
+          "written": 77
+        },
+        {
+          "changed": false,
+          "discarded": 0,
+          "expected": 10,
+          "jobs": 10,
+          "purged": 0,
+          "run_id": "bc7026e2-cbbe-470f-b8c7-de6eee3dc858",
+          "written": 10
+        },
+        {
+          "changed": false,
+          "discarded": 0,
+          "expected": 15,
+          "jobs": 15,
+          "purged": 0,
+          "run_id": "c930b1cc-92a3-4231-8904-1995784e1c65",
+          "written": 15
+        }
+      ],
+      "written": 479
+    },
+    {
+      "job": "char_xingjiang_gpt_1108",
+      "sources": [
+        {
+          "changed": false,
+          "discarded": 0,
+          "expected": 132,
+          "jobs": 132,
+          "purged": 0,
+          "run_id": "9bbc6034-e756-4aa9-951e-e70a68651948",
+          "written": 132
+        }
+      ],
+      "written": 132
+    },
+    {
+      "job": "char_nuoya_gpt_1108",
+      "sources": [
+        {
+          "changed": false,
+          "discarded": 0,
+          "expected": 136,
+          "jobs": 136,
+          "purged": 0,
+          "run_id": "bf742ebd-a6af-4fb3-8bf0-033b61162900",
+          "written": 136
+        }
+      ],
+      "written": 136
+    },
+    {
+      "job": "char_zhengli_gpt_1108",
+      "sources": [
+        {
+          "changed": false,
+          "discarded": 0,
+          "expected": 138,
+          "jobs": 138,
+          "purged": 0,
+          "run_id": "ef49378c-ac5d-4f8e-a320-2a8443e49559",
+          "written": 138
+        }
+      ],
+      "written": 138
+    },
+    {
+      "job": "char_weileita_gpt_1108",
+      "sources": [
+        {
+          "changed": false,
+          "discarded": 0,
+          "expected": 134,
+          "jobs": 134,
+          "purged": 0,
+          "run_id": "b832d415-1488-4aab-879c-9f3f464bddb2",
+          "written": 134
+        }
+      ],
+      "written": 134
+    },
+    {
+      "job": "char_shikong_gpt_1108",
+      "sources": [
+        {
+          "changed": false,
+          "discarded": 0,
+          "expected": 114,
+          "jobs": 114,
+          "purged": 0,
+          "run_id": "748af765-72f8-41ec-91cb-b6f6571dde83",
+          "written": 114
+        }
+      ],
+      "written": 114
+    },
+    {
+      "job": "char_chaoshen_gpt_1108",
+      "sources": [
+        {
+          "changed": false,
+          "discarded": 0,
+          "expected": 94,
+          "jobs": 94,
+          "purged": 0,
+          "run_id": "77cf8b27-5270-407d-b08f-ea88281246ae",
+          "written": 94
+        }
+      ],
+      "written": 94
+    }
+  ],
+  "preserved_jobs": [
+    "style_shipo_1108",
+    "char_xingjiang_gpt_1108",
+    "char_nuoya_gpt_1108",
+    "char_zhengli_gpt_1108"
+  ],
+  "state": "extended"
+}

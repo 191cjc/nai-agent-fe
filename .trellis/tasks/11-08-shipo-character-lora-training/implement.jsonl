@@ -1,0 +1,4 @@
+{"file":".trellis/spec/backend/dataset-run-contract.md","reason":"Style dataset caption/export contracts and private run boundaries"}
+{"file":".trellis/spec/backend/character-dataset-contract.md","reason":"Character fixed traits and style caption handling"}
+{"file":".trellis/spec/backend/dataset-review-contract.md","reason":"Schema13 purge intent and discard/override preservation"}
+{"file":".trellis/tasks/11-08-shipo-character-lora-training/research/training-environment.md","reason":"Existing external tools, known unsafe log/success mechanisms, exact host and shuffle evidence"}

@@ -1,0 +1,1037 @@
+{
+  "timestamp": "2026-11-08T09:23:03.171119+00:00",
+  "base_model": {
+    "path": "/hy-tmp/models/NoobAI-XL-v1.1.safetensors",
+    "bytes": 7105349958,
+    "sha256": "6681e8e4b134c81f16533acedb0d406d7e5e366e1624b4105178c64d00b05d51"
+  },
+  "directories": [
+    {
+      "output_dir": "/hy-tmp/char_buxiu_mix/output",
+      "files": 7,
+      "bytes": 1023271973
+    },
+    {
+      "output_dir": "/hy-tmp/char_buxiu_nai/output",
+      "files": 7,
+      "bytes": 1023271301
+    },
+    {
+      "output_dir": "/hy-tmp/char_miruike_gpt/output",
+      "files": 7,
+      "bytes": 1023265841
+    },
+    {
+      "output_dir": "/hy-tmp/char_mixixi_gpt/output",
+      "files": 7,
+      "bytes": 1023262371
+    },
+    {
+      "output_dir": "/hy-tmp/char_mixixi_mix/output",
+      "files": 7,
+      "bytes": 1023274667
+    },
+    {
+      "output_dir": "/hy-tmp/char_mixixi_nai/output",
+      "files": 7,
+      "bytes": 1023271211
+    },
+    {
+      "output_dir": "/hy-tmp/char_moyan_gpt/output",
+      "files": 7,
+      "bytes": 1023263477
+    },
+    {
+      "output_dir": "/hy-tmp/char_moyan_gpt_aoqi_1107/output",
+      "files": 7,
+      "bytes": 1023263645
+    },
+    {
+      "output_dir": "/hy-tmp/char_moyan_mix/output",
+      "files": 7,
+      "bytes": 1023272693
+    },
+    {
+      "output_dir": "/hy-tmp/char_moyan_nai/output",
+      "files": 7,
+      "bytes": 1023270933
+    },
+    {
+      "output_dir": "/hy-tmp/char_nuoya_gpt_aoqi_1107/output",
+      "files": 5,
+      "bytes": 852725780
+    },
+    {
+      "output_dir": "/hy-tmp/char_xiwang_gpt/output",
+      "files": 7,
+      "bytes": 1023266171
+    },
+    {
+      "output_dir": "/hy-tmp/char_xiwang_mix/output",
+      "files": 7,
+      "bytes": 1023267387
+    },
+    {
+      "output_dir": "/hy-tmp/char_zhengli_mix/output",
+      "files": 7,
+      "bytes": 1023272033
+    },
+    {
+      "output_dir": "/hy-tmp/char_zhengli_nai/output",
+      "files": 7,
+      "bytes": 1023271841
+    },
+    {
+      "output_dir": "/hy-tmp/char_zhixu_gpt/output",
+      "files": 7,
+      "bytes": 1023265013
+    },
+    {
+      "output_dir": "/hy-tmp/char_zhixu_gpt_v2/output",
+      "files": 7,
+      "bytes": 1023264983
+    },
+    {
+      "output_dir": "/hy-tmp/char_zhixu_mix/output",
+      "files": 7,
+      "bytes": 1023272469
+    },
+    {
+      "output_dir": "/hy-tmp/char_zhixu_nai/output",
+      "files": 7,
+      "bytes": 1023269333
+    },
+    {
+      "output_dir": "/hy-tmp/style_shipo_nf_lo_se_st_wurenwu_1107/output",
+      "files": 7,
+      "bytes": 1023372773
+    },
+    {
+      "output_dir": "/hy-tmp/style_shipo_nf_lo_se_st_wurenwu_quality_1107/output",
+      "files": 7,
+      "bytes": 1023373501
+    },
+    {
+      "output_dir": "/hy-tmp/style_wushipo_wurenwu/output",
+      "files": 7,
+      "bytes": 1023316409
+    }
+  ],
+  "files": [
+    {
+      "path": "/hy-tmp/char_buxiu_mix/output/SHA256SUMS.txt",
+      "bytes": 605,
+      "inode": 515388364,
+      "mtime_ns": 1794041064978188029
+    },
+    {
+      "path": "/hy-tmp/char_buxiu_mix/output/buxiu_mix_noobai-000002.safetensors",
+      "bytes": 170545228,
+      "inode": 512828496,
+      "mtime_ns": 1794039359156433263
+    },
+    {
+      "path": "/hy-tmp/char_buxiu_mix/output/buxiu_mix_noobai-000004.safetensors",
+      "bytes": 170545228,
+      "inode": 512862341,
+      "mtime_ns": 1794039688760877977
+    },
+    {
+      "path": "/hy-tmp/char_buxiu_mix/output/buxiu_mix_noobai-000006.safetensors",
+      "bytes": 170545228,
+      "inode": 515388353,
+      "mtime_ns": 1794040017884176742
+    },
+    {
+      "path": "/hy-tmp/char_buxiu_mix/output/buxiu_mix_noobai-000008.safetensors",
+      "bytes": 170545228,
+      "inode": 515388352,
+      "mtime_ns": 1794040346295115134
+    },
+    {
+      "path": "/hy-tmp/char_buxiu_mix/output/buxiu_mix_noobai-000010.safetensors",
+      "bytes": 170545228,
+      "inode": 515388360,
+      "mtime_ns": 1794040675350542591
+    },
+    {
+      "path": "/hy-tmp/char_buxiu_mix/output/buxiu_mix_noobai.safetensors",
+      "bytes": 170545228,
+      "inode": 515388363,
+      "mtime_ns": 1794041003986228846
+    },
+    {
+      "path": "/hy-tmp/char_buxiu_nai/output/SHA256SUMS.txt",
+      "bytes": 605,
+      "inode": 512876220,
+      "mtime_ns": 1794037433554634945
+    },
+    {
+      "path": "/hy-tmp/char_buxiu_nai/output/buxiu_nai_noobai-000002.safetensors",
+      "bytes": 170545116,
+      "inode": 512876202,
+      "mtime_ns": 1794036082467530853
+    },
+    {
+      "path": "/hy-tmp/char_buxiu_nai/output/buxiu_nai_noobai-000004.safetensors",
+      "bytes": 170545116,
+      "inode": 512876212,
+      "mtime_ns": 1794036331893524618
+    },
+    {
+      "path": "/hy-tmp/char_buxiu_nai/output/buxiu_nai_noobai-000006.safetensors",
+      "bytes": 170545116,
+      "inode": 512876216,
+      "mtime_ns": 1794036580680286427
+    },
+    {
+      "path": "/hy-tmp/char_buxiu_nai/output/buxiu_nai_noobai-000008.safetensors",
+      "bytes": 170545116,
+      "inode": 512876210,
+      "mtime_ns": 1794036829599516155
+    },
+    {
+      "path": "/hy-tmp/char_buxiu_nai/output/buxiu_nai_noobai-000010.safetensors",
+      "bytes": 170545116,
+      "inode": 512876218,
+      "mtime_ns": 1794037079219032947
+    },
+    {
+      "path": "/hy-tmp/char_buxiu_nai/output/buxiu_nai_noobai.safetensors",
+      "bytes": 170545116,
+      "inode": 512876219,
+      "mtime_ns": 1794037328986727478
+    },
+    {
+      "path": "/hy-tmp/char_miruike_gpt/output/SHA256SUMS.txt",
+      "bytes": 617,
+      "inode": 2743699165,
+      "mtime_ns": 1793885379961815202
+    },
+    {
+      "path": "/hy-tmp/char_miruike_gpt/output/miruike_gpt_noobai-000002.safetensors",
+      "bytes": 170544204,
+      "inode": 2745404684,
+      "mtime_ns": 1793884017770329574
+    },
+    {
+      "path": "/hy-tmp/char_miruike_gpt/output/miruike_gpt_noobai-000004.safetensors",
+      "bytes": 170544204,
+      "inode": 2745404709,
+      "mtime_ns": 1793884268979932599
+    },
+    {
+      "path": "/hy-tmp/char_miruike_gpt/output/miruike_gpt_noobai-000006.safetensors",
+      "bytes": 170544204,
+      "inode": 2745486206,
+      "mtime_ns": 1793884519877148776
+    },
+    {
+      "path": "/hy-tmp/char_miruike_gpt/output/miruike_gpt_noobai-000008.safetensors",
+      "bytes": 170544204,
+      "inode": 2745486207,
+      "mtime_ns": 1793884769698920612
+    },
+    {
+      "path": "/hy-tmp/char_miruike_gpt/output/miruike_gpt_noobai-000010.safetensors",
+      "bytes": 170544204,
+      "inode": 2743723225,
+      "mtime_ns": 1793885019738611884
+    },
+    {
+      "path": "/hy-tmp/char_miruike_gpt/output/miruike_gpt_noobai.safetensors",
+      "bytes": 170544204,
+      "inode": 2743723226,
+      "mtime_ns": 1793885269949024527
+    },
+    {
+      "path": "/hy-tmp/char_mixixi_gpt/output/SHA256SUMS.txt",
+      "bytes": 611,
+      "inode": 8639217661,
+      "mtime_ns": 1793890380167020657
+    },
+    {
+      "path": "/hy-tmp/char_mixixi_gpt/output/mixixi_gpt_noobai-000002.safetensors",
+      "bytes": 170543628,
+      "inode": 8639217655,
+      "mtime_ns": 1793888924216374747
+    },
+    {
+      "path": "/hy-tmp/char_mixixi_gpt/output/mixixi_gpt_noobai-000004.safetensors",
+      "bytes": 170543620,
+      "inode": 8639217656,
+      "mtime_ns": 1793889210417092716
+    },
+    {
+      "path": "/hy-tmp/char_mixixi_gpt/output/mixixi_gpt_noobai-000006.safetensors",
+      "bytes": 170543628,
+      "inode": 8639217658,
+      "mtime_ns": 1793889497278894252
+    },
+    {
+      "path": "/hy-tmp/char_mixixi_gpt/output/mixixi_gpt_noobai-000008.safetensors",
+      "bytes": 170543628,
+      "inode": 8639217659,
+      "mtime_ns": 1793889783649321906
+    },
+    {
+      "path": "/hy-tmp/char_mixixi_gpt/output/mixixi_gpt_noobai-000010.safetensors",
+      "bytes": 170543628,
+      "inode": 8639217662,
+      "mtime_ns": 1793890068464110626
+    },
+    {
+      "path": "/hy-tmp/char_mixixi_gpt/output/mixixi_gpt_noobai.safetensors",
+      "bytes": 170543628,
+      "inode": 8639217660,
+      "mtime_ns": 1793890353305979793
+    },
+    {
+      "path": "/hy-tmp/char_mixixi_mix/output/SHA256SUMS.txt",
+      "bytes": 611,
+      "inode": 11865720147,
+      "mtime_ns": 1794056222407076038
+    },
+    {
+      "path": "/hy-tmp/char_mixixi_mix/output/mixixi_mix_noobai-000002.safetensors",
+      "bytes": 170545676,
+      "inode": 11865720139,
+      "mtime_ns": 1794054997054238342
+    },
+    {
+      "path": "/hy-tmp/char_mixixi_mix/output/mixixi_mix_noobai-000004.safetensors",
+      "bytes": 170545676,
+      "inode": 11865720140,
+      "mtime_ns": 1794055231630164055
+    },
+    {
+      "path": "/hy-tmp/char_mixixi_mix/output/mixixi_mix_noobai-000006.safetensors",
+      "bytes": 170545676,
+      "inode": 11865720141,
+      "mtime_ns": 1794055465694253230
+    },
+    {
+      "path": "/hy-tmp/char_mixixi_mix/output/mixixi_mix_noobai-000008.safetensors",
+      "bytes": 170545676,
+      "inode": 11865720145,
+      "mtime_ns": 1794055700190446014
+    },
+    {
+      "path": "/hy-tmp/char_mixixi_mix/output/mixixi_mix_noobai-000010.safetensors",
+      "bytes": 170545676,
+      "inode": 11865720136,
+      "mtime_ns": 1794055934262703774
+    },
+    {
+      "path": "/hy-tmp/char_mixixi_mix/output/mixixi_mix_noobai.safetensors",
+      "bytes": 170545676,
+      "inode": 11865720146,
+      "mtime_ns": 1794056168339002827
+    },
+    {
+      "path": "/hy-tmp/char_mixixi_nai/output/SHA256SUMS.txt",
+      "bytes": 611,
+      "inode": 1419992992,
+      "mtime_ns": 1794053579000149486
+    },
+    {
+      "path": "/hy-tmp/char_mixixi_nai/output/mixixi_nai_noobai-000002.safetensors",
+      "bytes": 170545100,
+      "inode": 1419992987,
+      "mtime_ns": 1794052341680596744
+    },
+    {
+      "path": "/hy-tmp/char_mixixi_nai/output/mixixi_nai_noobai-000004.safetensors",
+      "bytes": 170545100,
+      "inode": 1419720960,
+      "mtime_ns": 1794052586523584806
+    },
+    {
+      "path": "/hy-tmp/char_mixixi_nai/output/mixixi_nai_noobai-000006.safetensors",
+      "bytes": 170545100,
+      "inode": 1419992988,
+      "mtime_ns": 1794052831015240700
+    },
+    {
+      "path": "/hy-tmp/char_mixixi_nai/output/mixixi_nai_noobai-000008.safetensors",
+      "bytes": 170545100,
+      "inode": 1419992989,
+      "mtime_ns": 1794053076055309856
+    },
+    {
+      "path": "/hy-tmp/char_mixixi_nai/output/mixixi_nai_noobai-000010.safetensors",
+      "bytes": 170545100,
+      "inode": 1419992990,
+      "mtime_ns": 1794053320427634701
+    },
+    {
+      "path": "/hy-tmp/char_mixixi_nai/output/mixixi_nai_noobai.safetensors",
+      "bytes": 170545100,
+      "inode": 1419992991,
+      "mtime_ns": 1794053565184118788
+    },
+    {
+      "path": "/hy-tmp/char_moyan_gpt/output/SHA256SUMS.txt",
+      "bytes": 605,
+      "inode": 11831610760,
+      "mtime_ns": 1793877561196062379
+    },
+    {
+      "path": "/hy-tmp/char_moyan_gpt/output/moyan_gpt_noobai-000002.safetensors",
+      "bytes": 170543812,
+      "inode": 11919061423,
+      "mtime_ns": 1793875991360419829
+    },
+    {
+      "path": "/hy-tmp/char_moyan_gpt/output/moyan_gpt_noobai-000004.safetensors",
+      "bytes": 170543812,
+      "inode": 11831610755,
+      "mtime_ns": 1793876283838756836
+    },
+    {
+      "path": "/hy-tmp/char_moyan_gpt/output/moyan_gpt_noobai-000006.safetensors",
+      "bytes": 170543812,
+      "inode": 11831610758,
+      "mtime_ns": 1793876575435412360
+    },
+    {
+      "path": "/hy-tmp/char_moyan_gpt/output/moyan_gpt_noobai-000008.safetensors",
+      "bytes": 170543812,
+      "inode": 11831610759,
+      "mtime_ns": 1793876866912884575
+    },
+    {
+      "path": "/hy-tmp/char_moyan_gpt/output/moyan_gpt_noobai-000010.safetensors",
+      "bytes": 170543812,
+      "inode": 11831610763,
+      "mtime_ns": 1793877159004565246
+    },
+    {
+      "path": "/hy-tmp/char_moyan_gpt/output/moyan_gpt_noobai.safetensors",
+      "bytes": 170543812,
+      "inode": 11831610764,
+      "mtime_ns": 1793877451723230723
+    },
+    {
+      "path": "/hy-tmp/char_moyan_gpt_aoqi_1107/output/SHA256SUMS.txt",
+      "bytes": 629,
+      "inode": 9663973624,
+      "mtime_ns": 1794061024736070889
+    },
+    {
+      "path": "/hy-tmp/char_moyan_gpt_aoqi_1107/output/aoqimoyan_gpt_noobai-000002.safetensors",
+      "bytes": 170543836,
+      "inode": 9663973592,
+      "mtime_ns": 1794059552426370607
+    },
+    {
+      "path": "/hy-tmp/char_moyan_gpt_aoqi_1107/output/aoqimoyan_gpt_noobai-000004.safetensors",
+      "bytes": 170543836,
+      "inode": 9663973593,
+      "mtime_ns": 1794059845705940624
+    },
+    {
+      "path": "/hy-tmp/char_moyan_gpt_aoqi_1107/output/aoqimoyan_gpt_noobai-000006.safetensors",
+      "bytes": 170543836,
+      "inode": 9663973627,
+      "mtime_ns": 1794060139205580228
+    },
+    {
+      "path": "/hy-tmp/char_moyan_gpt_aoqi_1107/output/aoqimoyan_gpt_noobai-000008.safetensors",
+      "bytes": 170543836,
+      "inode": 9663973625,
+      "mtime_ns": 1794060431662044825
+    },
+    {
+      "path": "/hy-tmp/char_moyan_gpt_aoqi_1107/output/aoqimoyan_gpt_noobai-000010.safetensors",
+      "bytes": 170543836,
+      "inode": 9663973626,
+      "mtime_ns": 1794060724123332725
+    },
+    {
+      "path": "/hy-tmp/char_moyan_gpt_aoqi_1107/output/aoqimoyan_gpt_noobai.safetensors",
+      "bytes": 170543836,
+      "inode": 9663973623,
+      "mtime_ns": 1794061017304057438
+    },
+    {
+      "path": "/hy-tmp/char_moyan_mix/output/SHA256SUMS.txt",
+      "bytes": 605,
+      "inode": 4299295106,
+      "mtime_ns": 1794046824788536417
+    },
+    {
+      "path": "/hy-tmp/char_moyan_mix/output/moyan_mix_noobai-000002.safetensors",
+      "bytes": 170545348,
+      "inode": 4301121456,
+      "mtime_ns": 1794045488283430094
+    },
+    {
+      "path": "/hy-tmp/char_moyan_mix/output/moyan_mix_noobai-000004.safetensors",
+      "bytes": 170545348,
+      "inode": 4301196781,
+      "mtime_ns": 1794045730963593307
+    },
+    {
+      "path": "/hy-tmp/char_moyan_mix/output/moyan_mix_noobai-000006.safetensors",
+      "bytes": 170545348,
+      "inode": 4299364337,
+      "mtime_ns": 1794045973339731774
+    },
+    {
+      "path": "/hy-tmp/char_moyan_mix/output/moyan_mix_noobai-000008.safetensors",
+      "bytes": 170545348,
+      "inode": 4299364340,
+      "mtime_ns": 1794046216037456022
+    },
+    {
+      "path": "/hy-tmp/char_moyan_mix/output/moyan_mix_noobai-000010.safetensors",
+      "bytes": 170545348,
+      "inode": 4299362292,
+      "mtime_ns": 1794046458416912779
+    },
+    {
+      "path": "/hy-tmp/char_moyan_mix/output/moyan_mix_noobai.safetensors",
+      "bytes": 170545348,
+      "inode": 4299327958,
+      "mtime_ns": 1794046700477780637
+    },
+    {
+      "path": "/hy-tmp/char_moyan_nai/output/SHA256SUMS.txt",
+      "bytes": 605,
+      "inode": 1414353165,
+      "mtime_ns": 1794043806275499760
+    },
+    {
+      "path": "/hy-tmp/char_moyan_nai/output/moyan_nai_noobai-000002.safetensors",
+      "bytes": 170545052,
+      "inode": 1414353155,
+      "mtime_ns": 1794042158153144400
+    },
+    {
+      "path": "/hy-tmp/char_moyan_nai/output/moyan_nai_noobai-000004.safetensors",
+      "bytes": 170545052,
+      "inode": 1414353164,
+      "mtime_ns": 1794042472804576212
+    },
+    {
+      "path": "/hy-tmp/char_moyan_nai/output/moyan_nai_noobai-000006.safetensors",
+      "bytes": 170545052,
+      "inode": 1414353156,
+      "mtime_ns": 1794042786856202933
+    },
+    {
+      "path": "/hy-tmp/char_moyan_nai/output/moyan_nai_noobai-000008.safetensors",
+      "bytes": 170545052,
+      "inode": 1414353168,
+      "mtime_ns": 1794043101303934110
+    },
+    {
+      "path": "/hy-tmp/char_moyan_nai/output/moyan_nai_noobai-000010.safetensors",
+      "bytes": 170545060,
+      "inode": 1414353163,
+      "mtime_ns": 1794043415691722117
+    },
+    {
+      "path": "/hy-tmp/char_moyan_nai/output/moyan_nai_noobai.safetensors",
+      "bytes": 170545060,
+      "inode": 1414353167,
+      "mtime_ns": 1794043730299540709
+    },
+    {
+      "path": "/hy-tmp/char_nuoya_gpt_aoqi_1107/output/aoqinuoya_gpt_noobai-000002.safetensors",
+      "bytes": 170545156,
+      "inode": 3068299544,
+      "mtime_ns": 1794128512800062842
+    },
+    {
+      "path": "/hy-tmp/char_nuoya_gpt_aoqi_1107/output/aoqinuoya_gpt_noobai-000004.safetensors",
+      "bytes": 170545156,
+      "inode": 3068299562,
+      "mtime_ns": 1794128760520479644
+    },
+    {
+      "path": "/hy-tmp/char_nuoya_gpt_aoqi_1107/output/aoqinuoya_gpt_noobai-000006.safetensors",
+      "bytes": 170545156,
+      "inode": 3057796730,
+      "mtime_ns": 1794129008204882110
+    },
+    {
+      "path": "/hy-tmp/char_nuoya_gpt_aoqi_1107/output/aoqinuoya_gpt_noobai-000008.safetensors",
+      "bytes": 170545156,
+      "inode": 3068299568,
+      "mtime_ns": 1794129255357274946
+    },
+    {
+      "path": "/hy-tmp/char_nuoya_gpt_aoqi_1107/output/aoqinuoya_gpt_noobai-000010.safetensors",
+      "bytes": 170545156,
+      "inode": 3070095930,
+      "mtime_ns": 1794129503457663857
+    },
+    {
+      "path": "/hy-tmp/char_xiwang_gpt/output/SHA256SUMS.txt",
+      "bytes": 659,
+      "inode": 3755548088,
+      "mtime_ns": 1793882951964368035
+    },
+    {
+      "path": "/hy-tmp/char_xiwang_gpt/output/xiwang-goddess_gpt_noobai-000002.safetensors",
+      "bytes": 170544252,
+      "inode": 3755548066,
+      "mtime_ns": 1793881577364972786
+    },
+    {
+      "path": "/hy-tmp/char_xiwang_gpt/output/xiwang-goddess_gpt_noobai-000004.safetensors",
+      "bytes": 170544252,
+      "inode": 3755548052,
+      "mtime_ns": 1793881831873196271
+    },
+    {
+      "path": "/hy-tmp/char_xiwang_gpt/output/xiwang-goddess_gpt_noobai-000006.safetensors",
+      "bytes": 170544252,
+      "inode": 3755548064,
+      "mtime_ns": 1793882085913384350
+    },
+    {
+      "path": "/hy-tmp/char_xiwang_gpt/output/xiwang-goddess_gpt_noobai-000008.safetensors",
+      "bytes": 170544252,
+      "inode": 3755548072,
+      "mtime_ns": 1793882339966601940
+    },
+    {
+      "path": "/hy-tmp/char_xiwang_gpt/output/xiwang-goddess_gpt_noobai-000010.safetensors",
+      "bytes": 170544252,
+      "inode": 3755548073,
+      "mtime_ns": 1793882593119134912
+    },
+    {
+      "path": "/hy-tmp/char_xiwang_gpt/output/xiwang-goddess_gpt_noobai.safetensors",
+      "bytes": 170544252,
+      "inode": 3755548083,
+      "mtime_ns": 1793882846786024226
+    },
+    {
+      "path": "/hy-tmp/char_xiwang_mix/output/SHA256SUMS.txt",
+      "bytes": 659,
+      "inode": 9710157352,
+      "mtime_ns": 1793880524434858146
+    },
+    {
+      "path": "/hy-tmp/char_xiwang_mix/output/xiwang-goddess_mix_noobai-000002.safetensors",
+      "bytes": 170544452,
+      "inode": 9668293496,
+      "mtime_ns": 1793878979506305801
+    },
+    {
+      "path": "/hy-tmp/char_xiwang_mix/output/xiwang-goddess_mix_noobai-000004.safetensors",
+      "bytes": 170544452,
+      "inode": 9710157330,
+      "mtime_ns": 1793879264557252862
+    },
+    {
+      "path": "/hy-tmp/char_xiwang_mix/output/xiwang-goddess_mix_noobai-000006.safetensors",
+      "bytes": 170544452,
+      "inode": 9710157334,
+      "mtime_ns": 1793879549704578991
+    },
+    {
+      "path": "/hy-tmp/char_xiwang_mix/output/xiwang-goddess_mix_noobai-000008.safetensors",
+      "bytes": 170544452,
+      "inode": 9710157345,
+      "mtime_ns": 1793879834556122857
+    },
+    {
+      "path": "/hy-tmp/char_xiwang_mix/output/xiwang-goddess_mix_noobai-000010.safetensors",
+      "bytes": 170544460,
+      "inode": 9710157346,
+      "mtime_ns": 1793880120328492837
+    },
+    {
+      "path": "/hy-tmp/char_xiwang_mix/output/xiwang-goddess_mix_noobai.safetensors",
+      "bytes": 170544460,
+      "inode": 9710157349,
+      "mtime_ns": 1793880404850324103
+    },
+    {
+      "path": "/hy-tmp/char_zhengli_mix/output/SHA256SUMS.txt",
+      "bytes": 617,
+      "inode": 9787581301,
+      "mtime_ns": 1794035081811081290
+    },
+    {
+      "path": "/hy-tmp/char_zhengli_mix/output/zhengli_mix_noobai-000002.safetensors",
+      "bytes": 170545236,
+      "inode": 9787581307,
+      "mtime_ns": 1794033368372574997
+    },
+    {
+      "path": "/hy-tmp/char_zhengli_mix/output/zhengli_mix_noobai-000004.safetensors",
+      "bytes": 170545236,
+      "inode": 9787558912,
+      "mtime_ns": 1794033696922010888
+    },
+    {
+      "path": "/hy-tmp/char_zhengli_mix/output/zhengli_mix_noobai-000006.safetensors",
+      "bytes": 170545236,
+      "inode": 9787581296,
+      "mtime_ns": 1794034025115676446
+    },
+    {
+      "path": "/hy-tmp/char_zhengli_mix/output/zhengli_mix_noobai-000008.safetensors",
+      "bytes": 170545236,
+      "inode": 9787581297,
+      "mtime_ns": 1794034353866784311
+    },
+    {
+      "path": "/hy-tmp/char_zhengli_mix/output/zhengli_mix_noobai-000010.safetensors",
+      "bytes": 170545236,
+      "inode": 9787581299,
+      "mtime_ns": 1794034682582677224
+    },
+    {
+      "path": "/hy-tmp/char_zhengli_mix/output/zhengli_mix_noobai.safetensors",
+      "bytes": 170545236,
+      "inode": 9787581300,
+      "mtime_ns": 1794035010538981897
+    },
+    {
+      "path": "/hy-tmp/char_zhengli_nai/output/SHA256SUMS.txt",
+      "bytes": 617,
+      "inode": 4299144414,
+      "mtime_ns": 1794031359885287440
+    },
+    {
+      "path": "/hy-tmp/char_zhengli_nai/output/zhengli_nai_noobai-000002.safetensors",
+      "bytes": 170545204,
+      "inode": 4299143761,
+      "mtime_ns": 1794030120506233271
+    },
+    {
+      "path": "/hy-tmp/char_zhengli_nai/output/zhengli_nai_noobai-000004.safetensors",
+      "bytes": 170545204,
+      "inode": 4298719208,
+      "mtime_ns": 1794030364701635989
+    },
+    {
+      "path": "/hy-tmp/char_zhengli_nai/output/zhengli_nai_noobai-000006.safetensors",
+      "bytes": 170545204,
+      "inode": 4298719209,
+      "mtime_ns": 1794030611057332999
+    },
+    {
+      "path": "/hy-tmp/char_zhengli_nai/output/zhengli_nai_noobai-000008.safetensors",
+      "bytes": 170545204,
+      "inode": 4298719221,
+      "mtime_ns": 1794030857849216101
+    },
+    {
+      "path": "/hy-tmp/char_zhengli_nai/output/zhengli_nai_noobai-000010.safetensors",
+      "bytes": 170545204,
+      "inode": 4299144410,
+      "mtime_ns": 1794031102125214133
+    },
+    {
+      "path": "/hy-tmp/char_zhengli_nai/output/zhengli_nai_noobai.safetensors",
+      "bytes": 170545204,
+      "inode": 4299144413,
+      "mtime_ns": 1794031345473281874
+    },
+    {
+      "path": "/hy-tmp/char_zhixu_gpt/output/SHA256SUMS.txt",
+      "bytes": 605,
+      "inode": 3755533722,
+      "mtime_ns": 1793875003593416708
+    },
+    {
+      "path": "/hy-tmp/char_zhixu_gpt/output/zhixu_gpt_noobai-000002.safetensors",
+      "bytes": 170544068,
+      "inode": 3774765042,
+      "mtime_ns": 1793873532441336979
+    },
+    {
+      "path": "/hy-tmp/char_zhixu_gpt/output/zhixu_gpt_noobai-000004.safetensors",
+      "bytes": 170544068,
+      "inode": 3774765043,
+      "mtime_ns": 1793873816233094302
+    },
+    {
+      "path": "/hy-tmp/char_zhixu_gpt/output/zhixu_gpt_noobai-000006.safetensors",
+      "bytes": 170544068,
+      "inode": 3774913444,
+      "mtime_ns": 1793874098410930895
+    },
+    {
+      "path": "/hy-tmp/char_zhixu_gpt/output/zhixu_gpt_noobai-000008.safetensors",
+      "bytes": 170544068,
+      "inode": 3774765047,
+      "mtime_ns": 1793874380844705959
+    },
+    {
+      "path": "/hy-tmp/char_zhixu_gpt/output/zhixu_gpt_noobai-000010.safetensors",
+      "bytes": 170544068,
+      "inode": 3755533712,
+      "mtime_ns": 1793874663879026730
+    },
+    {
+      "path": "/hy-tmp/char_zhixu_gpt/output/zhixu_gpt_noobai.safetensors",
+      "bytes": 170544068,
+      "inode": 3755533720,
+      "mtime_ns": 1793874945841669241
+    },
+    {
+      "path": "/hy-tmp/char_zhixu_gpt_v2/output/SHA256SUMS.txt",
+      "bytes": 623,
+      "inode": 1580618153,
+      "mtime_ns": 1793893552432852124
+    },
+    {
+      "path": "/hy-tmp/char_zhixu_gpt_v2/output/zhixu_gpt_v2_noobai-000002.safetensors",
+      "bytes": 170544060,
+      "inode": 1580618115,
+      "mtime_ns": 1793891985428468913
+    },
+    {
+      "path": "/hy-tmp/char_zhixu_gpt_v2/output/zhixu_gpt_v2_noobai-000004.safetensors",
+      "bytes": 170544060,
+      "inode": 1580618117,
+      "mtime_ns": 1793892277825580585
+    },
+    {
+      "path": "/hy-tmp/char_zhixu_gpt_v2/output/zhixu_gpt_v2_noobai-000006.safetensors",
+      "bytes": 170544060,
+      "inode": 1580618118,
+      "mtime_ns": 1793892569807551574
+    },
+    {
+      "path": "/hy-tmp/char_zhixu_gpt_v2/output/zhixu_gpt_v2_noobai-000008.safetensors",
+      "bytes": 170544060,
+      "inode": 1580618142,
+      "mtime_ns": 1793892862205968080
+    },
+    {
+      "path": "/hy-tmp/char_zhixu_gpt_v2/output/zhixu_gpt_v2_noobai-000010.safetensors",
+      "bytes": 170544060,
+      "inode": 1580618143,
+      "mtime_ns": 1793893155169198957
+    },
+    {
+      "path": "/hy-tmp/char_zhixu_gpt_v2/output/zhixu_gpt_v2_noobai.safetensors",
+      "bytes": 170544060,
+      "inode": 1580618152,
+      "mtime_ns": 1793893447636891734
+    },
+    {
+      "path": "/hy-tmp/char_zhixu_mix/output/SHA256SUMS.txt",
+      "bytes": 605,
+      "inode": 6445039453,
+      "mtime_ns": 1794029149196247954
+    },
+    {
+      "path": "/hy-tmp/char_zhixu_mix/output/zhixu_mix_noobai-000002.safetensors",
+      "bytes": 170545308,
+      "inode": 6446752519,
+      "mtime_ns": 1794027920713721860
+    },
+    {
+      "path": "/hy-tmp/char_zhixu_mix/output/zhixu_mix_noobai-000004.safetensors",
+      "bytes": 170545308,
+      "inode": 6446752520,
+      "mtime_ns": 1794028154267796008
+    },
+    {
+      "path": "/hy-tmp/char_zhixu_mix/output/zhixu_mix_noobai-000006.safetensors",
+      "bytes": 170545308,
+      "inode": 6446752521,
+      "mtime_ns": 1794028387225288616
+    },
+    {
+      "path": "/hy-tmp/char_zhixu_mix/output/zhixu_mix_noobai-000008.safetensors",
+      "bytes": 170545308,
+      "inode": 6445040036,
+      "mtime_ns": 1794028621306421213
+    },
+    {
+      "path": "/hy-tmp/char_zhixu_mix/output/zhixu_mix_noobai-000010.safetensors",
+      "bytes": 170545316,
+      "inode": 6445039633,
+      "mtime_ns": 1794028854455317451
+    },
+    {
+      "path": "/hy-tmp/char_zhixu_mix/output/zhixu_mix_noobai.safetensors",
+      "bytes": 170545316,
+      "inode": 6445039635,
+      "mtime_ns": 1794029087692067367
+    },
+    {
+      "path": "/hy-tmp/char_zhixu_nai/output/SHA256SUMS.txt",
+      "bytes": 605,
+      "inode": 9663679140,
+      "mtime_ns": 1794026232493338365
+    },
+    {
+      "path": "/hy-tmp/char_zhixu_nai/output/zhixu_nai_noobai-000002.safetensors",
+      "bytes": 170544788,
+      "inode": 9663679133,
+      "mtime_ns": 1794024756128736567
+    },
+    {
+      "path": "/hy-tmp/char_zhixu_nai/output/zhixu_nai_noobai-000004.safetensors",
+      "bytes": 170544788,
+      "inode": 9663679134,
+      "mtime_ns": 1794025026237143353
+    },
+    {
+      "path": "/hy-tmp/char_zhixu_nai/output/zhixu_nai_noobai-000006.safetensors",
+      "bytes": 170544788,
+      "inode": 9663679135,
+      "mtime_ns": 1794025296208808927
+    },
+    {
+      "path": "/hy-tmp/char_zhixu_nai/output/zhixu_nai_noobai-000008.safetensors",
+      "bytes": 170544788,
+      "inode": 9663679136,
+      "mtime_ns": 1794025565491073480
+    },
+    {
+      "path": "/hy-tmp/char_zhixu_nai/output/zhixu_nai_noobai-000010.safetensors",
+      "bytes": 170544788,
+      "inode": 9663679138,
+      "mtime_ns": 1794025834216640246
+    },
+    {
+      "path": "/hy-tmp/char_zhixu_nai/output/zhixu_nai_noobai.safetensors",
+      "bytes": 170544788,
+      "inode": 9663679139,
+      "mtime_ns": 1794026102980102298
+    },
+    {
+      "path": "/hy-tmp/style_shipo_nf_lo_se_st_wurenwu_1107/output/SHA256SUMS.txt",
+      "bytes": 605,
+      "inode": 4299293938,
+      "mtime_ns": 1794052013421579516
+    },
+    {
+      "path": "/hy-tmp/style_shipo_nf_lo_se_st_wurenwu_1107/output/shipo_mix_noobai-000002.safetensors",
+      "bytes": 170562028,
+      "inode": 4299154737,
+      "mtime_ns": 1794050103067545018
+    },
+    {
+      "path": "/hy-tmp/style_shipo_nf_lo_se_st_wurenwu_1107/output/shipo_mix_noobai-000004.safetensors",
+      "bytes": 170562028,
+      "inode": 4299154738,
+      "mtime_ns": 1794050461678149709
+    },
+    {
+      "path": "/hy-tmp/style_shipo_nf_lo_se_st_wurenwu_1107/output/shipo_mix_noobai-000006.safetensors",
+      "bytes": 170562028,
+      "inode": 4299154740,
+      "mtime_ns": 1794050820694255465
+    },
+    {
+      "path": "/hy-tmp/style_shipo_nf_lo_se_st_wurenwu_1107/output/shipo_mix_noobai-000008.safetensors",
+      "bytes": 170562028,
+      "inode": 4299155722,
+      "mtime_ns": 1794051178359114276
+    },
+    {
+      "path": "/hy-tmp/style_shipo_nf_lo_se_st_wurenwu_1107/output/shipo_mix_noobai-000010.safetensors",
+      "bytes": 170562028,
+      "inode": 4299154742,
+      "mtime_ns": 1794051536138380190
+    },
+    {
+      "path": "/hy-tmp/style_shipo_nf_lo_se_st_wurenwu_1107/output/shipo_mix_noobai.safetensors",
+      "bytes": 170562028,
+      "inode": 4299155728,
+      "mtime_ns": 1794051893752852672
+    },
+    {
+      "path": "/hy-tmp/style_shipo_nf_lo_se_st_wurenwu_quality_1107/output/SHA256SUMS.txt",
+      "bytes": 653,
+      "inode": 520738549,
+      "mtime_ns": 1794058511469768785
+    },
+    {
+      "path": "/hy-tmp/style_shipo_nf_lo_se_st_wurenwu_quality_1107/output/shipo_mix_quality_noobai-000002.safetensors",
+      "bytes": 170562140,
+      "inode": 520740593,
+      "mtime_ns": 1794056717060781030
+    },
+    {
+      "path": "/hy-tmp/style_shipo_nf_lo_se_st_wurenwu_quality_1107/output/shipo_mix_quality_noobai-000004.safetensors",
+      "bytes": 170562140,
+      "inode": 520740594,
+      "mtime_ns": 1794057074896082140
+    },
+    {
+      "path": "/hy-tmp/style_shipo_nf_lo_se_st_wurenwu_quality_1107/output/shipo_mix_quality_noobai-000006.safetensors",
+      "bytes": 170562140,
+      "inode": 520740595,
+      "mtime_ns": 1794057432331763808
+    },
+    {
+      "path": "/hy-tmp/style_shipo_nf_lo_se_st_wurenwu_quality_1107/output/shipo_mix_quality_noobai-000008.safetensors",
+      "bytes": 170562140,
+      "inode": 520740596,
+      "mtime_ns": 1794057789143634262
+    },
+    {
+      "path": "/hy-tmp/style_shipo_nf_lo_se_st_wurenwu_quality_1107/output/shipo_mix_quality_noobai-000010.safetensors",
+      "bytes": 170562140,
+      "inode": 520740597,
+      "mtime_ns": 1794058146535598273
+    },
+    {
+      "path": "/hy-tmp/style_shipo_nf_lo_se_st_wurenwu_quality_1107/output/shipo_mix_quality_noobai.safetensors",
+      "bytes": 170562148,
+      "inode": 520735809,
+      "mtime_ns": 1794058503829818055
+    },
+    {
+      "path": "/hy-tmp/style_wushipo_wurenwu/output/SHA256SUMS.txt",
+      "bytes": 593,
+      "inode": 9713210635,
+      "mtime_ns": 1793888002669976798
+    },
+    {
+      "path": "/hy-tmp/style_wushipo_wurenwu/output/wushipo_noobai-000002.safetensors",
+      "bytes": 170552636,
+      "inode": 9713182844,
+      "mtime_ns": 1793886569040148434
+    },
+    {
+      "path": "/hy-tmp/style_wushipo_wurenwu/output/wushipo_noobai-000004.safetensors",
+      "bytes": 170552636,
+      "inode": 9713182845,
+      "mtime_ns": 1793886842869683292
+    },
+    {
+      "path": "/hy-tmp/style_wushipo_wurenwu/output/wushipo_noobai-000006.safetensors",
+      "bytes": 170552636,
+      "inode": 9713182846,
+      "mtime_ns": 1793887117210912096
+    },
+    {
+      "path": "/hy-tmp/style_wushipo_wurenwu/output/wushipo_noobai-000008.safetensors",
+      "bytes": 170552636,
+      "inode": 9713182847,
+      "mtime_ns": 1793887391279959001
+    },
+    {
+      "path": "/hy-tmp/style_wushipo_wurenwu/output/wushipo_noobai-000010.safetensors",
+      "bytes": 170552636,
+      "inode": 9713409805,
+      "mtime_ns": 1793887665888902028
+    },
+    {
+      "path": "/hy-tmp/style_wushipo_wurenwu/output/wushipo_noobai.safetensors",
+      "bytes": 170552636,
+      "inode": 9713210630,
+      "mtime_ns": 1793887941049784766
+    }
+  ],
+  "weights": 131,
+  "total_bytes": 22341625805,
+  "free_before": 16559788032
+}
