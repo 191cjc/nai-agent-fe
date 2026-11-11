@@ -263,9 +263,13 @@ review only (operator restriction); no paid probes.
   GPT runs accept only GPT sizes. Image-to-image character runs reject item sizes
   (422): the source image is sent at the run size.
 - Web 「按构图自动选比例」 (default on, off for img2img): `itemShape()` in
-  `dataset-run.ts` — `wide shot`/`scenery`/full-body groups → landscape, `full body`
-  /`cowboy shot` → portrait, else square; NovelAI 832×1216 / 1024×1024 / 1216×832,
-  GPT 1024×1536 / 1024×1024 / 1536×1024. Style library default: 114 / 127 / 57.
+  `dataset-run.ts` — `lying`/`reclining`/`on back`/`on side`/`on stomach`,
+  `wide shot`/`scenery`/full-body groups → landscape, then `full body`/`cowboy shot`
+  → portrait, else square; NovelAI 832×1216 / 1024×1024 / 1216×832,
+  GPT 1024×1536 / 1024×1024 / 1536×1024. Pose tags are exact comma-separated,
+  case-insensitive matches in the item's scene or per-person prompts, shared by
+  style and character runs. Lying poses take priority even with `full body` or
+  `cowboy shot`; `sleeping` alone does not imply a lying pose.
 - `POST /api/generations/{job_id}/rerun` accepts optional `prompt` (1–1000) and
   `style_prompt` (1–3000). An edited prompt replaces `experiment.item.prompt` (the
   caption) and the sent prompt; character groups keep `<traits>, ` and swap only the

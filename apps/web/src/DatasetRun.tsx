@@ -242,7 +242,7 @@ export const DatasetRunConfig = observer(({ generation, api, hidden }: { generat
     </>}
     {!snapshot && <label className="dataset-shape-toggle">
       <input type="checkbox" checked={shapes} disabled={!shapeAllowed} onChange={event => setAutoShape(event.target.checked)} />
-      <span>按构图自动选比例：全身、七分身用竖图，远景、风景和多人全身用横图，其余用方图（{gptMode ? 'GPT 1024×1536 / 1024×1024 / 1536×1024' : '832×1216 / 1024×1024 / 1216×832'}）。{shapeAllowed ? '关闭后整套使用生成设置的尺寸。' : '图生图会按整套尺寸发送参考图，固定使用生成设置的尺寸。'}</span>
+      <span>按构图自动选比例：躺姿（仰躺、侧躺、趴卧、斜倚）、远景、风景和多人全身优先用横图，其他全身、七分身用竖图，其余用方图（{gptMode ? 'GPT 1024×1536 / 1024×1024 / 1536×1024' : '832×1216 / 1024×1024 / 1216×832'}）。{shapeAllowed ? '关闭后整套使用生成设置的尺寸。' : '图生图会按整套尺寸发送参考图，固定使用生成设置的尺寸。'}</span>
     </label>}
     {!snapshot && error && <p className="alert" role="alert">{error}</p>}
     {!snapshot && <div className="experiment-preview" aria-live="polite" aria-atomic="true">

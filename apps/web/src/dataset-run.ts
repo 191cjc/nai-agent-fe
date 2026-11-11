@@ -59,13 +59,15 @@ export const NAI_SHAPE_SIZES: Record<ItemShape, ItemSize> = {
 export const SHAPE_LABELS: Record<ItemShape, string> = { portrait: '竖图', square: '方图', landscape: '横图' }
 
 /**
- * Canvas shape from an item's framing tags: wide shots, scenery and full-body groups are
- * landscape; full-body and cowboy-shot items are portrait; everything else is square.
+ * Canvas shape from an item's framing and pose tags: lying poses, wide shots, scenery
+ * and full-body groups take landscape priority over full-body/cowboy-shot portrait.
+ * Everything else is square.
  */
 export function itemShape(prompt: string, characters: readonly string[] = []): ItemShape {
   const tags = new Set([prompt, ...characters].join(',').split(',').map(tag => tag.trim().toLowerCase()).filter(Boolean))
   const group = ['2girls', '3girls', '2boys', 'multiple girls'].some(tag => tags.has(tag)) || characters.length > 1
-  if (tags.has('wide shot') || tags.has('scenery') || (group && tags.has('full body'))) return 'landscape'
+  const lying = ['lying', 'reclining', 'on back', 'on side', 'on stomach'].some(tag => tags.has(tag))
+  if (lying || tags.has('wide shot') || tags.has('scenery') || (group && tags.has('full body'))) return 'landscape'
   if (tags.has('full body') || tags.has('cowboy shot')) return 'portrait'
   return 'square'
 }
