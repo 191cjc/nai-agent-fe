@@ -455,3 +455,15 @@ def test_basic_template_is_valid_and_clean():
                 assert not any("shoes" in t or "boots" in t or "skirt" in t for t in tags)
             if "no humans" in tags:
                 assert "1girl" not in tags and "detailed eyes" in item.style_edits["remove"]
+
+
+def test_assembly_never_emits_empty_tags_or_stray_commas():
+    recipe = DatasetRecipe.model_validate({"draw_order": ["a", "b"], "partitions": [
+        {"id": "a", "options": [{"id": "x", "tags": " 1girl,, solo , ,", "weight": 1,
+                                 "effects": {"content_add": ["smile, , blush", "smile"],
+                                             "style_add": ["soft, ,light"]}}]},
+        {"id": "b", "options": [{"id": "y", "tags": ",,day，night,", "weight": 1}]},
+    ]})
+    item = sample(recipe, 1, 1).items[0]
+    assert item.prompt == "1girl, solo, smile, blush, day, night"
+    assert item.style_edits == {"add": ["soft", "light"], "remove": []}

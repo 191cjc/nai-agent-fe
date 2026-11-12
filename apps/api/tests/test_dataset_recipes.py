@@ -209,3 +209,23 @@ def test_old_api_style_tolerance_unknown_item_keys_are_ignored() -> None:
     stored = json.loads(json.dumps({**RECIPE_ITEM, "future_field": {"x": 1}}))
     item = DatasetItem.model_validate(stored)
     assert "future_field" not in item.model_dump()
+
+
+def test_experiment_page_returns_frozen_draws_for_review_filters(
+    database: Database,  # noqa: F811
+) -> None:
+    user = owner(database)
+    provider = ScriptedProvider()
+    manager = GenerationManager(database, provider, cache=ResultCache())
+    service = StyleExperimentService(database, manager)
+    manager.start()
+    try:
+        run = service.store.create(user, dataset(items=[RECIPE_ITEM]))
+        assert pump(service, user, run.id).status == "completed"
+        _summary, rows, _next = manager.store.experiment(user, run.id, limit=10, offset=0)
+        item = rows[0].parameters.experiment.item
+        assert item.model_dump(mode="json")["draws"] == RECIPE_ITEM["draws"]
+        assert item.style_edits.add == ["gentle smile"]
+    finally:
+        service.stop()
+        manager.stop()

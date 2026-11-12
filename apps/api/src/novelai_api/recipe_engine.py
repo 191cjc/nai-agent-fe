@@ -47,8 +47,15 @@ def tag_key(tag: str) -> str:
     """Comparison key of one tag: case-, underscore- and whitespace-insensitive."""
     return _SPACES.sub(" ", tag.replace("_", " ")).strip().lower()
 
+_SEPARATORS = re.compile(r"[,，\r\n]+")
+
 def split_tags(text: str) -> list[str]:
-    return [_SPACES.sub(" ", part).strip() for part in re.split(r"[,\r\n]+", text) if part.strip()]
+    """Tags split on ASCII/full-width commas and newlines; blanks dropped."""
+    return [_SPACES.sub(" ", part).strip() for part in _SEPARATORS.split(text) if part.strip()]
+
+def normalize_prompt(text: str) -> str:
+    """Collapse empty tags and stray separators: 'a,, b ,' -> 'a, b'."""
+    return ", ".join(split_tags(text))
 
 class _Model(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -89,6 +96,12 @@ class WeightMod(_Model):
     when: Condition
     factor: float = Field(ge=0, le=1000, allow_inf_nan=False)
 
+def _tag_list(value: list[str]) -> list[str]:
+    tags: list[str] = []
+    for text in value:
+        tags.extend(tag for tag in split_tags(text) if tag not in tags)
+    return tags
+
 class Effects(_Model):
     hide: list[Id] = Field(default_factory=list, max_length=32)
     set: dict[Id, Id] = Field(default_factory=dict)
@@ -102,6 +115,11 @@ class Effects(_Model):
     remove_tags: list[Tag] = Field(default_factory=list, max_length=64)
     style_add: list[Tag] = Field(default_factory=list, max_length=32)
     style_remove: list[Tag] = Field(default_factory=list, max_length=32)
+
+    @field_validator("content_add", "remove_tags", "style_add", "style_remove", mode="after")
+    @classmethod
+    def clean_tags(cls, value: list[str]) -> list[str]:
+        return _tag_list(value)
 
     @field_validator("consume")
     @classmethod
@@ -869,11 +887,12 @@ class Sampler:
         seen: set[str] = set()
         ordered: list[str] = []
         for tags in groups.values():
-            for tag in tags:
-                key = tag_key(tag)
-                if key and key not in seen:
-                    seen.add(key)
-                    ordered.append(tag)
+            for fragment in tags:
+                for tag in split_tags(fragment):
+                    key = tag_key(tag)
+                    if key and key not in seen:
+                        seen.add(key)
+                        ordered.append(tag)
         # Style edits: region-bound tags first, then options and rules (later wins).
         hidden = item.hidden()
         edits: dict[str, tuple[str, str]] = {}
@@ -888,7 +907,7 @@ class Sampler:
             "add": [tag for op, tag in edits.values() if op == "add"],
             "remove": [tag for op, tag in edits.values() if op == "remove"],
         }
-        return ", ".join(ordered), style, region_removed
+        return normalize_prompt(", ".join(ordered)), style, region_removed
 
 def _record(item: _Item, recipe: DatasetRecipe, region_removed: list[str]) -> list[dict]:
     labels = {part.id: part.label or part.id for part in recipe.partitions}

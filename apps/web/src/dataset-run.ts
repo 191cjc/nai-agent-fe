@@ -70,6 +70,11 @@ export function nextCustomId(entries: readonly DatasetEntry[]): string {
   return `custom-${index}`
 }
 
+/** Comma-separated tags with empty entries and stray separators removed. */
+export function tidyPrompt(prompt: string): string {
+  return prompt.split(/[,，\n]/).map(tag => tag.replace(/\s+/g, ' ').trim()).filter(Boolean).join(', ')
+}
+
 export function hasCommentLine(prompt: string): boolean {
   return prompt.split(/\r\n|\r|\n/).some(line => line.replace(/^[ \t]+/, '').startsWith('//'))
 }
@@ -139,7 +144,9 @@ export function datasetItems(entries: readonly DatasetEntry[], styles: readonly 
         if (!compilePromptComments(previewStyle(style, recipe.style_edits)).trim()) throw new Error(`${label}的画风增删会让画风变空。`)
       }
     }
-    if (!characters.length) return { id: entry.id, prompt: entry.prompt, ...canvas, ...recipe }
+    // Recipe items: tidy separators left by hand edits ("a,, b ," -> "a, b") before sending.
+    const prompt = recipe.draws ? tidyPrompt(entry.prompt) : entry.prompt
+    if (!characters.length) return { id: entry.id, prompt, ...canvas, ...recipe }
     if (traits.trim()) throw new Error(`${label}是多人条目，角色训练集不支持，请取消选择。`)
     if (!nativeCharacters) throw new Error(`${label}是多人条目，需要支持多角色提示词的 V4 / V4.5 / V5 模型；请切换模型或取消「多人互动」。`)
     if (characters.length > MAX_ITEM_CHARACTERS) throw new Error(`${label}最多 ${MAX_ITEM_CHARACTERS} 个人物。`)

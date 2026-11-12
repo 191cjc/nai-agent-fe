@@ -470,10 +470,10 @@ export function describeCondition(recipe: Recipe, condition: Condition | null | 
   if (!condition) return ''
   if ('all' in condition) return condition.all.map(child => describeCondition(recipe, child)).join(' 且 ')
   if ('any' in condition) return `(${condition.any.map(child => describeCondition(recipe, child)).join(' 或 ')})`
-  if ('not' in condition) return `非[${describeCondition(recipe, condition.not)}]`
+  if ('not' in condition) return `不满足（${describeCondition(recipe, condition.not)}）`
   if ('chosen' in condition) return `选了 ${optionLabel(recipe, condition.chosen)}`
   if ('partition_drawn' in condition) return `${partitionLabel(recipe, condition.partition_drawn)} 有结果`
-  if ('state' in condition) return `${recipe.states?.[condition.state] || condition.state} ∈ {${condition.in.join(', ')}}`
+  if ('state' in condition) return `${recipe.states?.[condition.state] || condition.state} 是 ${condition.in.join(' 或 ')}`
   if ('visible' in condition) return `${recipe.regions?.find(region => region.id === condition.visible)?.label || condition.visible} 可见`
   if ('tag' in condition) return `内容含 ${condition.tag}`
   return ''
