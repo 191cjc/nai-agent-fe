@@ -16,3 +16,16 @@ Operator requested "可以部署了" (2026-11-12). Work commit `8c3b25b`.
 Rollback: stop API, repoint both symlinks to `20261112T053918Z-0853c1c`. Schema 14 only adds a
 table, so the old API still runs. Recipe draws on newly created runs would be ignored.
 Interactive acceptance remains with the operator.
+
+## Redeploy: editor rework and prompt separator cleanup (2026-11-12)
+
+Operator requested "部署吧". Work commit `bc6762a`.
+
+- API/Web: `20261112T120942Z-bc6762a` (previous `20261112T084616Z-8c3b25b` retained).
+- 0 active jobs/runs before the stop; schema already 14, so no migration and no new backup.
+  PID 1485 → 7811; quick_check ok; failed-job count unchanged (472).
+- Public index.html and all 9 assets match the staged bytes; unauthenticated recipe route → 401.
+- Live OpenAPI differs from the committed snapshot only in the 422 response description
+  ("Unprocessable Content" vs "Unprocessable Entity"): production runs Python 3.14, the
+  snapshot was generated on local 3.12. The previous release had the same difference (the
+  first deployment compared path sets only). Follow-up: move the local toolchain to 3.14.
