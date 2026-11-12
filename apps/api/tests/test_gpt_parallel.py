@@ -157,6 +157,7 @@ def test_schema9_current_group_moves_into_in_flight_table(tmp_path) -> None:
     upgraded.migrate()
     user = owner(upgraded)
     with upgraded.connect(write=True) as connection:
+        connection.execute("DROP TABLE provider_image_links")
         connection.execute("DROP TABLE dataset_recipes")
         connection.execute("DROP TABLE purged_images")
         connection.execute("DROP TABLE caption_overrides")
@@ -170,7 +171,7 @@ def test_schema9_current_group_moves_into_in_flight_table(tmp_path) -> None:
         )
     upgraded.migrate()
     with sqlite3.connect(upgraded.path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 14
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 15
         assert connection.execute(
             "SELECT run_id, job_id, ordinal FROM style_experiment_inflight",
         ).fetchall() == [("r", "job-2", "2")]

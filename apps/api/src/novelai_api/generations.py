@@ -409,6 +409,9 @@ class GenerationRequest(BaseModel):
 class GeneratedImage:
     data: bytes
     mime_type: str
+    # Upstream signed download link for this image, when the provider returns one.
+    # Server-private: never serialized to the browser; expires upstream (local PNG wins).
+    link: str | None = None
 
 
 class ImageProvider(Protocol):
@@ -945,15 +948,37 @@ class JobStore:
             return None
         return json.loads(row["provider_request_json"])
 
-    def finish(self, job_id: str, *, image_count: int = 0, error_code: str | None = None) -> bool:
+    def finish(
+        self, job_id: str, *, image_count: int = 0, error_code: str | None = None,
+        image_links: Sequence[str] | None = None,
+    ) -> bool:
         status = "failed" if error_code is not None else "succeeded"
+        now = int(time.time())
         with self.database.connect(write=True) as connection:
             updated = connection.execute(
                 "UPDATE generation_jobs SET status = ?, error_code = ?, image_count = ?, "
                 "updated_at = ? WHERE id = ? AND status = 'running'",
-                (status, error_code, image_count, int(time.time()), job_id),
+                (status, error_code, image_count, now, job_id),
             )
+            if updated.rowcount and error_code is None and image_links:
+                # Same transaction as the success mark: links exist only for finished jobs.
+                connection.execute(
+                    "INSERT INTO provider_image_links (job_id, links_json, recorded_at) "
+                    "VALUES (?, ?, ?)",
+                    (job_id, json.dumps(list(image_links), separators=(",", ":")), now),
+                )
         return bool(updated.rowcount)
+
+    def image_links(self, user_id: str, job_id: str) -> list[str | None] | None:
+        """Server-side only: the owner's recorded upstream links (None when not recorded)."""
+        with self.database.connect() as connection:
+            row = connection.execute(
+                "SELECT links.links_json FROM provider_image_links AS links "
+                "JOIN generation_jobs AS jobs ON jobs.id = links.job_id "
+                "WHERE links.job_id = ? AND jobs.user_id = ?",
+                (job_id, user_id),
+            ).fetchone()
+        return json.loads(row["links_json"]) if row else None
 
     def get(self, user_id: str, job_id: str) -> HistoryItem | None:
         with self.database.connect() as connection:
@@ -1458,7 +1483,11 @@ class GenerationManager:
                 if not self.cache.put(job_id, user_id, images):
                     self.store.finish(job_id, error_code="invalid_result")
                     return
-                if not self.store.finish(job_id, image_count=len(images)):
+                links = [image.link for image in images]
+                if not self.store.finish(
+                    job_id, image_count=len(images),
+                    image_links=links if all(links) else None,
+                ):
                     self.cache.discard(job_id)
                 self.health[self.lane(parameters)].report(None)
             except ProviderFailure as exception:

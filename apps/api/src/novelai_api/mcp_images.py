@@ -6,8 +6,9 @@ import json
 import logging
 import re
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -31,6 +32,8 @@ MAX_RESPONSE_BYTES = 48 * 1024 * 1024
 MAX_VIBE_TOKEN_CHARS = 8 * 1024 * 1024
 VIBE_TOKEN = re.compile(r"[A-Za-z0-9+/=_-]{16,}")
 PROTOCOL_VERSION = "2025-06-18"
+MAX_IMAGE_LINK_CHARS = 2048
+_URL_IN_TEXT = re.compile(r"https://[^\s\"'<>()\[\]{}]+")
 REQUIRED_FIELDS = frozenset(
     {
         "prompt",
@@ -160,6 +163,69 @@ class NovelAiMcpProvider:
         # Upstream image_to_image took ~132 s for one image (2026-10-29); a short deadline
         # would turn slow paid calls into outcome_unknown.
         self.image_to_image_timeout = max(timeout, image_to_image_timeout)
+        # Signed download links are only trusted under the configured endpoint's /images/.
+        base = urlsplit(url)
+        self._link_host = base.netloc.lower()
+        self._link_prefix = base.path.rstrip("/") + "/images/"
+
+    def _image_link(self, value: Any) -> str | None:
+        if not isinstance(value, str):
+            return None
+        link = value.strip().rstrip(".,;:")
+        if not link or len(link) > MAX_IMAGE_LINK_CHARS or any(
+            ord(char) < 0x21 or ord(char) == 0x7F for char in link
+        ):
+            return None
+        try:
+            parts = urlsplit(link)
+        except ValueError:
+            return None
+        if (
+            parts.scheme != "https" or parts.netloc.lower() != self._link_host
+            or parts.username or parts.password or parts.fragment
+            or not parts.path.startswith(self._link_prefix)
+            or ".." in parts.path.split("/")
+        ):
+            return None
+        return link
+
+    def _image_links(self, result: dict, content: list) -> list[str]:
+        """Upstream download links in result order, de-duplicated (best effort)."""
+
+        def candidates(value: Any, depth: int = 0) -> Iterator[Any]:
+            if depth > 6:
+                return
+            if isinstance(value, str):
+                yield value
+                yield from _URL_IN_TEXT.findall(value)
+            elif isinstance(value, dict):
+                for key in ("uri", "url", "download_url", "downloadUrl", "image_url", "imageUrl",
+                            "link", "href"):
+                    if key in value:
+                        yield from candidates(value[key], depth + 1)
+                for key, item in value.items():
+                    if key in ("data", "blob"):  # base64 payloads, never links
+                        continue
+                    if isinstance(item, dict | list):
+                        yield from candidates(item, depth + 1)
+                    elif isinstance(item, str) and key in ("text",):
+                        yield from candidates(item, depth + 1)
+            elif isinstance(value, list):
+                for item in value:
+                    yield from candidates(item, depth + 1)
+
+        links: list[str] = []
+        sources: list[Any] = []
+        for item in content:
+            if isinstance(item, dict) and item.get("type") in ("resource_link", "resource", "text"):
+                sources.append(item)
+        sources.append(result.get("structuredContent"))
+        for source in sources:
+            for candidate in candidates(source):
+                link = self._image_link(candidate)
+                if link is not None and link not in links:
+                    links.append(link)
+        return links
 
     def probe(self) -> bool:
         """Unpaid reachability check: one MCP initialize, short deadline, no tool call."""
@@ -489,6 +555,19 @@ class NovelAiMcpProvider:
             images.append(GeneratedImage(data=image, mime_type="image/png"))
         if len(images) != parameters.sample_count:
             raise ProviderFailure("invalid_result")
+        # Links are attached only when they pair one-to-one with the images; otherwise the
+        # order would be ambiguous, so none are recorded (images are unaffected either way).
+        links = self._image_links(result, content)
+        if len(links) == len(images):
+            images = [
+                GeneratedImage(data=image.data, mime_type=image.mime_type, link=link)
+                for image, link in zip(images, links, strict=True)
+            ]
+        elif links:
+            logger.warning(
+                "NovelAI returned %d image links for %d images; links not recorded",
+                len(links), len(images),
+            )
         return images
 
     @staticmethod

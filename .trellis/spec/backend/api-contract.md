@@ -176,3 +176,18 @@ does not. The JSON `ApiError` shape is unchanged.
 - Wrong: label a frontend projection or rebuilt historical payload as the
   actual provider input. Correct: display only the adapter-captured snapshot
   and explain null snapshots without inventing missing fields.
+
+
+## Upstream image links
+
+- Since 2026-11-13 the MCP image tools also return a signed public download link per
+  image under `<NAI_NOVELAI_MCP_URL>/images/` (default 7-day validity, no extra token).
+  The adapter accepts a link only if it is HTTPS on the configured MCP host, under that
+  `/images/` prefix, without credentials, fragments or `..`, and ≤ 2048 chars; it reads
+  `resource_link`/`resource` URIs, `structuredContent` URL fields and URLs in text items.
+- Links are stored only when their count equals the image count (order = result order);
+  otherwise none are stored and a count-only warning is logged. Images are unaffected.
+- Links are server-private (the signature grants access): never in `GenerationView`,
+  history, OpenAPI, logs or provider-request snapshots. `JobStore.image_links()` is the
+  only reader, owner-scoped. Local PNG files stay the source of truth; links expire.
+- Tests use synthetic links with MockTransport only; no paid probe is required.

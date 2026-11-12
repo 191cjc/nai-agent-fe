@@ -313,6 +313,7 @@ def test_restore_racing_purge_is_serialized_and_migration_preserves_marks(databa
     with database.connect(write=True) as connection:
         connection.execute("UPDATE generation_jobs SET settings_json = ?, status = 'succeeded', "
                            "image_count = 2 WHERE id = ?", (parameters.model_dump_json(), job))
+        connection.execute("DROP TABLE provider_image_links")
         connection.execute("DROP TABLE dataset_recipes")
         connection.execute("DROP TABLE purged_images")
         connection.execute("PRAGMA user_version = 12")

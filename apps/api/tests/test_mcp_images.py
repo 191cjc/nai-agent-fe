@@ -917,3 +917,93 @@ def test_mocked_mcp_adapter_runs_through_api_without_live_service(
         )
         assert len(job["image_urls"]) == 2
         assert len(calls) == 4
+
+
+SIGNED = "https://mcp.example/novel-ai-v5/images/{name}.png?expires=1763600000&sig=abc%2Bdef"
+
+
+def image_item() -> dict:
+    return {"type": "image", "mimeType": "image/png", "data": base64.b64encode(PNG).decode()}
+
+
+@pytest.mark.parametrize("shape", ["resource_link", "structured", "text"])
+def test_signed_download_links_pair_with_images_in_order(shape: str) -> None:
+    links = [SIGNED.format(name="a"), SIGNED.format(name="b")]
+    content = [image_item(), image_item()]
+    result: dict = {"content": content}
+    if shape == "resource_link":
+        content += [
+            {"type": "resource_link", "uri": link, "name": "image", "mimeType": "image/png"}
+            for link in links
+        ]
+    elif shape == "structured":
+        result["structuredContent"] = {"result": [
+            {"path": "/srv/private/out/a.png", "download_url": links[0]},
+            {"path": "/srv/private/out/b.png", "download_url": links[1]},
+        ]}
+    else:
+        content.append({"type": "text", "text": f"Saved. Download: {links[0]}\n{links[1]}."})
+    transport, _calls = mock_mcp(result=result)
+    images = provider_for(transport).generate(PARAMETERS)
+    assert [image.link for image in images] == links
+    assert all(image.data == PNG for image in images)
+
+
+@pytest.mark.parametrize("bad", [
+    "http://mcp.example/novel-ai-v5/images/a.png?sig=1",          # not https
+    "https://evil.example/novel-ai-v5/images/a.png?sig=1",        # other host
+    "https://mcp.example/novel-ai-v5/other/a.png?sig=1",          # outside /images/
+    "https://mcp.example/novel-ai-v5/images/../secret?sig=1",     # traversal
+    "https://user:pw@mcp.example/novel-ai-v5/images/a.png",       # credentials
+    "https://mcp.example/novel-ai-v5/images/" + "a" * 2100,        # too long
+])
+def test_untrusted_links_are_ignored(bad: str) -> None:
+    content = [image_item(), image_item(),
+               {"type": "resource_link", "uri": bad, "name": "x"},
+               {"type": "resource_link", "uri": bad.replace("a.png", "b.png"), "name": "x"}]
+    transport, _calls = mock_mcp(result={"content": content})
+    assert [image.link for image in provider_for(transport).generate(PARAMETERS)] == [None, None]
+
+
+def test_link_count_mismatch_records_no_links_and_keeps_images() -> None:
+    content = [image_item(), image_item(),
+               {"type": "resource_link", "uri": SIGNED.format(name="only"), "name": "x"}]
+    transport, _calls = mock_mcp(result={"content": content})
+    images = provider_for(transport).generate(PARAMETERS)
+    assert len(images) == 2 and [image.link for image in images] == [None, None]
+
+
+def test_links_are_stored_server_side_and_never_returned_to_the_browser(tmp_path: Path) -> None:
+    import time
+
+    database = Database(tmp_path / "test.sqlite3")
+    database.migrate()
+    links = [SIGNED.format(name="a"), SIGNED.format(name="b")]
+    content = [image_item(), image_item()] + [
+        {"type": "resource_link", "uri": link, "name": "image"} for link in links
+    ]
+    transport, _calls = mock_mcp(result={"content": content})
+    app = create_app(Settings(database.path, "https://testserver"), database,
+                     image_provider=provider_for(transport))
+    with TestClient(app, base_url="https://testserver") as client:
+        _id, token = create_token(database, "alice")
+        user = client.post("/api/auth/session", json={"token": token},
+                           headers={"Origin": "https://testserver"}).json()["id"]
+        job_id = client.post("/api/generations", json=PARAMETERS.model_dump(),
+                             headers={"Origin": "https://testserver"}).json()["id"]
+        for _attempt in range(200):
+            job = client.get(f"/api/generations/{job_id}").json()
+            if job["status"] in ("succeeded", "failed"):
+                break
+            time.sleep(0.01)
+        assert job["status"] == "succeeded"
+        browser = json.dumps([job, client.get("/api/generations").json()])
+        assert "mcp.example/novel-ai-v5/images" not in browser and "sig=" not in browser
+        store = app.state.generations.store
+        assert store.image_links(user, job_id) == links
+        assert store.image_links(str(uuid4()), job_id) is None
+        assert client.delete(f"/api/generations/{job_id}",
+                             headers={"Origin": "https://testserver"}).status_code == 204
+        with database.connect() as connection:
+            remaining = connection.execute("SELECT COUNT(*) FROM provider_image_links")
+            assert remaining.fetchone()[0] == 0
