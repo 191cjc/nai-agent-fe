@@ -200,7 +200,7 @@ def continuation_request(
     })
     if run.item_seeds is not None:
         # Remaining items keep the seeds they were given when the run was created.
-        request = request.model_copy(update={"item_seeds": run.item_seeds[offset:]})
+        request = request.with_item_seeds(run.item_seeds[offset:])
     return request, pinned
 
 
@@ -275,9 +275,7 @@ class RunStore:
             ):
                 # Style training sets: every item gets its own random seed. Character sets
                 # keep the base+N rule (their seeds stay owner-reproducible).
-                request = request.model_copy(update={
-                    "item_seeds": random_item_seeds(len(request.items)),
-                })
+                request = request.with_item_seeds(random_item_seeds(len(request.items)))
             definition, total = (
                 request.definition(references) if isinstance(request, DatasetRunCreate)
                 else request.definition()

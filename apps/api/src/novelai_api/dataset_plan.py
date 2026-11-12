@@ -5,7 +5,7 @@ import secrets
 from typing import Literal, Self
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 
 from .generations import (
     DatasetItem,
@@ -165,10 +165,21 @@ class DatasetRunCreate(BaseModel):
     # GPT image runs only: groups in flight at once (absent = server maximum). Mutable
     # while the run is unfinished, so it is stored beside, not inside, the definition.
     gpt_concurrency: int | None = Field(default=None, ge=1, le=16)
-    # Server-only: independent random seed per item, chosen once at creation. Continuations
-    # pass the stopped run's remaining seeds so each item renders exactly as before. Absent on
-    # browser requests (seeds are never client-chosen) and on runs created before this field.
-    item_seeds: list[int] | None = Field(default=None, exclude=True)
+    # Server-only (a private attribute, so request bodies cannot set it): one random seed per
+    # item, chosen once at creation. Continuations carry the stopped run's remaining seeds so
+    # each item renders exactly as before. None on runs created before per-item seeds.
+    _item_seeds: list[int] | None = PrivateAttr(default=None)
+
+    @property
+    def item_seeds(self) -> list[int] | None:
+        return self._item_seeds
+
+    def with_item_seeds(self, seeds: list[int]) -> "DatasetRunCreate":
+        if len(seeds) != len(self.items):
+            raise ValueError("One seed per item is required")
+        copy = self.model_copy()
+        copy._item_seeds = list(seeds)
+        return copy
 
     @model_validator(mode="after")
     def valid_plan(self) -> Self:

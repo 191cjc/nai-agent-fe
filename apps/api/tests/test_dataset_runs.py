@@ -364,3 +364,12 @@ def test_legacy_runs_without_item_seeds_keep_base_plus_n(
     legacy = service.store.get(user, run.id)
     assert legacy.item_seeds is None
     assert group_parameters(legacy).seed == 101
+
+
+def test_clients_cannot_choose_item_seeds() -> None:
+    request = DatasetRunCreate.model_validate({
+        "id": str(uuid4()), "items": ITEMS, "item_seeds": [1, 2, 3], "_item_seeds": [1, 2, 3],
+        "parameters": {**INPUT, "positive_prompt": "", "style_prompt": "artist:fixture"},
+    })
+    assert request.item_seeds is None
+    assert "item_seeds" not in DatasetRunCreate.model_json_schema()["properties"]
