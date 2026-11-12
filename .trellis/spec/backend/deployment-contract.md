@@ -6,7 +6,7 @@ Use this contract when changing `deploy/novelai-api.service`,
 `deploy/nginx-novelai.conf.example`, `deploy/.env.api.example`, static release
 instructions, or API environment wiring. The operator chose a single-server
 deployment without Docker: Vite/FastAPI locally, host Nginx and one systemd
-API process in production. Generated images use private seven-day disk retention;
+API process in production. Generated images remain in private disk storage until explicit deletion;
 see [Image Retention](./image-retention-contract.md) and
 [Durable Experiments](./durable-experiment-contract.md) (introduced schema3)
 and [Prompt Sections](./prompt-sections-contract.md) (introduced schema4).
@@ -95,7 +95,8 @@ Captured provider requests use current schema5; see [Database](./database-guidel
   Check unauthenticated new snapshot routes return401 with no-store on both
   loopback and public paths. For image preservation evidence, capture private
   manifest/PNG SHA-256 inventory while the API is stopped, then verify exact
-  bytes and original expiry for every still-unexpired result after startup.
+  bytes for every retained result after startup, preserving manifest metadata
+  without applying the former seven-day expiry.
   Root-directory existence/permissions alone do not verify retained images.
 - Captured provider-request rollout requires migration5 and API-first web
   publication. Preserve the same private backup, idle/shutdown, configuration
@@ -143,7 +144,12 @@ Captured provider requests use current schema5; see [Database](./database-guidel
   writable path is needed. API-first retention rollout verifies its private
   root and OpenAPI before web. Keep the retention API during web fallback.
   SQLite online backup excludes images; separate private image backup is
-  required for host recovery. Preserve original expiry when restoring files.
+  required for host recovery. Old seven-day manifests remain valid without expiry
+  enforcement; do not rewrite stored images/manifests during release switches.
+  The no-expiry release writes null-expiry manifests that the former seven-day
+  API cannot read; retain the new API if reverting only web assets. When the
+  operator requests no interruption, wait for zero active jobs and runs before
+  restarting; do not stop/drain their runs to force an idle deployment window.
 
 - Durable experiments require migration3. Verify a private online v2 backup,
   zero active jobs/runs, stop API, run the staged service-user migration and
@@ -181,7 +187,7 @@ Captured provider requests use current schema5; see [Database](./database-guidel
 | HTTP package source or missing lockfile integrity | Refuse release staging; use an HTTPS source with verified pinned archives |
 | Web base path and Nginx prefix differ | Treat as a release-blocking same-origin route defect |
 | Old hashed assets removed during switch | Existing tabs can fail; retain them for the cache/rollback window |
-| API restart during generation | No automatic paid retry; unexpired completed disk images survive |
+| API restart during generation | No automatic paid retry; completed disk images survive; wait until jobs/runs are idle when the operator requires it |
 | Web fallback after durable schema3 migration | Retain compatible new API/private state; never start schema2-only API or restore live DB |
 
 ## Good / Base / Bad Cases

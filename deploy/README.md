@@ -5,7 +5,7 @@ HTTPS server and its `/api` proxy; see `apps/web/README.md` and
 `apps/api/README.md`. Production uses the existing `www.firesoul.cn` HTTPS
 Nginx server, one loopback-only Uvicorn process under systemd, and a private
 SQLite file. Keep the existing `/aiqq` route and TLS configuration. Generated
-images are privately retained for seven days under
+images are privately retained until explicitly deleted under
 `/var/lib/novelai/generation-images/` and survive process restarts. Tokens,
 sessions, generation parameters and experiment metadata persist in SQLite;
 PNG bytes never enter SQLite or the web root.
@@ -219,7 +219,7 @@ API outage is expected; keep traffic closed if the schema change is not
 backward compatible. `sudo systemctl stop novelai-api` waits up to 65 seconds
 for graceful shutdown; then use `sudo systemctl start novelai-api`. One API
 process is required by SQLite and generation admission ownership. Completed
-unexpired disk images survive restart; older memory-only releases lose their
+disk images survive restart; older memory-only releases lose their
 transient images. A restart leaves uncertain paid jobs for the user to review
 in history; do not automatically retry them. Inspect failures with
 `systemctl status novelai-api` and `journalctl -u novelai-api`.
@@ -365,12 +365,14 @@ jobs before the restart; images from older memory-only releases are lost. No pro
 configuration change or paid generation is needed to deploy this addition.
 
 
-## Private seven-day image retention
+## Private image retention until explicit deletion
 
 New successful results are stored beside SQLite in generation-images/, under
-service ownership, directories 0700/files 0600. Startup and periodic cleanup
-remove expired/abandoned artifacts. Original seven-day wall-clock expiry does
-not reset on restart; parameter/experiment metadata lasts until deleted.
+service ownership, directories 0700/files 0600. Completed images no longer
+expire automatically. Existing seven-day manifests remain readable without
+rewriting files; new manifests and API result expiry use null. Startup,
+periodic and admission cleanup remove only abandoned managed temporary and
+reservation artifacts; parameter/experiment metadata lasts until deleted.
 Existing authenticated API image routes serve these bytes; never add an Nginx
 alias for this directory. Browser history can reopen ordinary images or saved
 experiment comparisons without submitting a paid request.
@@ -379,12 +381,12 @@ The default store has no fixed size budget; it refuses new work when free disk
 would drop below 3 GiB. Pending
 accepted jobs reserve their maximum bounded image output before provider work.
 Full/unwritable storage refuses new generation safely; it does not evict
-unexpired seven-day results. Monitor filesystem space/inodes and plan capacity
+saved results. Monitor filesystem space/inodes and plan capacity
 for image storage, logs, SQLite/WAL, backups and release directories together.
 
 Database.backup remains SQLite-only. It does not back up generation-images/.
 A separate private image backup is needed for host/disk recovery; retain the
-original expiry metadata and apply its expiration policy to backup copies too.
+stored manifests without imposing the former expiry policy on restored images.
 Do not expose, print or include images in source/control or public releases.
 Provider-free restore drills use a separate state/image root, never the live
 store. Keep generation-images/ unchanged during API/web release switches.
@@ -413,7 +415,7 @@ SQLite snapshots include active definitions/cursors. For a disposable recovery
 drill, disable copied active runs before starting any application lifespan,
 keep all image/advice providers unconfigured and use a separate state/image
 root. Do not let a backup clone resume work against live paid credentials.
-Private image files require their own backup and keep their original expiry.
+Private image files require their own backup and remain until explicit deletion.
 
 ## Character reference images (schema 6)
 

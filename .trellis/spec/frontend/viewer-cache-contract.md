@@ -20,8 +20,10 @@ ownership and server retention/scheduling are separate.
   Blob.size. A hit refreshes LRU recency and avoids another image-byte request.
   These are compressed image bytes, not a bound on browser decoded memory.
 - Continue normal group/generation metadata reads on navigation. A cache hit
-  requires current accepted metadata exposing the same image path and a valid
-  original result_expires_at. Do not cache metadata or extend server expiry.
+  requires current accepted metadata exposing the same image path.
+  `result_expires_at: null` means no server expiry; a numeric expiry must still
+  be valid. Normalize null to Infinity only inside the bounded in-page cache,
+  including explicit preloading. Do not cache metadata or extend numeric expiry.
 - Prune expired entries on access. Evict least recently used entries until
   both budgets fit. Keep the displayed URL valid and include it in the budget;
   do not create a second Blob URL for a hit. A single oversized image can be
@@ -103,7 +105,7 @@ no API, server scheduler or provider changes.
 ### Good / Base / Bad Cases
 
 - Good: explicitly load a72-image experiment and compare its cached PNGs with
-  arrows while preserving fresh metadata and original seven-day expiry.
+  arrows while preserving fresh metadata and any applicable numeric expiry.
 - Base: ordinary single-image opening loads one selected PNG under32/64MiB budgets.
   Saved datasets initially open the thumbnail grid without a full PNG, under
   [Dataset Review and Cleanup](../backend/dataset-review-contract.md).

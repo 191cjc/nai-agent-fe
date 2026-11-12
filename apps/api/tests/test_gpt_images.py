@@ -76,13 +76,17 @@ def relay(status=200, body=None, *, images=1):
 
 def test_prompt_template_separates_traits_item_and_style() -> None:
     assert gpt_prompt(gpt_group()) == "\n".join([
-        "Use the attached reference image(s); they all show the same character.",
-        "Draw exactly this character: keep the face, hair, eyes, outfit, accessories and "
-        "weapon identical to the references.",
+        "Use the attached reference image(s) only to identify the same character.",
+        "Preserve the character identity, facial features, hair, eyes, outfit, accessories "
+        "and weapon design and colours.",
+        "Create a new image following the requested scene and pose. Pose, limb placement, "
+        "expression, gaze, camera angle and framing must follow the scene and pose "
+        "instructions, independently of the references.",
         "Character: 1girl, katana",
         "Scene and pose: sitting",
         "Art style: watercolor",
-        "One character only. No text, no watermark, no signature.",
+        "Draw one character in one view only. No turnaround sheet, panels, text, watermark "
+        "or signature.",
     ])
 
 

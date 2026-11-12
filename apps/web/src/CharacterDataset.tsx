@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { Palette, Plus, Sparkles, Trash2, Upload, X } from 'lucide-react'
 import { ReferenceThumb } from './ReferencePreview'
-import { ApiFailure, errorText, type Capabilities, type ReferenceImage, type WorkspaceApi } from './api'
+import { ApiFailure, errorText, type Capabilities, type ReferenceImage, type TraitAdviceResult, type WorkspaceApi } from './api'
 import { GPT_SIZES, MAX_REFERENCES, MAX_STYLE_POOL, MAX_TRAITS_LENGTH, characterRequest, type CharacterSettings, type GptSize } from './dataset-run'
-import { PRECISE_MODELS, VIBE_MODELS } from './store'
+import { PRECISE_MODELS } from './store'
 import type { PreciseType } from './api'
-import { DEFAULT_PRESET_IDS, STYLE_PRESETS, presetStyles } from './style-presets'
+import type { CharacterMode } from './character-prompts'
+import { characterStylePresets, defaultCharacterStyles, presetStyles } from './style-presets'
 
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 
@@ -23,21 +24,22 @@ export interface CharacterState {
 }
 
 /** Character run settings live in the dataset panel so collapsing it keeps them. */
-export function useCharacterSettings(draftStyle: string): CharacterState {
-  const [settings, setSettingsState] = useState<CharacterSettings>({ traits: '', mode: 'vibe', referenceIds: [], strength: '0.55', noise: '0', information: '1', vibeStrength: '1',
+export function useCharacterSettings(): CharacterState {
+  const [settings, setSettingsState] = useState<CharacterSettings>({ traits: '', mode: 'gpt', referenceIds: [],
     gptSize: 'portrait', gptQuality: 'auto', gptSamples: '1', gptConcurrency: '', preciseType: 'character', preciseStrength: '1', preciseFidelity: '1' })
-  // Until the user edits the pool it follows the live draft style, like style mode.
-  const [edited, setEdited] = useState<string[] | null>(null)
-  const styles = edited ?? [draftStyle]
+  const [stylePools, setStylePools] = useState<Record<CharacterMode, string[]>>(() => ({
+    gpt: defaultCharacterStyles('gpt'), precise: defaultCharacterStyles('precise'),
+  }))
+  const styles = stylePools[settings.mode]
   const [gpt, setGpt] = useState<Capabilities | null>(null)
   return {
     gpt, setGpt, settings, styles,
     setSettings: update => setSettingsState(update),
-    setStyles: update => setEdited(current => update(current ?? [draftStyle])),
+    setStyles: update => setStylePools(current => ({ ...current, [settings.mode]: update(current[settings.mode]) })),
     error: model => {
       if (settings.mode === 'gpt' && !gpt?.gpt_image) return 'GPT 生图未配置，请在服务器上设置 NAI_GPT_IMAGE_API_KEY。'
       try {
-        characterRequest(settings, model, VIBE_MODELS, PRECISE_MODELS)
+        characterRequest(settings, model, PRECISE_MODELS)
         return ''
       } catch (error) {
         return error instanceof Error ? error.message : '角色设置无效。'
@@ -46,15 +48,16 @@ export function useCharacterSettings(draftStyle: string): CharacterState {
   }
 }
 
-/** Mirrors the server template so the user sees exactly what GPT receives. */
+/** Mirrors server instruction wording, with a placeholder for the selected item. */
 function gptPromptPreview(traits: string, style: string): string {
   return [
-    'Use the attached reference image(s); they all show the same character.',
-    'Draw exactly this character: keep the face, hair, eyes, outfit, accessories and weapon identical to the references.',
+    'Use the attached reference image(s) only to identify the same character.',
+    'Preserve the character identity, facial features, hair, eyes, outfit, accessories and weapon design and colours.',
+    'Create a new image following the requested scene and pose. Pose, limb placement, expression, gaze, camera angle and framing must follow the scene and pose instructions, independently of the references.',
     `Character: ${traits.trim()}`,
     'Scene and pose: <第 1 条内容提示词>',
     ...(style.trim() ? [`Art style: ${style.trim()}`] : []),
-    'One character only. No text, no watermark, no signature.',
+    'Draw one character in one view only. No turnaround sheet, panels, text, watermark or signature.',
   ].join('\n')
 }
 
@@ -172,19 +175,15 @@ function TraitAdvice({ api, referenceIds, traits, onApply }: {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [suggestion, setSuggestion] = useState('')
+  const [translations, setTranslations] = useState<TraitAdviceResult['translations']>([])
   const [error, setError] = useState('')
   const controller = useRef<AbortController | null>(null)
-  const key = referenceIds.join(',')
 
-  useEffect(() => () => controller.current?.abort(), [])
-  // A response for an earlier reference selection must not be applied to a new one.
-  useEffect(() => {
+  // The parent keys this component by mode, reference selection and source traits.
+  useEffect(() => () => {
     controller.current?.abort()
     controller.current = null
-    setLoading(false)
-    setSuggestion('')
-    setError('')
-  }, [key])
+  }, [])
 
   async function request() {
     controller.current?.abort()
@@ -193,9 +192,13 @@ function TraitAdvice({ api, referenceIds, traits, onApply }: {
     setLoading(true)
     setError('')
     setSuggestion('')
+    setTranslations([])
     try {
       const result = await api.traitAdvice(referenceIds, traits, current.signal)
-      if (controller.current === current) setSuggestion(result.suggestion)
+      if (controller.current === current && !current.signal.aborted) {
+        setSuggestion(result.suggestion)
+        setTranslations(result.translations)
+      }
     } catch (exception) {
       if (controller.current === current && !current.signal.aborted) setError(failureText(exception))
     } finally {
@@ -209,8 +212,13 @@ function TraitAdvice({ api, referenceIds, traits, onApply }: {
     setOpen(false)
     setLoading(false)
     setSuggestion('')
+    setTranslations([])
     setError('')
   }
+
+  const canApply = suggestion.trim().length > 0 && /^[\u0020-\u007e]+$/.test(suggestion.trim())
+    && suggestion.split(',').every(tag => tag.trim().length > 0)
+  const appended = [traits.trim(), suggestion.trim()].filter(Boolean).join(', ')
 
   if (!open) {
     return <button className="text-action" type="button" disabled={!referenceIds.length} title={referenceIds.length ? undefined : '先选择参考图'}
@@ -218,16 +226,29 @@ function TraitAdvice({ api, referenceIds, traits, onApply }: {
   }
   return <div className="dataset-export trait-advice" role="group" aria-label="角色特征 AI 建议">
     <p className="prompt-hint">将把所选 {referenceIds.length} 张参考图和当前角色特征发送给已配置的 AI 建议服务（第三方模型），每次点击是一次付费请求。建议不会自动应用。</p>
-    {suggestion && <label className="field"><span>建议的角色特征（可编辑）</span>
-      <textarea rows={3} value={suggestion} maxLength={MAX_TRAITS_LENGTH} spellCheck={false} onChange={event => setSuggestion(event.target.value)} /></label>}
+    {suggestion && <label className="field"><span>建议的英文角色特征（可编辑，仅英文会应用）</span>
+      <textarea rows={3} value={suggestion} maxLength={MAX_TRAITS_LENGTH} spellCheck={false} onChange={event => {
+        setSuggestion(event.target.value)
+        setTranslations([])
+      }} /></label>}
+    {translations.length > 0 && <div className="trait-translations">
+      <strong>中文逐项对照</strong>
+      <dl>{translations.map(({ tag, translation }, index) => <div key={`${index}-${tag}`}>
+        <dt>{tag}</dt><dd>{translation}</dd>
+      </div>)}</dl>
+    </div>}
+    {suggestion && !translations.length && <p className="prompt-hint">英文建议已编辑，原翻译已清除；重新获取建议可生成新的中英对照。</p>}
+    {suggestion && !canApply && <p className="alert" role="alert">请保留用逗号分隔的英文标签，中文翻译仅用于阅读。</p>}
     {error && <p className="alert" role="alert">{error}</p>}
     <div className="experiment-config-actions">
       <button className="primary" type="button" disabled={loading || !referenceIds.length} onClick={() => void request()}>
         <Sparkles size={14} aria-hidden="true" /> {loading ? '正在分析参考图...' : suggestion ? '重新获取建议' : '获取建议'}</button>
       {suggestion && <>
-        <button className="secondary" type="button" onClick={() => { onApply(suggestion.trim()); close() }}>替换</button>
-        <button className="secondary" type="button" onClick={() => {
-          onApply([traits.trim(), suggestion.trim()].filter(Boolean).join(', '))
+        <button className="secondary" type="button" disabled={!canApply} onClick={() => { if (canApply) { onApply(suggestion.trim()); close() } }}>替换</button>
+        <button className="secondary" type="button" disabled={!canApply || appended.length > MAX_TRAITS_LENGTH}
+          title={appended.length > MAX_TRAITS_LENGTH ? `追加后超过 ${MAX_TRAITS_LENGTH} 字符，请删减标签或使用替换。` : undefined} onClick={() => {
+          if (!canApply || appended.length > MAX_TRAITS_LENGTH) return
+          onApply(appended)
           close()
         }}>追加</button>
       </>}
@@ -252,10 +273,19 @@ export function CharacterRunSettings({ api, state, model, draftStyle }: {
   }, [api])
   // Optional shared prefix (e.g. quality tags), empty by default. Never the draft style:
   // that is itself a style and would mix into every preset.
-  const [prefix, setPrefix] = useState('')
-  const [presetIds, setPresetIds] = useState<readonly string[]>(DEFAULT_PRESET_IDS)
-  const chosenPresets = presetStyles(prefix, presetIds)
-  const vibeSupported = VIBE_MODELS.includes(model.trim())
+  const [styleOptions, setStyleOptions] = useState<Record<CharacterMode, { prefix: string; presetIds: readonly string[] }>>(() => ({
+    gpt: { prefix: '', presetIds: characterStylePresets('gpt').filter(preset => preset.defaultOn).map(preset => preset.id) },
+    precise: { prefix: '', presetIds: characterStylePresets('precise').filter(preset => preset.defaultOn).map(preset => preset.id) },
+  }))
+  const mode = settings.mode
+  const { prefix, presetIds } = styleOptions[mode]
+  const presets = characterStylePresets(mode)
+  const recommendedIds = presets.filter(preset => preset.defaultOn).map(preset => preset.id)
+  const setPrefix = (value: string) => setStyleOptions(current => ({ ...current, [mode]: { ...current[mode], prefix: value } }))
+  const setPresetIds = (update: readonly string[] | ((current: readonly string[]) => readonly string[])) => setStyleOptions(current => ({
+    ...current, [mode]: { ...current[mode], presetIds: typeof update === 'function' ? update(current[mode].presetIds) : update },
+  }))
+  const chosenPresets = presetStyles(prefix, presetIds, mode)
   const preciseSupported = PRECISE_MODELS.includes(model.trim())
 
   return <>
@@ -265,18 +295,15 @@ export function CharacterRunSettings({ api, state, model, draftStyle }: {
       <textarea rows={2} value={settings.traits} maxLength={MAX_TRAITS_LENGTH} spellCheck={false}
         placeholder="例如 1girl, solo, silver hair, long hair, red eyes, black hoodie"
         onChange={event => setSettings(current => ({ ...current, traits: event.target.value }))} /></label>
-    <TraitAdvice api={api} referenceIds={settings.referenceIds} traits={settings.traits}
+    <TraitAdvice key={JSON.stringify([settings.mode, settings.referenceIds, settings.traits])}
+      api={api} referenceIds={settings.referenceIds} traits={settings.traits}
       onApply={traits => setSettings(current => ({ ...current, traits }))} />
     <fieldset className="dataset-categories">
       <legend>生成方式</legend>
-      <label className="history-select"><input type="radio" name="character-mode" checked={settings.mode === 'vibe'}
-        onChange={() => setSettings(current => ({ ...current, mode: 'vibe' }))} /> Vibe Transfer（所有参考图一起使用；仅 V4 / V4.5 模型）</label>
-      <label className="history-select"><input type="radio" name="character-mode" checked={settings.mode === 'img2img'}
-        onChange={() => setSettings(current => ({ ...current, mode: 'img2img' }))} /> 图生图（参考图按条目轮流使用；所有模型）</label>
-      <label className="history-select"><input type="radio" name="character-mode" checked={settings.mode === 'precise'}
-        onChange={() => setSettings(current => ({ ...current, mode: 'precise' }))} /> 精准参考 Precise Reference（参考图按条目轮流使用；仅 V4.5 模型）</label>
       <label className="history-select"><input type="radio" name="character-mode" checked={settings.mode === 'gpt'} disabled={!gpt?.gpt_image}
         onChange={() => setSettings(current => ({ ...current, mode: 'gpt' }))} /> GPT 参考图生成（{gpt?.gpt_image_model ?? 'GPT 生图'}；与 NovelAI 无关{gpt && !gpt.gpt_image ? '；未配置' : ''}）</label>
+      <label className="history-select"><input type="radio" name="character-mode" checked={settings.mode === 'precise'}
+        onChange={() => setSettings(current => ({ ...current, mode: 'precise' }))} /> NovelAI 精准参考 Precise Reference（参考图按条目轮流使用；仅 V4.5 模型）</label>
       {settings.mode === 'gpt' && <>
         <p className="prompt-hint">GPT 模式不使用 NovelAI 的模型、采样器、步数、CFG 和负面提示词。所有参考图会和下方提示词一起发送给中转站的 GPT 生图模型；每条一次付费调用，约 1–2 分钟；暴露或有版权的内容可能被审核拒绝（记为失败，继续下一条）。</p>
         <div className="experiment-range-fields">
@@ -294,23 +321,9 @@ export function CharacterRunSettings({ api, state, model, draftStyle }: {
             <input type="text" inputMode="numeric" placeholder={String(gpt?.gpt_concurrency_max ?? '')} value={settings.gptConcurrency}
               onChange={event => setSettings(current => ({ ...current, gptConcurrency: event.target.value }))} /></label>
         </div>
-        <details className="dataset-category"><summary><strong>第 1 条的提示词预览</strong></summary>
+        <details className="dataset-category"><summary><strong>GPT 提示词模板预览</strong></summary>
           <pre className="request-snapshot-json">{gptPromptPreview(settings.traits, styles[0] ?? '')}</pre></details>
       </>}
-      {settings.mode === 'vibe' && <div className="experiment-range-fields">
-        <label className="field"><span>信息提取度（0.01–1，越高越贴近参考图中的角色，越低越只取风格）</span>
-          <input type="text" inputMode="decimal" value={settings.information} onChange={event => setSettings(current => ({ ...current, information: event.target.value }))} /></label>
-        <label className="field"><span>Vibe 强度（0.01–1，生成时参考图的影响力，越高越像参考图）</span>
-          <input type="text" inputMode="decimal" value={settings.vibeStrength} onChange={event => setSettings(current => ({ ...current, vibeStrength: event.target.value }))} /></label>
-      </div>}
-      {settings.mode === 'vibe' && <p className="prompt-hint">每张参考图会先编码成 vibe（NovelAI 对编码另行扣费），结果按参考图、模型和信息提取度缓存在服务器上，之后的条目和批跑会复用，不再重复扣费。</p>}
-      {settings.mode === 'vibe' && !vibeSupported && <p className="experiment-note">当前模型不支持 Vibe Transfer，请在生成设置中选择 V4 / V4.5 模型，或改用图生图。</p>}
-      {settings.mode === 'img2img' && <div className="experiment-range-fields">
-        <label className="field"><span>strength（0.01–0.99，越大越偏离原图）</span>
-          <input type="text" inputMode="decimal" value={settings.strength} onChange={event => setSettings(current => ({ ...current, strength: event.target.value }))} /></label>
-        <label className="field"><span>noise（0–0.99）</span>
-          <input type="text" inputMode="decimal" value={settings.noise} onChange={event => setSettings(current => ({ ...current, noise: event.target.value }))} /></label>
-      </div>}
       {settings.mode === 'precise' && <div className="experiment-range-fields">
         <label className="field"><span>参考内容</span>
           <select value={settings.preciseType} onChange={event => setSettings(current => ({ ...current, preciseType: event.target.value as PreciseType }))}>
@@ -323,13 +336,12 @@ export function CharacterRunSettings({ api, state, model, draftStyle }: {
         <label className="field"><span>保真度（0–1，越高越贴近参考图细节）</span>
           <input type="text" inputMode="decimal" value={settings.preciseFidelity} onChange={event => setSettings(current => ({ ...current, preciseFidelity: event.target.value }))} /></label>
       </div>}
-      {settings.mode === 'precise' && <p className="prompt-hint">精准参考不改变构图，姿势和场景来自提示词，适合角色训练集；每条只用一张参考图（多张时按条目轮流）。NovelAI 对精准参考会额外扣 Anlas。训练角色 LoRA 建议选「角色」，让画风池负责画风。</p>}
+      {settings.mode === 'precise' && <p className="prompt-hint">精准参考用于保持角色外观，姿势和场景由条目指定；每条只用一张参考图（多张时按条目轮流）。NovelAI 对精准参考会额外扣 Anlas。训练角色 LoRA 建议选「角色」，让独立画风池负责画风。复杂动作生成后请检查肢体与关节是否正确。</p>}
       {settings.mode === 'precise' && !preciseSupported && <p className="experiment-note">当前模型不支持精准参考，请在生成设置中选择 V4.5 模型。</p>}
-      {settings.mode === 'img2img' && <p className="prompt-hint">图生图的构图会受原图影响：strength 低更像角色但姿势单一，高则多样但容易走样。建议 0.5–0.7 并人工筛图。</p>}
     </fieldset>
     <fieldset className="dataset-categories">
-      <legend>画风池（{styles.length} / {MAX_STYLE_POOL}，按条目轮流使用）</legend>
-      <p className="prompt-hint">多种画风可减少角色 LoRA 顺带学到某一种画风。导出时默认把每张图的画风写进 caption，让画风与角色分开学习。建议 8–12 种：再多每种画风只剩一两张，作用不大。</p>
+      <legend>{mode === 'gpt' ? 'GPT' : 'Precise'} 独立画风池（{styles.length} / {MAX_STYLE_POOL}，按条目轮流使用）</legend>
+      <p className="prompt-hint">两种方式各自保存画风、预设选择与公共前缀，切换时互不覆盖。默认各用 4 种清晰彩色画风，导出时默认写进 caption。设定稿风格每张仍只画一个角色、一个视角。</p>
       {styles.map((style, index) => <div className="dataset-custom" key={index}>
         <input type="text" value={style} spellCheck={false} aria-label={`画风 ${index + 1}`} placeholder="画风、媒介与画质标签"
           onChange={event => setStyles(current => current.map((item, position) => position === index ? event.target.value : item))} />
@@ -345,15 +357,15 @@ export function CharacterRunSettings({ api, state, model, draftStyle }: {
       <div className="dataset-style-presets">
         <span>预设画风（已选 {presetIds.length} 个）</span>
         <div className="style-preset-picks" role="group" aria-label="选择预设画风">
-          {STYLE_PRESETS.map(preset => <label key={preset.id} title={preset.tags}>
+          {presets.map(preset => <label key={preset.id} title={preset.tags}>
             <input type="checkbox" checked={presetIds.includes(preset.id)}
               onChange={event => setPresetIds(current => event.target.checked ? [...current, preset.id] : current.filter(id => id !== preset.id))} />
             {preset.label}{preset.note && <small>（{preset.note}）</small>}
           </label>)}
         </div>
         <div className="dataset-custom">
-          <button className="text-action" type="button" onClick={() => setPresetIds(DEFAULT_PRESET_IDS)}>恢复推荐</button>
-          <button className="text-action" type="button" onClick={() => setPresetIds(STYLE_PRESETS.map(preset => preset.id))}>全选</button>
+          <button className="text-action" type="button" onClick={() => setPresetIds(recommendedIds)}>恢复推荐</button>
+          <button className="text-action" type="button" onClick={() => setPresetIds(presets.map(preset => preset.id))}>全选</button>
           <button className="text-action" type="button" onClick={() => setPresetIds([])}>全不选</button>
         </div>
         <input type="text" value={prefix} spellCheck={false} aria-label="预设公共前缀"

@@ -6,7 +6,7 @@ import re
 from collections.abc import Sequence
 from typing import Protocol
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,36 @@ class AdviceResult(BaseModel):
         if not value.strip():
             raise ValueError("Advice output cannot be blank")
         return value
+
+
+class TraitTranslation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tag: str = Field(min_length=1, max_length=1000)
+    translation: str = Field(min_length=1, max_length=300)
+
+    @field_validator("translation")
+    @classmethod
+    def chinese_translation(cls, value: str) -> str:
+        if not re.search(r"[\u3400-\u9fff]", value):
+            raise ValueError("Trait translation must include Chinese")
+        return value
+
+
+class TraitAdviceResult(AdviceResult):
+    suggestion: str = Field(min_length=1, max_length=1000)
+    translations: list[TraitTranslation] = Field(min_length=1, max_length=100)
+
+    @model_validator(mode="after")
+    def aligned_tags(self) -> "TraitAdviceResult":
+        tags = [tag.strip() for tag in self.suggestion.split(",")]
+        if (
+            not re.fullmatch(r"[\x20-\x7e]+", self.suggestion)
+            or any(not tag for tag in tags)
+            or tags != [item.tag for item in self.translations]
+        ):
+            raise ValueError("Trait translations must match the English tags in order")
+        return self
 
 
 class ToolUseAttempt(Exception):
@@ -80,7 +110,7 @@ class AdviceService:
 
     async def advise(
         self, text: str, *, images: Sequence[bytes] = (), timeout: float | None = None,
-    ) -> AdviceResult:
+    ) -> AdviceResult | TraitAdviceResult:
         if self.runner is None:
             raise AdviceFailure(503, "advice_unavailable", "AI advice is not configured")
         if self._capacity.locked():
@@ -90,7 +120,8 @@ class AdviceService:
                 # Image turns attach only the owner's chosen reference images (trait advice).
                 turn = self.runner.run(text, images=images) if images else self.runner.run(text)
                 payload = await asyncio.wait_for(turn, timeout=timeout or self.timeout)
-                return AdviceResult.model_validate(payload)
+                result_type = TraitAdviceResult if images else AdviceResult
+                return result_type.model_validate(payload)
             except TimeoutError as exception:
                 logger.warning("AI advice timed out")
                 raise AdviceFailure(504, "advice_timeout", "AI advice timed out") from exception

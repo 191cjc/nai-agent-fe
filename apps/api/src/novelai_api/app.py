@@ -23,6 +23,7 @@ from .advice import (
     AdviceResult,
     AdviceRunner,
     AdviceService,
+    TraitAdviceResult,
     trait_advice_text,
 )
 from .auth import current_user, issue_session, revoke_session
@@ -1326,7 +1327,7 @@ def create_app(
 
     @app.post(
         "/api/reference-images/trait-advice",
-        response_model=AdviceResult,
+        response_model=TraitAdviceResult,
         responses={
             401: {"model": ApiError}, 403: {"model": ApiError}, 422: {"model": ApiError},
             429: {"model": ApiError}, 502: {"model": ApiError}, 503: {"model": ApiError},
@@ -1335,7 +1336,7 @@ def create_app(
     )
     async def trait_advice(
         payload: TraitAdviceRequest, user: Annotated[UserInfo, Depends(require_user)],
-    ) -> AdviceResult | JSONResponse:
+    ) -> TraitAdviceResult | JSONResponse:
         if len(set(payload.reference_ids)) != len(payload.reference_ids):
             return error(422, "validation_error", "Duplicate reference image")
         images = []

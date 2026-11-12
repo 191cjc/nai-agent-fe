@@ -996,7 +996,7 @@ class JobStore:
 class CachedResult:
     user_id: str
     images: tuple[GeneratedImage | None, ...]
-    expires_at: int
+    expires_at: int | None
     deadline: float
     size: int
 
@@ -1004,7 +1004,7 @@ class CachedResult:
 @dataclass(frozen=True)
 class ResultInfo:
     image_count: int
-    expires_at: int
+    expires_at: int | None
 
 
 def valid_images(images: Sequence[GeneratedImage]) -> bool:

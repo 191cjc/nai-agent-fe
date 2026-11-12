@@ -440,7 +440,15 @@ class ImageRunner:
 
     async def run(self, text, *, images=()):
         self.calls.append((text, list(images)))
-        return {"suggestion": "1girl, solo, silver hair, red eyes"}
+        return {
+            "suggestion": "1girl, solo, silver hair, red eyes",
+            "translations": [
+                {"tag": "1girl", "translation": "一名女性"},
+                {"tag": "solo", "translation": "单人"},
+                {"tag": "silver hair", "translation": "银色头发"},
+                {"tag": "red eyes", "translation": "红色眼睛"},
+            ],
+        }
 
 
 def test_reference_api_upload_pick_list_bytes_delete_trait_advice_and_isolation(
@@ -493,7 +501,15 @@ def test_reference_api_upload_pick_list_bytes_delete_trait_advice_and_isolation(
             "reference_ids": [first["id"], picked.json()["id"]], "traits": "1girl, blue hair",
         }, headers=ORIGIN)
         assert advice.status_code == 200
-        assert advice.json() == {"suggestion": "1girl, solo, silver hair, red eyes"}
+        assert advice.json() == {
+            "suggestion": "1girl, solo, silver hair, red eyes",
+            "translations": [
+                {"tag": "1girl", "translation": "一名女性"},
+                {"tag": "solo", "translation": "单人"},
+                {"tag": "silver hair", "translation": "银色头发"},
+                {"tag": "red eyes", "translation": "红色眼睛"},
+            ],
+        }
         text, images = runner.calls[0]
         assert "1girl, blue hair" in text and images == [png(), png()]
 

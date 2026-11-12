@@ -32,7 +32,7 @@ generated image bytes to it.
   Store job parameters, effective
   seed, timestamps and outcome, including optional experiment metadata in
   settings_json. Durable compact run/cursor/seed/Stop state uses the schema3 run table; see
-  [Durable Experiments](./durable-experiment-contract.md). Image payloads are stored separately in private seven-day
+  [Durable Experiments](./durable-experiment-contract.md). Image payloads are stored separately in private
   disk results; see [Image Retention](./image-retention-contract.md).
 - Schema4 adds an owner/id-keyed immutable prompt_snapshots library. Readiness
   probes its table; explicit migrations preserve all existing records. Snapshot

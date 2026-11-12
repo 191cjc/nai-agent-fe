@@ -20,6 +20,7 @@ interface SavedImage {
 interface CachedImage {
   url: string
   size: number
+  // Infinity represents a retained result whose API expiry is null.
   expiresAt: number
 }
 
@@ -27,7 +28,7 @@ interface TransientImage {
   path: string
   url: string
   size: number
-  expiresAt: number | null
+  expiresAt: number
 }
 
 const IMAGE_CACHE_LIMIT = 32
@@ -256,10 +257,9 @@ export class SavedResultsStore {
         const expectedGroups = Math.min(PRELOAD_PAGE_SIZE, groupLimit - offset)
         for (const job of page.items.slice(0, expectedGroups)) {
           if (!this.isCurrentPreload(epoch, selection.id, controller.signal)) return
-          const expiresAt = job.result_expires_at
+          const expiresAt = job.result_expires_at ?? Infinity
           const indexes = retainedImageIndexes(job)
-          if (job.status !== 'succeeded' || indexes.length === 0 || expiresAt === null
-            || !Number.isFinite(expiresAt) || expiresAt <= Date.now() / 1000) {
+          if (job.status !== 'succeeded' || indexes.length === 0 || !(expiresAt > Date.now() / 1000)) {
             runInAction(() => {
               this.preloadSkippedGroups += 1
               this.preloadProcessedGroups += 1
@@ -569,15 +569,15 @@ export class SavedResultsStore {
     if (!job || !path) return
     this.imageLoading = true
     try {
-      const expiresAt = job.result_expires_at
-      if (expiresAt !== null && expiresAt <= Date.now() / 1000) {
+      const expiresAt = job.result_expires_at ?? Infinity
+      if (expiresAt <= Date.now() / 1000) {
         throw new ApiFailure(404, 'image_unavailable', 'This result image has expired.')
       }
       let url = this.cachedImage(path, expiresAt)
       if (!url) {
         const blob = await this.api.image(path, signal)
         if (epoch !== this.viewerEpoch) return
-        if (expiresAt !== null && expiresAt <= Date.now() / 1000) {
+        if (expiresAt <= Date.now() / 1000) {
           throw new ApiFailure(404, 'image_unavailable', 'This result image has expired.')
         }
         // A completed read can only populate this still-open viewer's cache.
@@ -593,14 +593,13 @@ export class SavedResultsStore {
     }
   }
 
-  private cachedImage(path: string, expiresAt: number | null): string | null {
+  private cachedImage(path: string, expiresAt: number): string | null {
     this.pruneExpiredImages()
     let cached = this.imageCache.get(path)
     const transient = this.transientImage
     // Explicit preload may make an already displayed oversized PNG cacheable.
     // Transfer its existing URL rather than downloading/owning it a second time.
-    if (!cached && transient?.path === path && expiresAt !== null && Number.isFinite(expiresAt)
-      && transient.expiresAt !== null && Number.isFinite(transient.expiresAt)
+    if (!cached && transient?.path === path
       && Math.min(expiresAt, transient.expiresAt) > Date.now() / 1000
       && this.imageCache.size < this.cacheLimit && this.imageCacheBytes + transient.size <= this.cacheByteLimit) {
       cached = { url: transient.url, size: transient.size, expiresAt: Math.min(expiresAt, transient.expiresAt) }
@@ -609,7 +608,7 @@ export class SavedResultsStore {
       this.transientImage = null
     }
     if (!cached) return null
-    if (expiresAt === null || !Number.isFinite(expiresAt)) {
+    if (!(expiresAt > Date.now() / 1000)) {
       this.removeCachedImage(path)
       return null
     }
@@ -624,12 +623,12 @@ export class SavedResultsStore {
     return cached.url
   }
 
-  private retainImage(path: string, blob: Blob, expiresAt: number | null): string {
+  private retainImage(path: string, blob: Blob, expiresAt: number): string {
     this.pruneExpiredImages()
-    if (expiresAt !== null && expiresAt <= Date.now() / 1000) {
+    if (expiresAt <= Date.now() / 1000) {
       throw new ApiFailure(404, 'image_unavailable', 'This result image has expired.')
     }
-    let cacheable = expiresAt !== null && Number.isFinite(expiresAt) && expiresAt > Date.now() / 1000
+    let cacheable = expiresAt > Date.now() / 1000
       && blob.size <= this.cacheByteLimit
     if (cacheable) {
       while (this.imageCache.size >= this.cacheLimit || this.imageCacheBytes + blob.size > this.cacheByteLimit) {
@@ -640,7 +639,7 @@ export class SavedResultsStore {
       }
     }
     const url = URL.createObjectURL(blob)
-    if (cacheable && expiresAt !== null) {
+    if (cacheable) {
       this.imageCache.set(path, { url, size: blob.size, expiresAt })
       this.imageCacheBytes += blob.size
     } else {

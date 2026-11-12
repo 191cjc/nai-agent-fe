@@ -397,6 +397,11 @@ h1, h2, h3 { letter-spacing: 0; }
 .reference-meta input { width: 14px; height: 14px; margin: 0; accent-color: var(--gold); }
 .reference-upload { grid-template-rows: none; place-items: center; align-content: center; gap: 6px; min-height: 140px; border-style: dashed; }
 .trait-advice textarea, .dataset-run-config textarea { width: 100%; min-width: 0; resize: vertical; }
+.trait-translations { color: #d3d0d5; font-size: 12px; }
+.trait-translations dl { display: grid; gap: 5px; margin: 8px 0; }
+.trait-translations dl > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.trait-translations dt, .trait-translations dd { margin: 0; overflow-wrap: anywhere; }
+.trait-translations dt { color: #aaa4b1; }
 .experiment-range-fields input { padding: 7px 8px; font-variant-numeric: tabular-nums; }
 .experiment-preview { min-width: 0; padding: 11px; border-radius: 4px; background: #1e2529; color: #c5d7d0; font-size: 12px; line-height: 1.5; }
 .experiment-preview ul { display: grid; gap: 5px; margin: 0 0 9px; padding: 0; list-style: none; }

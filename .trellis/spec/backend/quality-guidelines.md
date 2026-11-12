@@ -18,6 +18,10 @@ uv run --frozen --extra lint ruff check src tests
 uv lock --check --offline
 ```
 
+Disk-store tests exercise the real 3 GiB free-space reserve. If `/tmp` is a
+smaller tmpfs, set `TMPDIR` to a private disposable directory on a filesystem
+with sufficient free space; do not weaken the storage reserve to pass tests.
+
 Ruff checks `E`, `F`, `I`, `UP` and `B`, targets Python 3.12 and uses a
 100-character line limit. No Python type checker is configured; do not report
 type checking as passed. Install the declared lint extra when Ruff is missing;

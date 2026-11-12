@@ -52,6 +52,11 @@ and review how the web app consumes the change.
   wired only when `NAI_CODEX_API_KEY` is configured. Optional endpoint/model
   settings remain backend-only and do not change the browser schema; see
   [Codex Advice Runtime Contract](./codex-advice-contract.md).
+- `POST /api/reference-images/trait-advice` returns `TraitAdviceResult` with
+  English `suggestion` and aligned Chinese `translations: [{tag, translation}]`.
+  It remains an explicit owner-scoped request. General `/api/advice` keeps its
+  single-field response. Publish API before the web that requires translations;
+  see [Character Dataset Runs](./character-dataset-contract.md).
 - `/api/prompt-snapshots` lists/creates durable private named section bundles;
   `/{id}` reads/deletes only the owner's object. GenerationRequest adds optional
   validated prompt_sections metadata while retaining effective provider fields.

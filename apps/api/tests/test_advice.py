@@ -1,6 +1,7 @@
 """Stateless advice tests use in-process fake runners, never paid Codex."""
 
 import asyncio
+import json
 import logging
 import os
 import signal
@@ -20,6 +21,7 @@ from novelai_api.auth import create_token
 from novelai_api.codex_advice import (
     DISABLED_FEATURES,
     OUTPUT_SCHEMA,
+    TRAIT_OUTPUT_SCHEMA,
     CodexAdviceRunner,
     _cli_path,
     _login_with_api_key,
@@ -1017,7 +1019,13 @@ def test_sdk_trait_turn_attaches_private_images_and_cleans_up(tmp_path: Path) ->
         observed["instructions"] = (
             Path(sdk.thread_options["working_directory"]) / "AGENTS.md"
         ).read_text()
-        yield sdk_event("item.completed", "agent_message", '{"suggestion":"1girl, red eyes"}')
+        yield sdk_event("item.completed", "agent_message", json.dumps({
+            "suggestion": "1girl, red eyes",
+            "translations": [
+                {"tag": "1girl", "translation": "一名女性"},
+                {"tag": "red eyes", "translation": "红色眼睛"},
+            ],
+        }))
         yield sdk_event("turn.completed")
 
     sdk = FakeCodex(events)
@@ -1025,6 +1033,8 @@ def test_sdk_trait_turn_attaches_private_images_and_cleans_up(tmp_path: Path) ->
     images = [b"\x89PNG\r\n\x1a\nfirst", b"\xff\xd8second"]
     result = asyncio.run(AdviceService(runner).advise("traits", images=images, timeout=90))
     assert result.suggestion == "1girl, red eyes"
+    assert [item.translation for item in result.translations] == ["一名女性", "红色眼睛"]
+    assert sdk.turn_options["output_schema"] == TRAIT_OUTPUT_SCHEMA
     prompt = observed["prompt"]
     assert prompt[0] == {"type": "text", "text": "traits"}
     assert [part["type"] for part in prompt[1:]] == ["local_image", "local_image"]
@@ -1034,6 +1044,64 @@ def test_sdk_trait_turn_attaches_private_images_and_cleans_up(tmp_path: Path) ->
     if os.name == "posix":
         assert observed["modes"] == [0o600, 0o600]
     assert "persistent character identity tags" in observed["instructions"]
+    assert "Simplified Chinese" in observed["instructions"]
+    assert "Exclude pose, expression, gaze" in observed["instructions"]
+    assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize("payload", [
+    {"suggestion": "red eyes"},
+    {"suggestion": "red eyes", "translations": []},
+    {"suggestion": "red eyes", "translations": [
+        {"tag": "blue eyes", "translation": "红色眼睛"},
+    ]},
+    {"suggestion": "red eyes", "translations": [
+        {"tag": "red eyes", "translation": "red eyes"},
+    ]},
+    {"suggestion": "红色眼睛", "translations": [
+        {"tag": "红色眼睛", "translation": "红色眼睛"},
+    ]},
+    *[
+        {"suggestion": suggestion, "translations": [
+            {"tag": "red eyes", "translation": "红色眼睛"},
+        ]}
+        for suggestion in ("\nred eyes", "red eyes\n", "\tred eyes", "red eyes\u3000")
+    ],
+    {"suggestion": "red eyes, silver hair", "translations": [
+        {"tag": "silver hair", "translation": "银色头发"},
+        {"tag": "red eyes", "translation": "红色眼睛"},
+    ]},
+    {"suggestion": "red eyes", "translations": [
+        {"tag": "red eyes", "translation": "红色眼睛", "extra": "unexpected"},
+    ]},
+])
+def test_trait_advice_rejects_missing_misaligned_or_non_chinese_translations(payload) -> None:
+    class Runner:
+        async def run(self, _text, *, images=()):
+            return payload
+
+    with pytest.raises(AdviceFailure) as failure:
+        asyncio.run(AdviceService(Runner()).advise("fixture traits", images=[b"fixture image"]))
+    assert failure.value.code == "advice_failed"
+
+
+def test_trait_sdk_accepts_bounded_translations_longer_than_text_only_advice(tmp_path) -> None:
+    tags = [f"fixture {index}" for index in range(40)]
+    payload = {
+        "suggestion": ", ".join(tags),
+        "translations": [{"tag": tag, "translation": "合成标签翻译" * 4} for tag in tags],
+    }
+    message = json.dumps(payload)
+    assert len(message) > 4096
+
+    async def events():
+        yield sdk_event("item.completed", "agent_message", message)
+        yield sdk_event("turn.completed")
+
+    sdk = FakeCodex(events)
+    runner = isolated_runner(tmp_path, sdk)
+    result = asyncio.run(AdviceService(runner).advise("fixture traits", images=[b"\x89PNGx"]))
+    assert result.model_dump() == payload
     assert not list(tmp_path.iterdir())
 
 

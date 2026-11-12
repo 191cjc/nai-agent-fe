@@ -93,15 +93,16 @@ An authenticated `POST /api/generations` accepts a positive and negative
 prompt, model, width/height (multiples of 64), steps, CFG scale, sampler,
 optional seed, sample count and boolean quality toggle. `seed: null` chooses
 an explicit random seed before the provider call. `GET /api/generations/{id}`
-shows status and seven-day owner-only image URLs; `GET /api/generations`
+shows status and retained owner-only image URLs; `GET /api/generations`
 lists paginated **parameter-only** history with 1-100 records per request
 (20 by default) and no 10,000-record cutoff; offsets use the JavaScript-safe
 integer range. `DELETE /api/generations/{id}`
 deletes a finished record and its image files. Active jobs cannot be deleted.
-New images use private seven-day disk storage in generation-images/ beside
-SQLite and survive restart; prompts, parameters and experiment metadata
-persist in SQLite until deleted. See the image-retention contract under
-.trellis/spec/backend/ for bounded capacity and pre-paid storage admission.
+Images use private disk storage in generation-images/ beside SQLite and remain
+until explicitly deleted, including images with former seven-day manifests.
+`result_expires_at` is null for retained disk images. Prompts, parameters and
+experiment metadata persist in SQLite until deleted. See the image-retention
+contract under .trellis/spec/backend/ for bounded capacity and pre-paid storage admission.
 For consistent backups of a live SQLite database, run the admin `backup`
 command to a new private path, never copy only the active database file while
 WAL is in use. Backup retention and restore drills belong to the deployment

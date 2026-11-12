@@ -444,7 +444,7 @@ const HistoryPanel = observer(({ store, onView, onReuse, onResume, mode, onModeC
     <div className="history-toolbar"><span>已保存的生成记录</span>
       <button type="button" className="icon-button" title="刷新历史" aria-label="刷新历史"
         onClick={() => void history.load()} disabled={history.loading || history.deletingId !== null}><RefreshCw size={17} /></button></div>
-    <p className="prompt-hint">新图片私有保存 7 天，可查看和下载；已过期图片仍保留参数。删除记录也会删除它保存的图片。</p>
+    <p className="prompt-hint">图片由服务器私有保存，可查看和下载。删除记录也会删除它保存的图片。</p>
     <div className="history-selection">
       {selecting ? <>
         <span>已选 {selected.length} 条（可跨页）</span>

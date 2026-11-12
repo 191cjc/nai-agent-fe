@@ -128,7 +128,7 @@ export const StyleExperimentConfig = observer(({ generation, hidden }: { generat
     </div>}
     <p className="prompt-hint">固定种子用于所有组；留空时服务器在创建实验时随机一次，即使首组失败也沿用同一种子。</p>
     <p className="prompt-hint">实验在服务器依次执行，单组失败后继续下一组。已有实验或训练集在运行时，新实验加入队列，按顺序开始。刷新、关闭页面、断线或退出登录都不会停止；重新进入会接回进度。只在点击“停止”后停止后续组。</p>
-    <p className="prompt-hint">新图片私有保存 7 天，参数和权重保留更久；从进度区或历史记录的“画风实验”打开对比。</p>
+    <p className="prompt-hint">图片、参数和权重由服务器私有保存；从进度区或历史记录的“画风实验”打开对比。</p>
     {!frozen && !supportedModel && <p className="experiment-note">画风实验需要生成设置列表中的 V4 / V4.5 / V5 模型。</p>}
     {!frozen && generation.error && !generation.submitUncertain && <p className="alert" role="alert">{generation.error}</p>}
     <div className="experiment-config-actions">

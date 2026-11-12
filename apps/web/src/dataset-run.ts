@@ -1,4 +1,5 @@
 import type { CharacterPrompt, CharacterRunRequest, DatasetItem, PreciseType } from './api'
+import type { CharacterMode } from './character-prompts'
 import { compilePromptComments } from './prompt-weights'
 
 export const MAX_DATASET_ITEMS = 400
@@ -59,15 +60,16 @@ export const NAI_SHAPE_SIZES: Record<ItemShape, ItemSize> = {
 export const SHAPE_LABELS: Record<ItemShape, string> = { portrait: '竖图', square: '方图', landscape: '横图' }
 
 /**
- * Canvas shape from an item's framing and pose tags: lying poses, wide shots, scenery
- * and full-body groups take landscape priority over full-body/cowboy-shot portrait.
+ * Canvas shape from framing and pose tags: horizontal floor poses, wide shots,
+ * scenery and full-body groups take landscape priority over full-body portrait.
  * Everything else is square.
  */
 export function itemShape(prompt: string, characters: readonly string[] = []): ItemShape {
   const tags = new Set([prompt, ...characters].join(',').split(',').map(tag => tag.trim().toLowerCase()).filter(Boolean))
   const group = ['2girls', '3girls', '2boys', 'multiple girls'].some(tag => tags.has(tag)) || characters.length > 1
   const lying = ['lying', 'reclining', 'on back', 'on side', 'on stomach'].some(tag => tags.has(tag))
-  if (lying || tags.has('wide shot') || tags.has('scenery') || (group && tags.has('full body'))) return 'landscape'
+  const horizontal = ['all fours', 'crawling', 'plank', 'side plank', 'downward dog', 'seated forward fold'].some(tag => tags.has(tag))
+  if (lying || horizontal || tags.has('wide shot') || tags.has('scenery') || (group && tags.has('full body'))) return 'landscape'
   if (tags.has('full body') || tags.has('cowboy shot')) return 'portrait'
   return 'square'
 }
@@ -118,14 +120,8 @@ export const GPT_SIZES: Record<GptSize, { label: string; width: number; height: 
 
 export interface CharacterSettings {
   traits: string
-  mode: 'vibe' | 'img2img' | 'gpt' | 'precise'
+  mode: CharacterMode
   referenceIds: string[]
-  strength: string
-  noise: string
-  /** Vibe only: encode_vibe information_extracted, 0.01–1. */
-  information: string
-  /** Vibe only: generation-time influence of the vibes, 0.01–1. */
-  vibeStrength: string
   /** GPT only: output size, quality (auto = model default) and images per item. */
   gptSize: GptSize
   gptQuality: 'auto' | 'low' | 'medium' | 'high'
@@ -144,7 +140,7 @@ function ratio(value: string, label: string, min: number, max: number): number {
   return number
 }
 
-export function characterRequest(settings: CharacterSettings, model: string, vibeModels: readonly string[], preciseModels: readonly string[] = []): CharacterRunRequest {
+export function characterRequest(settings: CharacterSettings, model: string, preciseModels: readonly string[]): CharacterRunRequest {
   if (!settings.traits.trim()) throw new Error('请填写角色特征标签。')
   if (settings.traits.length > MAX_TRAITS_LENGTH) throw new Error(`角色特征不能超过 ${MAX_TRAITS_LENGTH} 字符。`)
   if (hasCommentLine(settings.traits)) throw new Error('角色特征不能包含以 // 开头的注释行。')
@@ -165,17 +161,5 @@ export function characterRequest(settings: CharacterSettings, model: string, vib
       precise_fidelity: ratio(settings.preciseFidelity, '精准参考保真度', 0, 1),
     }
   }
-  if (settings.mode === 'vibe') {
-    if (!vibeModels.includes(model.trim())) throw new Error('Vibe Transfer 只支持 V4 / V4.5 模型，请在生成设置中切换模型或改用图生图。')
-    return {
-      traits: settings.traits, mode: 'vibe', reference_ids: [...settings.referenceIds],
-      information_extracted: ratio(settings.information, '信息提取度', 0.01, 1),
-      reference_strength: ratio(settings.vibeStrength, 'Vibe 强度', 0.01, 1),
-    }
-  }
-  return {
-    traits: settings.traits, mode: 'img2img', reference_ids: [...settings.referenceIds],
-    strength: ratio(settings.strength, '图生图 strength', 0.01, 0.99),
-    noise: ratio(settings.noise, '图生图 noise', 0, 0.99),
-  }
+  throw new Error('角色训练集仅支持 GPT 或 Precise Reference。')
 }

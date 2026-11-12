@@ -66,7 +66,11 @@ proof that every tool is unavailable before execution.
   events. The pinned CLI still reports `unified_exec=true` despite a `false`
   setting; `shell_tool` reports disabled. This is an **accepted limitation**,
   not pre-execution tool denial. Host/process secrets must remain protected.
-- Request strict JSON output with a single `suggestion` property. The public
+- Text-only turns request strict JSON output with a single `suggestion` property.
+  Reference-image trait advice additionally returns validated per-tag Chinese
+  translations under its separate schema and bound; see
+  [Character Dataset Runs](./character-dataset-contract.md#bilingual-trait-advice-2026-11-12).
+  The public
   result is plain text, never executable instructions or an automatic draft
   mutation. The unified drawer displays it; the per-section frontend helper
   permits explicit user-reviewed text application under its own target/length

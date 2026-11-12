@@ -21,7 +21,7 @@ runs are dataset runs (`kind: "dataset"`) and inherit every rule in
   `GET /api/reference-images/{id}/image`; `DELETE /api/reference-images/{id}`
   (409 `reference_in_use` while a running/stopping run references it).
 - `POST /api/reference-images/trait-advice {reference_ids (1..4), traits}`
-  → `{suggestion}`; same errors as `/api/advice` plus
+  → `{suggestion, translations: [{tag, translation}]}`; same errors as `/api/advice` plus
   `422 reference_not_found` and `502 advice_image_unsupported`.
 - `POST /api/dataset-runs` optional `styles: [str] (1..12)` (first must equal
   `parameters.style_prompt`) and `character: {traits, mode: vibe|img2img,
@@ -184,3 +184,63 @@ needs one operator-approved probe.
 - Before first release the 20 appended framing items moved into their own
   default-selected categories so they can be run alone: `face` 「脸部特写」 (8,
   `char-face-N`) and `angle` 「侧面与背面」 (12, `char-angle-N`); `framing` is back to 18.
+
+## Separate GPT / Precise creation libraries (2026-11-12)
+
+This replaces the shared character library and default style pool above.
+
+- New browser creation offers only GPT and NovelAI Precise Reference, defaulting
+  to GPT. Keep all four modes in API wire/history models and legacy execution:
+  existing Vibe/img2img definitions, saved views, continuation and reruns remain
+  compatible. Never rewrite saved item text or stop existing runs for this change.
+- `characterCategories(mode)`, `characterPrompts(mode)` and
+  `defaultCharacterEntries(mode)` expose independent libraries: GPT has 64
+  ordinary portrait/standing/upper-body/sitting/daily-action items; Precise has
+  86 identity/balance/yoga/forward-fold/ground-support/combat items. Both mix
+  side, back, three-quarter, high and low views into action items. Every full-body
+  item requests hands and feet in frame. No category is combined with another
+  at runtime; every item must supply its own concrete action and framing.
+- IDs use `char-<mode>-<category>-N`. Keep legacy `char-<category>` and new
+  category labels in the saved-review registry. Restore defaults affects only
+  the selected mode. Prompt text, selections and custom items remain separate
+  when switching; unsubmitted import/custom UI state cannot carry into another mode.
+- `characterStylePresets(mode)` / `defaultCharacterStyles(mode)` start four
+  independent defaults, without inheriting the workspace draft style. GPT:
+  clean character-design flat colour, commercial soft-shaded illustration,
+  crisp light digital painting and coloured line illustration. Precise:
+  cel-shaded anime screencap, 1990s anime, game CG and crisp fantasy painting.
+  Each mode retains its own edited pool, selected presets and optional prefix.
+  No default grayscale, chibi, pixel art, watercolor or oil-painting pool.
+- GPT prompt construction preserves character identity and outfit/prop design
+  and colours, but explicitly makes pose, limb placement, expression, gaze,
+  camera and framing follow the item independently of references. Request a
+  single view, without turnaround sheets or panels. The browser preview mirrors
+  the actual wrapper. GPT requests carry no seed; do not claim seed reproduction.
+- Automatic canvases give horizontal ground poses (all fours, crawling, plank,
+  side plank, downward dog and seated forward fold) landscape priority, like
+  lying poses. Manual size mode remains explicit.
+
+## Bilingual trait advice (2026-11-12)
+
+- One explicit paid request returns English `suggestion` plus ordered
+  `translations: [{tag, translation}]`, with concise Simplified Chinese meanings.
+  No additional translation call or automatic retry. Identity-only instructions
+  still exclude pose, expression, gaze, framing, scene, lighting and style.
+- `TraitAdviceResult`: printable ASCII comma-separated English suggestion
+  1..1000 chars; 1..100 translations; each exact trimmed tag 1..1000 chars and
+  Chinese translation 1..300 chars containing a Han character. The array must
+  match all suggested tags in order. Missing/extra/misaligned/invalid output
+  fails safely with 502/advice_failed, without logging private output.
+- The image SDK turn uses its own strict output schema and a bounded 65536-char
+  final message. Text-only advice retains its original single-field schema,
+  4096-char message bound, error handling, concurrency and isolated cleanup.
+- Display editable English and Chinese per-tag meanings separately. Apply only
+  English via explicit replace/append. Editing the suggestion clears translations;
+  switching references, existing traits or mode aborts/discards stale suggestions.
+  Unmount/close and request-identity checks prevent late completion/application.
+- API/OpenAPI adds the typed trait result; publish API before matching web and
+  retain API during web fallback. No DB migration. Wait for idle jobs/runs before
+  any production restart under the operator's no-interruption requirement.
+- Verification uses synthetic images, disposable SQLite and fake advice streams.
+  No real reference/dataset probes or paid calls; frontend validation is source
+  review, lint/TypeScript and a fresh env-free build, with no frontend tests.

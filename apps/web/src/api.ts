@@ -82,6 +82,11 @@ export interface ReferenceImage {
   created_at: number
 }
 
+export interface TraitAdviceResult {
+  suggestion: string
+  translations: { tag: string; translation: string }[]
+}
+
 export interface CharacterRunRequest {
   traits: string
   mode: 'vibe' | 'img2img' | 'gpt' | 'precise'
@@ -734,10 +739,22 @@ export class WorkspaceApi {
     return response.blob()
   }
 
-  traitAdvice(referenceIds: string[], traits: string, signal?: AbortSignal): Promise<{ suggestion: string }> {
-    return this.request('/api/reference-images/trait-advice', {
+  async traitAdvice(referenceIds: string[], traits: string, signal?: AbortSignal): Promise<TraitAdviceResult> {
+    const result = await this.request<TraitAdviceResult>('/api/reference-images/trait-advice', {
       method: 'POST', body: JSON.stringify({ reference_ids: referenceIds, traits }), signal,
     })
+    if (!result || typeof result.suggestion !== 'string' || !result.suggestion.trim() || result.suggestion.length > 1000
+      || /[^\u0020-\u007e]/.test(result.suggestion)
+      || !Array.isArray(result.translations) || !result.translations.length || result.translations.length > 100) {
+      throw new ApiFailure(0, 'invalid_response', '角色建议缺少有效的中英对照，请确认服务器已更新。')
+    }
+    const tags = result.suggestion.split(',').map(tag => tag.trim())
+    if (tags.length !== result.translations.length || !result.translations.every((entry, index) =>
+      entry && typeof entry.tag === 'string' && entry.tag === tags[index] && entry.tag.length > 0 && entry.tag.length <= 1000
+      && typeof entry.translation === 'string' && entry.translation.length <= 300 && /[\u3400-\u9fff]/.test(entry.translation))) {
+      throw new ApiFailure(0, 'invalid_response', '角色建议的英文标签与中文翻译不对应，请重新检查。')
+    }
+    return result
   }
 
   advice(input: string, signal?: AbortSignal): Promise<{ suggestion: string }> {

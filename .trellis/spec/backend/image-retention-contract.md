@@ -4,8 +4,9 @@
 
 Use for generated result storage, capacity admission, generation metadata,
 private image routes, saved experiment comparisons or state-directory rollout.
-The operator selected server-private image retention for seven days. This
-supersedes older memory-only image contracts; SQLite still contains no PNG.
+The operator removed automatic seven-day image expiration on 2026-11-12.
+Server-private disk images remain until explicitly deleted. This supersedes
+the former seven-day policy; SQLite still contains no PNG.
 
 ## Signatures
 
@@ -24,20 +25,26 @@ supersedes older memory-only image contracts; SQLite still contains no PNG.
 
 ## Contracts
 
-- Retain new valid images seven days from save, with persisted wall expiry.
-  API restart does not extend or lose that retention. Expired results are not
-  served; startup and periodic cleanup reclaim expired/abandoned artifacts.
+- Retain valid images until explicit deletion, including existing images whose
+  version-1 manifests contain the former `saved_at + 604800` expiry. New
+  manifests use `expires_at: null`; disk results expose `result_expires_at: null`.
+  Never use stored expiry or directory age to delete or hide completed results,
+  including corrupt result directories. Do not rewrite legacy manifests.
+  Startup, periodic and admission sweeps reclaim only abandoned managed
+  `.tmp-<uuid>` directories and `.reserve-<uuid>` files (one-hour age outside
+  startup). The injected in-memory test cache retains its separate short TTL.
   Existing legacy records without bytes remain reusable parameter history.
 - Private directories 0700/files 0600, safe UUID paths, bounded manifests,
   no symlink following, exclusive temp writes and atomic publication. Preserve
   existing PNG/count/per-image/per-result validation. Missing/corrupt artifacts
   fail safely without paths/prompts/credentials in errors. Cleanup deletes only
-  managed UUID/temp/reservation names; preserve unknown artifacts and include
-  their bytes in capacity accounting. Reject unbudgetable nested trees safely.
+  explicitly selected result UUIDs or abandoned temp/reservation names; preserve
+  unknown artifacts and include their bytes in capacity accounting. Reject
+  unbudgetable nested trees safely.
 - No fixed store budget by default (2026-11-04); admission keeps at least 3 GiB
   free disk. An explicit budget is still honoured. Reserve worst-case accepted output
   min(sample_count*8 MiB,32 MiB) before paid admission; include all pending
-  reservations. Do not evict unexpired images to admit new work. Release on
+  reservations. Do not evict saved images to admit new work. Release on
   success/failure/queue rejection/canceled future/shutdown; canceled futures
   do not execute _run/finally. Capacity/write preflight refusal is distinct
   503/result_storage_unavailable before seed/history/provider work.
@@ -51,8 +58,8 @@ supersedes older memory-only image contracts; SQLite still contains no PNG.
   canonical decimal weight <=100 chars. Detail sorts length(ordinal), ordinal,
   job id rather than coercing to float/SQLite integer. List sorts newest first
   with id tie-breaker. Queries are parameterized and owner scoped.
-- Expiration removes files, not history/experiment metadata. Explicit terminal
-  history deletion removes its files and group association. Foreign jobs,
+- Images and history/experiment metadata remain until explicitly deleted.
+  Explicit terminal history deletion removes its files and group association. Foreign jobs,
   images and experiments return 404. No public static image route exists.
 - Construction/OpenAPI creates neither storage files nor DB. Storage lifecycle
   belongs to startup/shutdown; no credentials/provider calls in schema probes.
@@ -63,8 +70,8 @@ supersedes older memory-only image contracts; SQLite still contains no PNG.
 
 | Condition | Result |
 | --- | --- |
-| Unexpired stored result after process restart | Same authenticated image bytes and original expiry |
-| Seven days elapsed | Image unavailable; automatic file cleanup; parameters remain |
+| Stored result after process restart | Same authenticated image bytes, no expiry |
+| Seven days elapsed, including legacy manifests | Images and parameters remain available; no automatic result deletion |
 | Disk/budget/write reservation unavailable before admission | 503/result_storage_unavailable; no seed/history/provider execution |
 | Storage failure after provider work | Terminal safe error; never automatic retry |
 | Duplicate ordinal or inconsistent total | 409/experiment_conflict before provider work |
@@ -85,8 +92,10 @@ supersedes older memory-only image contracts; SQLite still contains no PNG.
 
 ## Tests Required
 
-Use disposable files/SQLite and fake providers only. Assert seven-day expiry
-across restart, cleanup, private modes/safe paths, corrupt/missing artifacts,
+Use disposable files/SQLite and fake providers only. Assert new and legacy
+images survive past the former expiry across restart, periodic and admission
+sweeps; abandoned temporary files are still reclaimed. Check private modes/safe
+paths, corrupt/missing artifacts,
 owner isolation/deletion, reserved capacity under concurrency/cancel/shutdown,
 pre-admission refusal, exact grouping/metadata bounds, duplicate prevention,
 huge ordinal sort/pagination and unchanged flat/native provider arguments.
@@ -96,9 +105,11 @@ or paid generation/advice. Real operator interaction stays a separate gate.
 
 ## Wrong vs Correct
 
-- Wrong: rebuild expiry from startup time, or scan/create private state during
+- Wrong: honor old expiry, delete old result directories, or scan/create private
+  state during
   create_app(...).openapi().
-- Correct: save expiry once and initialize/reap storage only in lifespan.
+- Correct: retain old/new results without rewriting manifests and initialize
+  storage only in lifespan; reap only abandoned temporary artifacts.
 - Wrong: reload a saved experiment by resubmitting its generation requests.
 - Correct: page saved jobs and fetch existing images through owner-auth routes.
 
@@ -107,7 +118,7 @@ or paid generation/advice. Real operator interaction stays a separate gate.
 - `GET /api/generation-results/{job_id}/images/{image_id}/thumbnail` →
   `image/webp`, long side ≤384 px (never upscaled), quality 80, `no-store`,
   `nosniff`. Same rules as the full PNG: owner-only (404 otherwise), job
-  `succeeded`, retained original present and unexpired (`describe`), index in
+  `succeeded`, retained original present (`describe`), index in
   range; 401 without a session.
 - `thumbnails.ThumbnailCache`: memory-only LRU keyed by `(job_id, index)` and
   bound to the owner, 32 MiB total. Nothing is written to the result

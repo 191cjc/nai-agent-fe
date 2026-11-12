@@ -1,4 +1,4 @@
-"""Private bounded seven-day image files, independent of code releases and SQLite."""
+"""Private bounded image files, retained until explicitly deleted."""
 
 import hashlib
 import json
@@ -22,7 +22,8 @@ from .generations import (
     valid_images,
 )
 
-IMAGE_RETENTION_SECONDS = 7 * 24 * 60 * 60
+# Validate existing manifests without applying their former expiry policy.
+LEGACY_IMAGE_RETENTION_SECONDS = 7 * 24 * 60 * 60
 # No fixed store budget by default: admission stops only when free disk would drop
 # below the reserve. Tests may still pass an explicit budget.
 IMAGE_BUDGET_BYTES: int | None = None
@@ -185,7 +186,7 @@ class DiskResultStore:
         saved_at = int(self._clock())
         manifest = {
             "version": 1, "job_id": job_id, "user_id": user_id, "saved_at": saved_at,
-            "expires_at": saved_at + IMAGE_RETENTION_SECONDS,
+            "expires_at": None,
             "images": [{"size": len(image.data), "sha256": hashlib.sha256(image.data).hexdigest()}
                        for image in images],
         }
@@ -242,8 +243,11 @@ class DiskResultStore:
             not isinstance(manifest, dict) or manifest.get("version") != 1
             or manifest.get("job_id") != job_id or not _uuid(manifest.get("user_id"))
             or type(manifest.get("saved_at")) is not int or manifest["saved_at"] < 0
-            or type(manifest.get("expires_at")) is not int
-            or manifest["expires_at"] != manifest["saved_at"] + IMAGE_RETENTION_SECONDS
+            or "expires_at" not in manifest
+            or (manifest["expires_at"] is not None and (
+                type(manifest["expires_at"]) is not int
+                or manifest["expires_at"] != manifest["saved_at"] + LEGACY_IMAGE_RETENTION_SECONDS
+            ))
             or not isinstance(manifest.get("images"), list)
             or not 1 <= len(manifest["images"]) <= 8
         ):
@@ -278,7 +282,7 @@ class DiskResultStore:
             directory = os.open(job_id, DIRECTORY_FLAGS, dir_fd=root)
             try:
                 manifest = self._manifest(directory, job_id)
-                if manifest["user_id"] != user_id or self._clock() >= manifest["expires_at"]:
+                if manifest["user_id"] != user_id:
                     raise ValueError("Image unavailable")
                 # A missing/symlink/short/oversized member invalidates the entire set.
                 for index, image in enumerate(manifest["images"]):
@@ -296,7 +300,7 @@ class DiskResultStore:
     def describe(self, job_id: str, user_id: str) -> ResultInfo | None:
         try:
             with self._result(job_id, user_id) as (_directory, manifest):
-                return ResultInfo(len(manifest["images"]), manifest["expires_at"])
+                return ResultInfo(len(manifest["images"]), None)
         except (OSError, ValueError, TypeError):
             return None
 
@@ -327,7 +331,7 @@ class DiskResultStore:
         if any(image is None for image in images):
             return None
         return CachedResult(
-            user_id, images, info.expires_at, float(info.expires_at),
+            user_id, images, info.expires_at, float("inf"),
             sum(len(image.data) for image in images),
         )
 
@@ -342,7 +346,7 @@ class DiskResultStore:
                 pass
 
     def purge_image(self, job_id: str, user_id: str, index: int) -> bool:
-        """Unlink exactly one original member, retaining siblings and the original TTL.
+        """Unlink exactly one original member, retaining siblings and saved metadata.
 
         The durable marker is published before unlink. Retrying a previously marked
         member still attempts unlink, so a filesystem error never becomes false success.
@@ -432,19 +436,10 @@ class DiskResultStore:
                     if stat.S_ISDIR(details.st_mode):
                         directory = os.open(entry.name, DIRECTORY_FLAGS, dir_fd=root)
                         try:
-                            expiry = details.st_mtime + IMAGE_RETENTION_SECONDS
                             temporary = _artifact(entry.name, ".tmp-")
-                            if temporary:
-                                expiry = details.st_mtime + 60 * 60
-                            if _uuid(entry.name):
-                                try:
-                                    expiry = self._manifest(directory, entry.name)["expires_at"]
-                                except (OSError, ValueError, TypeError):
-                                    pass
                             if (
-                                (_uuid(entry.name) or temporary)
-                                and ((temporary and startup)
-                                     or self._clock() >= expiry)
+                                temporary
+                                and (startup or self._clock() >= details.st_mtime + 60 * 60)
                             ):
                                 os.close(directory)
                                 directory = None

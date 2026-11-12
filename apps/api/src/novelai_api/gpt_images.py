@@ -48,16 +48,22 @@ def gpt_prompt(parameters: GenerationRequest) -> str:
     # GPT reads plain text: NovelAI weights would be noise, negative groups the opposite intent.
     traits, item, style = (strip_prompt_weights(text) for text in (traits, item, style))
     lines = [
-        "Use the attached reference image(s); they all show the same character.",
-        "Draw exactly this character: keep the face, hair, eyes, outfit, accessories and "
-        "weapon identical to the references.",
+        "Use the attached reference image(s) only to identify the same character.",
+        "Preserve the character identity, facial features, hair, eyes, outfit, accessories "
+        "and weapon design and colours.",
+        "Create a new image following the requested scene and pose. Pose, limb placement, "
+        "expression, gaze, camera angle and framing must follow the scene and pose "
+        "instructions, independently of the references.",
         f"Character: {traits}",
     ]
     if item:
         lines.append(f"Scene and pose: {item}")
     if style:
         lines.append(f"Art style: {style}")
-    lines.append("One character only. No text, no watermark, no signature.")
+    lines.append(
+        "Draw one character in one view only. No turnaround sheet, panels, text, watermark "
+        "or signature."
+    )
     return "\n".join(lines)
 
 

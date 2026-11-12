@@ -58,7 +58,7 @@ export const SavedExperimentList = observer(({ saved, api, onView, activeIds = [
       <button type="button" className="icon-button" title="刷新已保存实验" aria-label="刷新已保存实验" disabled={saved.listLoading}
         onClick={() => void saved.loadExperiments()}><RefreshCw size={17} /></button>
     </div>
-    <p className="prompt-hint">新图像由服务器私有保存 7 天；参数和权重保留更久。刷新后可在这里重新对比，服务器实验的进度会在工作台接回。</p>
+    <p className="prompt-hint">图像、参数和权重由服务器私有保存。刷新后可在这里重新对比，服务器实验的进度会在工作台接回。</p>
     {!saved.listLoaded && !saved.listLoading && <button className="secondary" type="button" onClick={() => void saved.loadExperiments(0)}>加载已保存实验</button>}
     {saved.listLoading && <p className="subtle" role="status">正在加载实验...</p>}
     {saved.listError && <p className="alert" role="alert">{saved.listError}</p>}
@@ -432,7 +432,7 @@ export const SavedResultViewer = observer(({ saved, api, onClose, onUseSeed, can
       {restorableDiscarded > 0 && <p className="subtle">本组已弃置 {restorableDiscarded} 张（导出时跳过；可点「恢复」撤销）。</p>}
       {purgedCount > 0 && <p className="subtle">本组已永久清理 {purgedCount} 张，无法恢复。</p>}
       {pendingPurges.size > 0 && <p className="subtle">本组还有 {pendingPurges.size} 张待重试清理，已禁止查看或恢复。</p>}
-      <div className="saved-result-actions"><span className="prompt-hint">私有保存 7 天</span><button type="button" className="text-action" disabled={saved.loading || saved.imageLoading} onClick={() => void saved.retry()}>
+      <div className="saved-result-actions"><span className="prompt-hint">图片私有保存</span><button type="button" className="text-action" disabled={saved.loading || saved.imageLoading} onClick={() => void saved.retry()}>
         <RefreshCw size={15} aria-hidden="true" /> 刷新保存记录
       </button></div>
       {job && <>

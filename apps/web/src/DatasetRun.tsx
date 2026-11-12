@@ -3,7 +3,7 @@ import { observer } from 'mobx-react-lite'
 import { Download, FileUp, Layers, Plus, RotateCcw, Trash2, Upload, UserRound, X } from 'lucide-react'
 import { ApiFailure, errorText, MAX_EXPERIMENT_NAME, type GenerationView, type WorkspaceApi } from './api'
 import { DATASET_CATEGORIES, type DatasetCategory } from './dataset-prompts'
-import { CHARACTER_CATEGORIES } from './character-prompts'
+import { characterCategories, type CharacterMode } from './character-prompts'
 import { CUSTOM_CATEGORY, MAX_DATASET_ITEMS, MAX_DATASET_PROMPT_LENGTH, SHAPE_LABELS, datasetItemText, datasetItems, itemShape, nextCustomId, type DatasetEntry, type ItemShape } from './dataset-run'
 import { translatePrompt } from './prompt-zh'
 import { supportsNativeCharacters } from './store'
@@ -178,18 +178,23 @@ export const DatasetRunConfig = observer(({ generation, api, hidden }: { generat
   const [mode, setMode] = useState<DatasetMode>('style')
   const [runName, setRunName] = useState('')
   const [entries, setEntries] = useState<DatasetEntry[]>(defaultDatasetEntries)
-  const [characterEntries, setCharacterEntries] = useState<DatasetEntry[]>(defaultCharacterEntries)
+  const [characterEntriesByMode, setCharacterEntriesByMode] = useState<Record<CharacterMode, DatasetEntry[]>>(() => ({
+    gpt: defaultCharacterEntries('gpt'), precise: defaultCharacterEntries('precise'),
+  }))
   const [autoShape, setAutoShape] = useState(true)
-  const character = useCharacterSettings(generation.draft.style_prompt)
+  const character = useCharacterSettings()
+  const characterMode = character.settings.mode
+  const characterEntries = characterEntriesByMode[characterMode]
+  const setCharacterEntries: Dispatch<SetStateAction<DatasetEntry[]>> = update => setCharacterEntriesByMode(current => ({
+    ...current, [characterMode]: typeof update === 'function' ? update(current[characterMode]) : update,
+  }))
   const runs = generation.runs
   const snapshot = runs.kind === 'dataset' ? runs.snapshot : null
   const style = generation.draft.style_prompt
   const active = mode === 'style' ? entries : characterEntries
   const selected = active.filter(entry => entry.selected)
   const gptMode = mode === 'character' && character.settings.mode === 'gpt'
-  // Image-to-image sends its source at the run size, so it keeps one canvas.
-  const shapeAllowed = !(mode === 'character' && character.settings.mode === 'img2img')
-  const shapes = autoShape && shapeAllowed
+  const shapes = autoShape
   const shapeCounts = shapes ? selected.reduce<Record<ItemShape, number>>((counts, entry) => {
     counts[itemShape(entry.prompt, entry.characters)] += 1
     return counts
@@ -225,7 +230,9 @@ export const DatasetRunConfig = observer(({ generation, api, hidden }: { generat
     {mode === 'style'
       ? <p className="prompt-hint">用当前「画风」固定风格，逐条运行下面的内容提示词，生成用于训练画风 LoRA 的图片。提示词只描述内容，不含画风与质量词；导出时作为 caption。默认全选 322 条，覆盖特写、半身、全身、视角、场景、光照、多人、异世界奇幻、「华丽立绘」（金饰华服、极长飘发、飘带披帛、头冠光环与发光的神祇立绘）、年幼男孩女孩和无人物；约四成人物条目写明刘海类型（中分最多，另有齐刘海、斜刘海、露额头等）；人物条目都写明发色、瞳色、带颜色的上下装，看得见脸的条目写明表情，穿外套的写成敞开的外套并写明内搭，约三分之一写明带颜色的饰品；只写构图里看得见的部分（半身不写鞋，全身和远景才写鞋袜），装饰与发光也写进 caption，让成图与 caption 对应；「多人互动」条目把每个人写成独立的人物提示词，需要 V4 / V4.5 / V5 模型。「男孩（年幼）」「女孩（年幼）」条目只含健全内容，不能与身体描写类画风同时使用。每条下方的中文只用于阅读，不会发送。</p>
       : <p className="prompt-hint">用参考图和固定的角色特征，逐条运行景别、表情、姿势、场景等内容提示词，生成用于训练角色 LoRA 的图片。导出的 caption 包含每张图使用的画风和内容提示词，不含角色特征（让画法不会被学成角色的一部分）。</p>}
-    <p className="prompt-hint">公共分区和人物卡片不参与批跑；负面提示词、模型、尺寸（关闭自动比例时）、步数、CFG、采样器和每条张数取自当前生成设置。</p>
+    <p className="prompt-hint">公共分区和人物卡片不参与批跑。{gptMode
+      ? 'GPT 的尺寸、质量和每条张数使用下方独立设置，自动比例开启时按条目调整尺寸；NovelAI 参数不参与。'
+      : '负面提示词、模型、尺寸（关闭自动比例时）、步数、CFG、采样器和每条张数取自当前生成设置。'}</p>
     {snapshot ? <div className="experiment-note" role="status">
       <p>这里展示本次训练集批跑固定的配置与 {snapshot.items?.length ?? 0} 条提示词。编辑草稿不会改变服务器批跑。</p>
       <p>画风：{snapshot.styles?.length ? snapshot.styles.join(' ｜ ') : snapshot.parameters.style_prompt}</p>
@@ -237,12 +244,15 @@ export const DatasetRunConfig = observer(({ generation, api, hidden }: { generat
         placeholder="添加自定义内容提示词，例如 1girl, solo, sitting, library" name="画风训练集" allowCharacters showShape={shapes} />
     </> : <>
       <CharacterRunSettings api={api} state={character} model={generation.draft.model} draftStyle={style} />
-      <PromptLibrary entries={characterEntries} setEntries={setCharacterEntries} categories={CHARACTER_CATEGORIES} defaults={defaultCharacterEntries}
+      <p className="prompt-hint">{characterMode === 'gpt'
+        ? 'GPT 默认条目覆盖肖像、正侧背面、站立、半身和坐姿等日常姿态，并穿插俯视、仰视和侧面。'
+        : 'Precise 默认条目保留基础角色视图，并增加瑜伽、战斗姿态、四肢着地、坐位前屈和碰脚尖等复杂动作，搭配不同视角。'} 当前方式的条目编辑、勾选和自定义内容会单独保留；切换方式不会覆盖另一套。</p>
+      <PromptLibrary key={characterMode} entries={characterEntries} setEntries={setCharacterEntries} categories={characterCategories(characterMode)} defaults={() => defaultCharacterEntries(characterMode)}
         placeholder="添加自定义内容提示词（不写性别、人数和外貌），例如 sitting, library, reading" name="角色训练集" allowCharacters={false} showShape={shapes} />
     </>}
     {!snapshot && <label className="dataset-shape-toggle">
-      <input type="checkbox" checked={shapes} disabled={!shapeAllowed} onChange={event => setAutoShape(event.target.checked)} />
-      <span>按构图自动选比例：躺姿（仰躺、侧躺、趴卧、斜倚）、远景、风景和多人全身优先用横图，其他全身、七分身用竖图，其余用方图（{gptMode ? 'GPT 1024×1536 / 1024×1024 / 1536×1024' : '832×1216 / 1024×1024 / 1216×832'}）。{shapeAllowed ? '关闭后整套使用生成设置的尺寸。' : '图生图会按整套尺寸发送参考图，固定使用生成设置的尺寸。'}</span>
+      <input type="checkbox" checked={shapes} onChange={event => setAutoShape(event.target.checked)} />
+      <span>按构图自动选比例：躺姿、四肢着地、爬行、平板支撑、侧平板、下犬式、坐位前屈，以及远景、风景和多人全身优先用横图，其他全身、七分身用竖图，其余用方图（{gptMode ? 'GPT 1024×1536 / 1024×1024 / 1536×1024' : '832×1216 / 1024×1024 / 1216×832'}）。关闭后整套使用{gptMode ? '下方 GPT 设置' : '生成设置'}的尺寸。</span>
     </label>}
     {!snapshot && error && <p className="alert" role="alert">{error}</p>}
     {!snapshot && <div className="experiment-preview" aria-live="polite" aria-atomic="true">
@@ -251,11 +261,14 @@ export const DatasetRunConfig = observer(({ generation, api, hidden }: { generat
         {shapeCounts && <>：竖图 {shapeCounts.portrait}、方图 {shapeCounts.square}、横图 {shapeCounts.landscape}</>}</p>
       <p className="prompt-hint">{mode === 'style'
         ? '每条提示词是一次付费生成。画风 LoRA 一般 30–150 张精选图即可。'
-        : '每条提示词是一次付费生成，Vibe Transfer / 图生图可能额外消耗 Anlas。角色 LoRA 一般 15–40 张一致的精选图即可，跑完请人工筛掉不像的图。'}</p>
+        : gptMode ? '每条提示词是一次 GPT 付费生成，请人工筛选角色一致、动作正确的图片，并核对 caption。'
+          : '每条提示词是一次 NovelAI 付费生成，Precise Reference 会额外消耗 Anlas。请人工筛选角色一致、肢体正确的图片，并核对 caption。'}</p>
     </div>}
-    <p className="prompt-hint">每条使用不同种子：生成设置中的种子作为基础种子（留空则服务器随机一次），第 N 条使用基础种子 + N − 1，便于复现。</p>
+    {!snapshot && <p className="prompt-hint">{gptMode
+      ? 'GPT 生图接口不接收种子，调整 NovelAI 的种子不会改变 GPT 请求，也无法靠种子保证复现。'
+      : '每条使用不同种子：生成设置中的种子作为基础种子（留空则服务器随机一次），第 N 条使用基础种子 + N − 1。'}</p>}
     <p className="prompt-hint">批跑在服务器依次执行，单条失败后继续下一条，不会自动重试。刷新、关闭页面或退出登录不会停止；只有“停止”会阻止后续条目。已有任务在运行时会加入队列：NovelAI 与 GPT 各自按加入顺序逐个执行，互不等待；最多 10 个未完成任务。</p>
-    <p className="prompt-hint">图片私有保存 7 天，请在过期前从历史记录的「实验与训练集」中导出训练集。</p>
+    <p className="prompt-hint">可从历史记录的「实验与训练集」中查看和导出已保存的图片。</p>
     {!snapshot && generation.error && !generation.submitUncertain && <p className="alert" role="alert">{generation.error}</p>}
     {!snapshot && <label className="dataset-run-name">训练集名称（可选）
       <input value={runName} maxLength={MAX_EXPERIMENT_NAME} placeholder={mode === 'style' ? '例如：水彩画风 第 1 版' : '例如：希望 角色 v2'}

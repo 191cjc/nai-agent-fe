@@ -28,7 +28,7 @@ from novelai_api.generations import (
 )
 from novelai_api.image_results import (
     DIRECTORY_OVERHEAD_BYTES,
-    IMAGE_RETENTION_SECONDS,
+    LEGACY_IMAGE_RETENTION_SECONDS,
     MAX_IMAGE_BYTES,
     DiskResultStore,
 )
@@ -78,7 +78,7 @@ def test_default_store_survives_app_restart_and_deletion(database: Database) -> 
         job = wait_finished(client, job_id)
         assert job["status"] == "succeeded"
         expiry = job["result_expires_at"]
-        assert int(time.time()) + IMAGE_RETENTION_SECONDS - 5 <= expiry
+        assert expiry is None
         directory = image_root / job_id
         manifest = json.loads((directory / "manifest.json").read_text())
         assert manifest["user_id"] == user_id
@@ -108,37 +108,49 @@ def test_default_store_survives_app_restart_and_deletion(database: Database) -> 
     assert provider.calls and len(provider.calls) == 1
 
 
-def test_expiry_uses_saved_wall_time_across_restart_and_keeps_metadata(database: Database) -> None:
+@pytest.mark.parametrize("legacy", [False, True])
+def test_images_remain_available_past_former_expiry_across_restart(
+    database: Database, legacy: bool,
+) -> None:
     now = [1_000_000.0]
     root = database.path.parent / "generation-images"
     cache = DiskResultStore(root, clock=lambda: now[0])
     run = context()
     with disk_client(database, FakeProvider(), cache) as client:
-        _token, _user, session = login(client, database, "alice")
+        _token, user, session = login(client, database, "alice")
         job_id = client.post(
             "/api/generations", json={**INPUT, "experiment": run}, headers=ORIGIN,
         ).json()["id"]
         saved = wait_finished(client, job_id)
-        assert saved["result_expires_at"] == int(now[0]) + IMAGE_RETENTION_SECONDS
-    now[0] += IMAGE_RETENTION_SECONDS - 1
+        assert saved["result_expires_at"] is None
+    manifest_path = root / job_id / "manifest.json"
+    if legacy:
+        manifest = json.loads(manifest_path.read_text())
+        manifest["expires_at"] = manifest["saved_at"] + LEGACY_IMAGE_RETENTION_SECONDS
+        manifest_path.write_text(json.dumps(manifest))
+    manifest_before = manifest_path.read_bytes()
+    now[0] += LEGACY_IMAGE_RETENTION_SECONDS * 5
     restarted_cache = DiskResultStore(root, clock=lambda: now[0])
     with disk_client(database, cache=restarted_cache) as client:
         client.cookies.set(SESSION_COOKIE, session)
         assert client.get(saved["image_urls"][0]).content == PNG
-        now[0] += 1
-        assert client.get(saved["image_urls"][0]).status_code == 404
-        assert client.get(f"/api/generations/{job_id}").json()["image_urls"] == []
         restarted_cache.sweep()
-        assert not (root / job_id).exists()
+        reservation = restarted_cache.reserve(1)
+        restarted_cache.release(reservation)
+        assert (root / job_id).exists()
+        assert client.get(saved["image_urls"][0]).content == PNG
+        assert restarted_cache.get(job_id, user).images == tuple(IMAGES)
+        assert manifest_path.read_bytes() == manifest_before
         detail = client.get(f"/api/style-experiments/{run['id']}").json()
         assert detail["summary"]["group_count"] == 1
         assert detail["summary"]["completed_count"] == 1
         assert detail["summary"]["image_count"] == 2
         assert detail["items"][0]["parameters"]["experiment"] == run
-        assert detail["items"][0]["image_urls"] == []
+        assert detail["items"][0]["image_urls"] == saved["image_urls"]
+        assert detail["items"][0]["result_expires_at"] is None
 
 
-def test_periodic_and_startup_sweep_remove_expired_and_abandoned_files(tmp_path: Path) -> None:
+def test_periodic_and_startup_sweep_remove_only_abandoned_files(tmp_path: Path) -> None:
     root = tmp_path / "images"
     now = [time.time()]
     cache = DiskResultStore(root, clock=lambda: now[0], sweep_interval=0.01)
@@ -154,16 +166,22 @@ def test_periodic_and_startup_sweep_remove_expired_and_abandoned_files(tmp_path:
     try:
         assert not abandoned.exists() and not reserve.exists()
         assert (root / job_id).exists()
-        now[0] += IMAGE_RETENTION_SECONDS
+        abandoned.mkdir(mode=0o700)
+        (abandoned / "partial.png").write_bytes(PNG)
+        reserve.write_bytes(b"partial")
+        now[0] += LEGACY_IMAGE_RETENTION_SECONDS * 5
         deadline = time.monotonic() + 2
-        while (root / job_id).exists() and time.monotonic() < deadline:
+        while (abandoned.exists() or reserve.exists()) and time.monotonic() < deadline:
             time.sleep(0.01)
-        assert not (root / job_id).exists()
+        assert not abandoned.exists() and not reserve.exists()
+        assert cache.image(job_id, owner, 0).data == PNG
     finally:
         cache.stop()
 
 
-@pytest.mark.parametrize("damage", ["missing", "symlink", "contents", "manifest", "oversized"])
+@pytest.mark.parametrize("damage", [
+    "missing", "symlink", "contents", "manifest", "expiry", "missing-expiry", "oversized",
+])
 def test_corrupt_files_fail_safely_without_owner_or_path_escape(
     tmp_path: Path, damage: str,
 ) -> None:
@@ -186,6 +204,14 @@ def test_corrupt_files_fail_safely_without_owner_or_path_escape(
         target.write_bytes(b"x" * len(PNG))
     elif damage == "manifest":
         (target.parent / "manifest.json").write_bytes(b"{" * 9000)
+    elif damage in ("expiry", "missing-expiry"):
+        path = target.parent / "manifest.json"
+        manifest = json.loads(path.read_text())
+        if damage == "expiry":
+            manifest["expires_at"] = manifest["saved_at"] + 1
+        else:
+            del manifest["expires_at"]
+        path.write_text(json.dumps(manifest))
     else:
         with target.open("wb") as output:
             output.truncate(MAX_IMAGE_BYTES + 1)
@@ -230,10 +256,15 @@ def test_cleanup_preserves_unknown_old_entries_and_refuses_unbudgetable_trees(
     sentinel = unknown / "keep.txt"
     sentinel.write_bytes(b"keep")
     os.utime(unknown, (0, 0))
+    damaged = cache.path / str(uuid4())
+    damaged.mkdir()
+    (damaged / "manifest.json").write_bytes(b"{")
+    os.utime(damaged, (0, 0))
     cache.start()
     try:
         cache.sweep()
         assert sentinel.read_bytes() == b"keep"
+        assert (damaged / "manifest.json").read_bytes() == b"{"
         (unknown / "nested").mkdir()
         with pytest.raises(ResultStorageUnavailable):
             cache.reserve(1)
@@ -250,7 +281,7 @@ def test_invalid_result_sets_never_create_partial_files(tmp_path: Path, images) 
     assert not cache.path.exists()
 
 
-def test_capacity_reserves_all_pending_work_and_never_evicts_unexpired(tmp_path: Path) -> None:
+def test_capacity_reserves_all_pending_work_and_never_evicts_saved_images(tmp_path: Path) -> None:
     now = [1000.0]
     amount = MAX_IMAGE_BYTES + DIRECTORY_OVERHEAD_BYTES
     cache = DiskResultStore(
@@ -272,10 +303,12 @@ def test_capacity_reserves_all_pending_work_and_never_evicts_unexpired(tmp_path:
     with pytest.raises(ResultStorageUnavailable):
         cache.reserve(1)
     assert cache.image(job_id, owner, 0).data == PNG
-    now[0] += IMAGE_RETENTION_SECONDS
-    reservation = cache.reserve(1)
-    cache.release(reservation)
-    assert not (cache.path / job_id).exists()
+    now[0] += LEGACY_IMAGE_RETENTION_SECONDS * 5
+    with pytest.raises(ResultStorageUnavailable):
+        cache.reserve(1)
+    assert cache.image(job_id, owner, 0).data == PNG
+    cache.discard(job_id)
+    cache.release(cache.reserve(1))
 
 
 def test_default_store_has_no_fixed_budget_and_keeps_three_gib_free(tmp_path: Path) -> None:

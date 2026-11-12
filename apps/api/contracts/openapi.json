@@ -2656,6 +2656,55 @@
         "title": "TraitAdviceRequest",
         "type": "object"
       },
+      "TraitAdviceResult": {
+        "additionalProperties": false,
+        "properties": {
+          "suggestion": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Suggestion",
+            "type": "string"
+          },
+          "translations": {
+            "items": {
+              "$ref": "#/components/schemas/TraitTranslation"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Translations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "suggestion",
+          "translations"
+        ],
+        "title": "TraitAdviceResult",
+        "type": "object"
+      },
+      "TraitTranslation": {
+        "additionalProperties": false,
+        "properties": {
+          "tag": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Tag",
+            "type": "string"
+          },
+          "translation": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Translation",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tag",
+          "translation"
+        ],
+        "title": "TraitTranslation",
+        "type": "object"
+      },
       "UserInfo": {
         "properties": {
           "id": {
@@ -4889,7 +4938,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AdviceResult"
+                  "$ref": "#/components/schemas/TraitAdviceResult"
                 }
               }
             },

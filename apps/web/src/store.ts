@@ -516,9 +516,9 @@ export class GenerationStore {
     let gptConcurrency: number | undefined
     try {
       const styles = options.styles ?? [this.draft.style_prompt]
-      // Per-item canvases by framing; image-to-image keeps one size so its source is not distorted.
+      // Per-item canvases by framing for the selected provider.
       const mode = options.character?.mode
-      const sizes = !options.autoShape || mode === 'img2img' ? undefined : mode === 'gpt' ? GPT_SIZES : NAI_SHAPE_SIZES
+      const sizes = !options.autoShape ? undefined : mode === 'gpt' ? GPT_SIZES : NAI_SHAPE_SIZES
       items = datasetItems(entries, styles, options.character?.traits, supportsNativeCharacters(this.draft.model), sizes)
       if (options.character?.mode === 'gpt') {
         // GPT image runs are independent of NovelAI: no NAI draft settings are used.
@@ -543,7 +543,7 @@ export class GenerationStore {
         parameters = { ...base, positive_prompt: '', character_prompts: [], auto_character_position: false }
         delete parameters.prompt_sections
       }
-      if (options.character) character = characterRequest(options.character, parameters.model, VIBE_MODELS, PRECISE_MODELS)
+      if (options.character) character = characterRequest(options.character, parameters.model, PRECISE_MODELS)
     } catch (error) {
       this.error = error instanceof Error ? error.message : '训练集批跑参数无效。'
       return
