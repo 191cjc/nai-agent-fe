@@ -857,7 +857,7 @@
             "items": {
               "$ref": "#/components/schemas/StyleTag"
             },
-            "maxItems": 64,
+            "maxItems": 128,
             "title": "Style Tags",
             "type": "array"
           },
@@ -1105,7 +1105,7 @@
               "minLength": 1,
               "type": "string"
             },
-            "maxItems": 32,
+            "maxItems": 128,
             "title": "Style Remove",
             "type": "array"
           }
@@ -3686,7 +3686,7 @@
               "minLength": 1,
               "type": "string"
             },
-            "maxItems": 32,
+            "maxItems": 128,
             "title": "Remove",
             "type": "array"
           }

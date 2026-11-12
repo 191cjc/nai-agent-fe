@@ -201,7 +201,7 @@ class StyleEdits(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     add: list[StyleTag] = Field(default_factory=list, max_length=32)
-    remove: list[StyleTag] = Field(default_factory=list, max_length=32)
+    remove: list[StyleTag] = Field(default_factory=list, max_length=128)
 
     @field_validator("add", "remove")
     @classmethod

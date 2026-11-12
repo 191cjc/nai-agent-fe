@@ -49,6 +49,21 @@ not treat it as a runnable configuration or overwrite any filled secrets.
 New tokens are generated server-side and printed **once**; only SHA-256 hashes
 are stored. The operator must securely distribute issued tokens to users.
 
+To explicitly reset every user's saved random training-set recipes, run this
+operator-only command against the intended `NAI_SQLITE_PATH`:
+
+```sh
+uv run novelai-admin clear-dataset-recipes --all-users
+```
+
+The required `--all-users` flag makes the scope explicit. The command deletes
+only `dataset_recipes` in one transaction and prints `{"deleted_recipes": N}`;
+it never loads or prints recipe names or JSON. Generated training sets, frozen
+run items, generation history, captions, images and authentication records stay
+intact. This reset is never run by startup, migration or an HTTP route. After
+refreshing the editor, users with no saved recipes start from the current
+built-in template and can save their own copy.
+
 The `__Host-nai_session` cookie requires HTTPS, and mutations require an
 `Origin` exactly matching `NAI_PUBLIC_ORIGIN`. Local browsers use Vite's
 HTTPS proxy; production browsers use the existing HTTPS Nginx origin.

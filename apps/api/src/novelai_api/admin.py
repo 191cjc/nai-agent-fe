@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .auth import create_token, list_tokens, revoke_token
 from .config import Settings
+from .dataset_recipes import RecipeStore
 from .db import Database
 
 
@@ -25,6 +26,13 @@ def main() -> None:
         "continue-run", help="Create the continuation of a stopped dataset run (ids only)",
     )
     proceed.add_argument("run_id")
+    clear_recipes = commands.add_parser(
+        "clear-dataset-recipes", help="Delete saved random recipes and print only their count",
+    )
+    clear_recipes.add_argument(
+        "--all-users", action="store_true", required=True,
+        help="Explicitly delete every user's saved recipes; retain generated datasets",
+    )
     arguments = parser.parse_args()
     database = Database(Settings.from_env().sqlite_path)
 
@@ -39,6 +47,8 @@ def main() -> None:
         print(f"Token ID: {token_id}\nAccess token (shown once): {token}")
     elif arguments.command == "list":
         print(json.dumps(list_tokens(database), ensure_ascii=False))
+    elif arguments.command == "clear-dataset-recipes":
+        print(json.dumps({"deleted_recipes": RecipeStore(database).clear_all()}))
     elif arguments.command == "continue-run":
         # Copies the stored definition server-side; prints only ids and counts.
         from .reference_images import ReferenceImageStore

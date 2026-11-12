@@ -173,7 +173,7 @@ def test_style_edits_rotate_with_the_style_pool() -> None:
 
 @pytest.mark.parametrize("edits", [
     {"add": ["a, b"]}, {"add": ["{x}"]}, {"remove": ["1.2::x"]}, {"add": [" "]},
-    {"add": ["x"] * 33}, {"other": []},
+    {"add": ["x"] * 33}, {"remove": ["x"] * 129}, {"other": []},
 ])
 def test_invalid_style_edits_are_rejected(edits) -> None:
     with pytest.raises(ValidationError):

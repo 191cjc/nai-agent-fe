@@ -20,6 +20,8 @@ from typing import Annotated, Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from .prompt_weights import strip_prompt_weights
+
 RECIPE_VERSION = 1
 MAX_PROMPT = 1000
 MAX_ITEMS = 400
@@ -44,8 +46,8 @@ Label = Annotated[str, Field(max_length=100)]
 Condition = dict[str, Any]
 
 def tag_key(tag: str) -> str:
-    """Comparison key of one tag: case-, underscore- and whitespace-insensitive."""
-    return _SPACES.sub(" ", tag.replace("_", " ")).strip().lower()
+    """Compare visible tags independently of emphasis, case and underscore spelling."""
+    return _SPACES.sub(" ", strip_prompt_weights(tag).replace("_", " ")).strip().lower()
 
 _SEPARATORS = re.compile(r"[,，\r\n]+")
 
@@ -114,7 +116,7 @@ class Effects(_Model):
     content_add: list[Tag] = Field(default_factory=list, max_length=64)
     remove_tags: list[Tag] = Field(default_factory=list, max_length=64)
     style_add: list[Tag] = Field(default_factory=list, max_length=32)
-    style_remove: list[Tag] = Field(default_factory=list, max_length=32)
+    style_remove: list[Tag] = Field(default_factory=list, max_length=128)
 
     @field_validator("content_add", "remove_tags", "style_add", "style_remove", mode="after")
     @classmethod
@@ -191,7 +193,7 @@ class DatasetRecipe(_Model):
     resources: dict[Id, int] = Field(default_factory=dict)
     states: dict[Id, Label] = Field(default_factory=dict)
     slots: list[Slot] = Field(default_factory=list, max_length=20)
-    style_tags: list[StyleTag] = Field(default_factory=list, max_length=64)
+    style_tags: list[StyleTag] = Field(default_factory=list, max_length=128)
     glossary: dict[str, str] = Field(default_factory=dict)
     draw_order: list[Id]
     prompt_order: list[Id] | None = None
@@ -441,13 +443,10 @@ def _validate(recipe: DatasetRecipe) -> None:
                 raise RecipeError(f"{path}.needs", f"unknown region '{region}'")
         if part.when is not None:
             _check_condition(recipe, part.when, f"{path}.when", scope)
-        if part.quota and (
-            part.when or part.needs or part.mode != "one"
-            or any(option.when or option.weight_mods or option.needs for option in part.options)
-        ):
+        if part.quota and part.mode != "one":
             raise RecipeError(
                 f"{path}.quota",
-                "quota partitions draw once and have no conditions, needs or weight modifiers",
+                "quota partitions must draw once",
             )
         # Same-partition references are allowed (fill mode sees its own earlier draws).
         own_scope = _Scope(partitions=scope.partitions | {part.id},
@@ -715,16 +714,19 @@ def _weighted(rng: random.Random, choices: list[tuple[Any, float]]) -> Any:
     return choices[-1][0]
 
 def _quota(
-    rng: random.Random, options: list[Option], n: int,
+    rng: random.Random, choices: list[tuple[Option, float]], n: int,
 ) -> list[str]:
-    total = sum(option.weight for option in options)
-    exact = [(option, option.weight * n / total) for option in options]
+    total = sum(weight for _, weight in choices)
+    exact = [(option, weight * n / total) for option, weight in choices]
     counts = {option.id: int(share) for option, share in exact}
     rest = n - sum(counts.values())
-    order = sorted(exact, key=lambda pair: (-(pair[1] - int(pair[1])), options.index(pair[0])))
+    # Random tie breaking avoids consistently favoring the first option in small batches.
+    order = list(exact)
+    rng.shuffle(order)
+    order.sort(key=lambda pair: -(pair[1] - int(pair[1])))
     for option, _ in order[:rest]:
         counts[option.id] += 1
-    plan = [option.id for option in options for _ in range(counts[option.id])]
+    plan = [option.id for option, _ in choices for _ in range(counts[option.id])]
     rng.shuffle(plan)
     return plan
 
@@ -734,6 +736,20 @@ class Sampler:
         self.slots = {slot.id: slot for slot in recipe.slots}
         self.parts = {part.id: part for part in recipe.partitions}
         self.descendants = _descendants(recipe)
+        self.slot_counts: dict[tuple, dict[str, int]] = {}
+
+    def _slot_value(self, rng: random.Random, name: str, choices: list[tuple[str, float]]) -> str:
+        """Balance repeated draws of the same legal slot values, including exclusions."""
+        counts = self.slot_counts.setdefault((name, tuple(choices)), {})
+        total = sum(weight for _, weight in choices)
+        ordinal = sum(counts.values()) + 1
+        ranked = [(value, ordinal * weight / total - counts.get(value, 0))
+                  for value, weight in choices]
+        best = max(score for _, score in ranked)
+        tied = [value for value, score in ranked if abs(score - best) < 1e-9]
+        value = rng.choice(tied)
+        counts[value] = counts.get(value, 0) + 1
+        return value
 
     def _value_choices(
         self, item: _Item, partition_id: str, option: Option, name: str,
@@ -756,10 +772,6 @@ class Sampler:
     def _eligible(self, item: _Item, part: Partition, option: Option, first: bool) -> float:
         if option.disabled:
             return 0
-        if option.none:
-            return option.weight * self._mods(item, option) if (
-                item.allowed(part.id) is None or NONE_ID in (item.allowed(part.id) or set())
-            ) else 0
         if any(draw.option.id == option.id for draw in item.chosen(part.id)):
             return 0
         if f"{part.id}.{option.id}" in item.removed_options():
@@ -794,7 +806,9 @@ class Sampler:
         text, label = option.tags, option.label
         for name in _placeholders(option.tags):
             # Drawn one by one so a later slot's exclude_state can see the earlier value.
-            value_id = _weighted(rng, self._value_choices(item, part.id, option, name))
+            value_id = self._slot_value(
+                rng, name, self._value_choices(item, part.id, option, name),
+            )
             value = next(v for v in self.slots[name].values if v.id == value_id)
             values[name] = value_id
             text = text.replace("{" + name + "}", value.tag)
@@ -813,50 +827,49 @@ class Sampler:
             return "condition"
         return None
 
-    def draw_item(self, rng: random.Random, index: int, quota: dict[str, list[str]]) -> _Item:
-        item = _Item(self.recipe, self.descendants)
-        for part_id in self.recipe.draw_order:
-            part = self.parts[part_id]
-            reason = self._skip_reason(item, part)
-            if reason:
-                item.skips[part.id] = reason
-                continue
-            count = 0
-            while count < part.max_draws:
-                choices = [
-                    (option, weight) for option in part.options
-                    if (weight := self._eligible(item, part, option, count == 0)) > 0
-                ]
-                # Only "none" left means every real option conflicts: that is a skip, not
-                # a deliberate none, so the none option's effects must not apply.
-                if not choices or all(option.none for option, _ in choices):
-                    if count == 0:
-                        item.skips[part.id] = "conflict"
-                    break
-                option = None
-                if part.quota:
-                    planned = next(o for o in part.options if o.id == quota[part.id][index])
-                    if any(choice is planned for choice, _ in choices):
-                        option = planned
-                if option is None:
-                    option = _weighted(rng, choices)
-                if option.none and count > 0:
-                    break  # fill mode: none stops further draws without applying effects
-                draw = self._fill(rng, item, part, option)
-                item.draws.append(draw)
-                for tag in option.effects.content_add:
-                    item.content_ops.append(("add", tag, part.id))
-                for tag in option.effects.remove_tags:
-                    item.content_ops.append(("remove", tag, part.id))
-                for tag in option.effects.style_add:
-                    item.style_ops.append(("add", tag))
-                for tag in option.effects.style_remove:
-                    item.style_ops.append(("remove", tag))
-                if option.effects.structural():
-                    item.withdraw(f"{part.id}.{option.id}", draw.label)
-                count += 1
-                if option.none or part.mode == "one":
-                    break
+    def draw_partition(
+        self, rng: random.Random, item: _Item, part: Partition, planned: str | None = None,
+    ) -> None:
+        reason = self._skip_reason(item, part)
+        if reason:
+            item.skips[part.id] = reason
+            return
+        count = 0
+        while count < part.max_draws:
+            choices = [
+                (option, weight) for option in part.options
+                if (weight := self._eligible(item, part, option, count == 0)) > 0
+            ]
+            # Only "none" left means every real option conflicts: that is a skip, not
+            # a deliberate none, so the none option's effects must not apply.
+            if not choices or all(option.none for option, _ in choices):
+                if count == 0:
+                    item.skips[part.id] = "conflict"
+                break
+            option = None
+            if planned is not None:
+                option = next((choice for choice, _ in choices if choice.id == planned), None)
+            if option is None:
+                option = _weighted(rng, choices)
+            if option.none and count > 0:
+                break  # fill mode: none stops further draws without applying effects
+            draw = self._fill(rng, item, part, option)
+            item.draws.append(draw)
+            for tag in option.effects.content_add:
+                item.content_ops.append(("add", tag, part.id))
+            for tag in option.effects.remove_tags:
+                item.content_ops.append(("remove", tag, part.id))
+            for tag in option.effects.style_add:
+                item.style_ops.append(("add", tag))
+            for tag in option.effects.style_remove:
+                item.style_ops.append(("remove", tag))
+            if option.effects.structural():
+                item.withdraw(f"{part.id}.{option.id}", draw.label)
+            count += 1
+            if option.none or part.mode == "one":
+                break
+
+    def apply_rules(self, item: _Item) -> None:
         for rule in self.recipe.rules:
             if rule.disabled or not item.evaluate(rule.when):
                 continue
@@ -870,7 +883,6 @@ class Sampler:
                 item.style_ops.append(("add", tag))
             for tag in rule.effects.style_remove:
                 item.style_ops.append(("remove", tag))
-        return item
 
     def assemble(self, item: _Item) -> tuple[str, dict[str, list[str]], list[str]]:
         groups: dict[str, list[str]] = {part_id: [] for part_id in self.recipe.output_order}
@@ -886,23 +898,25 @@ class Sampler:
                     tags[:] = [t for t in tags if tag_key(t) != key]
         seen: set[str] = set()
         ordered: list[str] = []
+        hidden = item.hidden()
+        forbidden = {tag_key(binding.tag) for binding in self.recipe.style_tags
+                     if binding.needs in hidden}
         for tags in groups.values():
             for fragment in tags:
                 for tag in split_tags(fragment):
                     key = tag_key(tag)
-                    if key and key not in seen:
+                    if key and key not in seen and key not in forbidden:
                         seen.add(key)
                         ordered.append(tag)
-        # Style edits: region-bound tags first, then options and rules (later wins).
-        hidden = item.hidden()
+        # Invisible-region requirements are final, including after explicit additions.
         edits: dict[str, tuple[str, str]] = {}
+        for op, tag in item.style_ops:
+            edits[tag_key(tag)] = (op, tag)
         region_removed: list[str] = []
         for style_tag in self.recipe.style_tags:
             if style_tag.needs in hidden:
                 edits[tag_key(style_tag.tag)] = ("remove", style_tag.tag)
                 region_removed.append(style_tag.tag)
-        for op, tag in item.style_ops:
-            edits[tag_key(tag)] = (op, tag)
         style = {
             "add": [tag for op, tag in edits.values() if op == "add"],
             "remove": [tag for op, tag in edits.values() if op == "remove"],
@@ -980,10 +994,39 @@ def sample(recipe: DatasetRecipe, n: int, seed: int) -> SampleResult:
         raise ValueError(f"n must be between 1 and {MAX_ITEMS}")
     rng = random.Random(seed)
     sampler = Sampler(recipe)
-    quota = {
-        part.id: _quota(rng, [o for o in part.options if not o.disabled], n)
-        for part in recipe.partitions if part.quota
-    }
+    sampled = [_Item(recipe, sampler.descendants) for _ in range(n)]
+    quota: dict[str, dict[int, str]] = {}
+    targets: dict[str, dict[str, float]] = {}
+    for part_id in recipe.draw_order:
+        part = sampler.parts[part_id]
+        planned: dict[int, str] = {}
+        if part.quota:
+            # Only items with the same legal choices share a quota. Invisible items
+            # never consume a footwear/bangs allocation, and restrictions stay binding.
+            buckets: dict[tuple, list[int]] = {}
+            for index, item in enumerate(sampled):
+                if sampler._skip_reason(item, part):
+                    continue
+                choices = [(option, weight) for option in part.options
+                           if (weight := sampler._eligible(item, part, option, True)) > 0]
+                if not choices or all(option.none for option, _ in choices):
+                    continue
+                signature = tuple((option.id, weight) for option, weight in choices)
+                buckets.setdefault(signature, []).append(index)
+            target = targets.setdefault(part_id, {})
+            for signature, indices in buckets.items():
+                choices = [(next(o for o in part.options if o.id == oid), weight)
+                           for oid, weight in signature]
+                plan = _quota(rng, choices, len(indices))
+                planned.update(zip(indices, plan, strict=True))
+                total = sum(weight for _, weight in choices)
+                for option, weight in choices:
+                    target[option.id] = target.get(option.id, 0) + len(indices) * weight / total
+            quota[part_id] = planned
+        for index, item in enumerate(sampled):
+            sampler.draw_partition(rng, item, part, planned.get(index))
+    for item in sampled:
+        sampler.apply_rules(item)
     counts: dict[str, dict[str, int]] = {part.id: {} for part in recipe.partitions}
     skips: dict[str, dict[str, int]] = {part.id: {} for part in recipe.partitions}
     values: dict[str, dict[str, dict[str, int]]] = {part.id: {} for part in recipe.partitions}
@@ -993,8 +1036,7 @@ def sample(recipe: DatasetRecipe, n: int, seed: int) -> SampleResult:
     style_added: dict[str, int] = {}
     items: list[SampleItem] = []
     overflow = stale = 0
-    for index in range(n):
-        item = sampler.draw_item(rng, index, quota)
+    for index, item in enumerate(sampled):
         prompt, style, region_removed = sampler.assemble(item)
         for draw in item.active:
             counts[draw.partition][draw.option.id] = counts[draw.partition].get(
@@ -1005,7 +1047,7 @@ def sample(recipe: DatasetRecipe, n: int, seed: int) -> SampleResult:
         for part_id, reason in item.skips.items():
             skips[part_id][reason] = skips[part_id].get(reason, 0) + 1
         for part in recipe.partitions:
-            if part.quota and not any(
+            if part.quota and index in quota[part.id] and not any(
                 draw.option.id == quota[part.id][index] for draw in item.chosen(part.id)
             ):
                 misses[part.id] = misses.get(part.id, 0) + 1
@@ -1034,7 +1076,10 @@ def sample(recipe: DatasetRecipe, n: int, seed: int) -> SampleResult:
             partition=part.id, label=part.label,
             options=[
                 OptionStat(option=option.id, label=option.label or option.tags or "无",
-                           target=0 if option.disabled else option.weight / total,
+                           target=(targets[part.id].get(option.id, 0) / len(quota[part.id])
+                                   if part.quota and quota[part.id]
+                                   else 0 if option.disabled or not total
+                                   else option.weight / total),
                            count=counts[part.id].get(option.id, 0))
                 for option in part.options
             ],

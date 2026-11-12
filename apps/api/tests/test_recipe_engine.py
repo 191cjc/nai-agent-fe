@@ -345,7 +345,8 @@ def test_overflow_reported_not_truncated():
     (lambda d: d["partitions"][8]["options"][1]["slots"]["color"].update(exclude=["pink"]),
      "partitions.outfit.options.dress.slots.color"),
     (lambda d: d["rules"][0]["effects"].update(hide=["eyes"]), "rules.gentle.effects"),
-    (lambda d: d["partitions"][1].update(quota=True), "partitions.framing.quota"),
+    (lambda d: d["partitions"][1].update(quota=True, mode="fill", max_draws=2),
+     "partitions.framing.quota"),
     (lambda d: d["partitions"][12]["options"].append(none()), "partitions.hands"),
     (lambda d: d["regions"].__setitem__(0, {"id": "person", "parent": "eyes"})
      if "regions" in d else d.update(regions=[
@@ -467,3 +468,79 @@ def test_assembly_never_emits_empty_tags_or_stray_commas():
     item = sample(recipe, 1, 1).items[0]
     assert item.prompt == "1girl, solo, smile, blush, day, night"
     assert item.style_edits == {"add": ["soft", "light"], "remove": []}
+
+
+def test_conditional_quota_counts_only_visible_items():
+    recipe = DatasetRecipe.model_validate({
+        "draw_order": ["crop", "feet"], "partitions": [
+            part("crop", [opt("full", "full body"),
+                          opt("upper", "upper body", effects={"hide": ["feet"]})], quota=True),
+            part("feet", [opt("bare", "barefoot", 7), opt("shod", "shoes", 3)],
+                 needs=["feet"], quota=True),
+        ],
+    })
+    result = sample(recipe, 400, 21)
+    counts = Counter(draw for item in result.items for draw in chosen(item, "feet"))
+    assert counts == {"bare": 140, "shod": 60}
+    stat = next(p for p in result.stats.partitions if p.partition == "feet")
+    assert stat.skips == {"invisible": 200} and stat.quota_misses == 0
+    assert [round(o.target, 6) for o in stat.options] == [0.7, 0.3]
+
+
+def test_quota_respects_option_conditions_and_reports_legal_targets():
+    recipe = DatasetRecipe.model_validate({
+        "draw_order": ["uniform", "shoe"], "partitions": [
+            part("uniform", [opt("a", "kimono", effects={"set": {"outfit": "kimono"}}),
+                             opt("b", "dress", effects={"set": {"outfit": "dress"}})],
+                 quota=True),
+            part("shoe", [opt("geta", "geta", when={"state": "outfit", "in": ["kimono"]}),
+                          opt("loafers", "loafers", when={"state": "outfit", "in": ["dress"]})],
+                 quota=True),
+        ],
+    })
+    result = sample(recipe, 100, 2)
+    assert Counter(draw for item in result.items for draw in chosen(item, "shoe")) == {
+        "geta": 50, "loafers": 50,
+    }
+    assert all(not p.quota_misses for p in result.stats.partitions)
+
+
+def test_region_cleanup_is_final_weight_aware_and_preserves_closed_eyes():
+    recipe = DatasetRecipe.model_validate({
+        "draw_order": ["face"],
+        "style_tags": [{"tag": "blue eyes", "needs": "eyes"},
+                       {"tag": "detailed eyes", "needs": "eyes"}],
+        "partitions": [part("face", [opt(
+            "closed", "closed eyes, 3::Blue_Eyes::, hair between eyes",
+            effects={"hide": ["eyes"]},
+        )])],
+        "rules": [{"id": "late", "when": {"tag": "closed eyes"},
+                   "effects": {"content_add": ["6::detailed eyes::"],
+                               "style_add": ["detailed eyes"]}}],
+    })
+    result = sample(recipe, 1, 3).items[0]
+    assert tags_of(result) == {"closed eyes", "hair between eyes"}
+    assert result.style_edits["add"] == []
+    assert set(result.style_edits["remove"]) == {"blue eyes", "detailed eyes"}
+
+
+def test_weighted_content_removal_matches_plain_tag():
+    recipe = DatasetRecipe.model_validate({
+        "draw_order": ["face"], "partitions": [part("face", [
+            opt("x", "smile, 6::Blue_Eyes::", effects={"remove_tags": ["blue eyes"]}),
+        ])],
+    })
+    assert sample(recipe, 1, 1).items[0].prompt == "smile"
+
+
+def test_slot_colors_balance_within_legal_candidates():
+    recipe = DatasetRecipe.model_validate({
+        "draw_order": ["outfit"],
+        "slots": [{"id": "color", "values": [
+            {"id": c, "tag": c} for c in ["red", "blue", "black", "white"]
+        ]}],
+        "partitions": [part("outfit", [opt("dress", "{color} dress")])],
+    })
+    result = sample(recipe, 400, 1)
+    counts = Counter(item.prompt for item in result.items)
+    assert set(counts.values()) == {100}

@@ -4,6 +4,7 @@
  * server (POST /api/dataset-recipes/sample) so previews and generation never disagree.
  */
 import { TAG_ZH } from './prompt-zh'
+import { compilePromptComments, parsePromptTags } from './prompt-weights'
 
 export type Condition =
   | { all: Condition[] } | { any: Condition[] } | { not: Condition }
@@ -189,20 +190,31 @@ export function optionLabel(recipe: Recipe, ref: string): string {
 // ------------------------------------------------------------------ translations
 
 export function splitTags(text: string): string[] {
-  return text.split(/[,\n]/).map(tag => tag.trim()).filter(Boolean)
+  return text.split(/[,，\r\n]/).map(tag => tag.trim()).filter(Boolean)
+}
+
+/** Use the prompt editor's numeric-weight parser before comparing/displaying a tag. */
+function plainTag(tag: string): string {
+  const parsed = parsePromptTags(tag)
+  return parsed.length === 1 ? parsed[0].text.trim() : tag.trim()
+}
+
+function tagKey(tag: string): string {
+  return plainTag(tag).replace(/_/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase()
 }
 
 /** Gloss of one plain tag: recipe glossary first, then the built-in dictionary. */
 export function glossTag(recipe: Recipe, tag: string): string | null {
-  const key = tag.trim().toLowerCase().replace(/_/g, ' ')
+  const plain = plainTag(tag)
+  const key = tagKey(plain)
   if (!key) return null
-  return recipe.glossary?.[key] ?? recipe.glossary?.[tag.trim()] ?? TAG_ZH[key] ?? null
+  return recipe.glossary?.[key] ?? recipe.glossary?.[plain] ?? TAG_ZH[key] ?? null
 }
 
 /** Tags of a text with `{slot}` placeholders substituted by a representative word. */
 function glossTemplate(recipe: Recipe, text: string): Array<{ tag: string; zh: string | null }> {
   return splitTags(text).map(tag => {
-    const plain = tag.replace(/\{[a-z0-9-]+\}\s*/g, '').trim()
+    const plain = plainTag(tag.replace(/\{[a-z0-9-]+\}\s*/g, ''))
     const placeholder = /\{([a-z0-9-]+)\}/.exec(tag)
     const slot = placeholder ? recipe.slots?.find(item => item.id === placeholder[1]) : undefined
     const base = glossTag(recipe, plain)
@@ -218,7 +230,7 @@ export function glossOption(recipe: Recipe, option: RecipeOption): Array<{ tag: 
 export function missingGlosses(recipe: Recipe): string[] {
   const missing = new Set<string>()
   const check = (tag: string) => {
-    const plain = tag.replace(/\{[a-z0-9-]+\}\s*/g, '').trim()
+    const plain = plainTag(tag.replace(/\{[a-z0-9-]+\}\s*/g, ''))
     if (plain && glossTag(recipe, plain) === null) missing.add(plain)
   }
   for (const part of recipe.partitions) {
@@ -500,8 +512,46 @@ export function describeEffects(recipe: Recipe, effects: Effects | undefined): s
 /** Apply style edits locally for display only (the server resolves the real style). */
 export function previewStyle(style: string, edits: StyleEdits | undefined): string {
   if (!edits || (!edits.add.length && !edits.remove.length)) return style
-  const remove = new Set(edits.remove.map(tag => tag.toLowerCase()))
-  const kept = splitTags(style).filter(tag => !remove.has(tag.replace(/^[\d.:{}[\]\s-]+|[:{}[\]\s]+$/g, '').toLowerCase()))
-  const present = new Set(kept.map(tag => tag.toLowerCase()))
-  return [...kept, ...edits.add.filter(tag => !present.has(tag.toLowerCase()))].join(', ')
+  const remove = new Set(edits.remove.map(tagKey))
+  const present = new Set<string>()
+  // Keep the scope markers surrounding a removed member so other members of a
+  // shared weight/emphasis group retain their original weights, as on the server.
+  const lines = style.split('\n').map(line => {
+    if (line.trimStart().startsWith('//')) return line
+    const kept: string[] = []
+    for (const piece of line.split(',')) {
+      const opener = /^(?:\s*(?:[{[]|[+-]?(?:\d+(?:\.\d+)?|\.\d+)::))*/.exec(piece)![0]
+      const rest = piece.slice(opener.length)
+      const closer = /(?:(?:[}\]]|::)\s*)*$/.exec(rest)![0]
+      const body = closer ? rest.slice(0, -closer.length) : rest
+      const key = tagKey(body)
+      if (key && remove.has(key)) {
+        if (opener.trim() || closer.trim()) kept.push(`${kept.length ? ' ' : ''}${opener.trim()}${closer.trim()}`)
+      } else {
+        if (key) present.add(key)
+        kept.push(piece)
+      }
+    }
+    return kept.join(',')
+  })
+  let result = lines.join('\n').replace(/(,\s*)+,/g, ',').replace(/^\s*,\s*/gm, '').replace(/\s*,\s*$/gm, '')
+  const additions: string[] = []
+  for (const tag of edits.add) {
+    const key = tagKey(tag)
+    if (key && !present.has(key)) {
+      present.add(key)
+      additions.push(tag.trim())
+    }
+  }
+  if (additions.length) {
+    const visible = compilePromptComments(result)
+    const opens = [...visible.matchAll(/(?:^|[\s,([{])[+-]?(?:\d+(?:\.\d+)?|\.\d+)::/g)].length
+    const closes = [...visible.matchAll(/::/g)].length - opens
+    let base = result.trimEnd()
+    if (opens > closes) base += ' ::'
+    let joiner = visible.trim() ? ', ' : ''
+    if (base.split('\n').at(-1)!.trimStart().startsWith('//')) joiner = '\n'
+    result = `${base}${joiner}${additions.join(', ')}`
+  }
+  return result
 }

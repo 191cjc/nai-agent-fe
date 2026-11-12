@@ -219,7 +219,7 @@ export function RecipeEditor({ api, open, onClose, style, onGenerate }: {
           {tab === 'glossary' && <GlossaryTab history={history} api={api} />}
           {tab === 'json' && <JsonTab history={history} name={name} setName={setName} />}
         </div>
-        <SamplePanel api={api} recipe={recipe} style={style} recipeRef={{ id: currentId, name: name.trim() || '未命名配方' }}
+        <SamplePanel api={api} open={open} recipe={recipe} style={style} recipeRef={{ id: currentId, name: name.trim() || '未命名配方' }}
           saved={Boolean(loadedAt) && !dirty} onGenerate={result => { onGenerate(result); onClose() }} />
       </div>
     </div>
@@ -365,8 +365,8 @@ function PartitionSettings({ history, part, onRemove }: { history: History; part
         {part.mode === 'fill' && <label className="recipe-inline">最多 <input type="number" min={2} max={10} value={part.max_draws ?? 2} onChange={event => update(p => { p.max_draws = Math.min(10, Math.max(2, Number(event.target.value) || 2)) })} /> 个</label>}
       </Row>
       {part.mode === 'fill' && <p className="recipe-help">资源（如手）用完、抽到「无」或达到上限时停止。</p>}
-      <Row label="配额" hint="开启后按条数精确分配占比，小批量也不会偏。不能和条件、部位要求一起用。">
-        <label className="recipe-check"><input type="checkbox" checked={Boolean(part.quota)} disabled={part.mode === 'fill'} onChange={event => update(p => { p.quota = event.target.checked })} /> 精确分配</label>
+      <Row label="配额" hint="在可选项及其占比相同的条目中分别分配；因不可见或条件不满足而跳过的条目不计入。小批量按整数取整。">
+        <label className="recipe-check"><input type="checkbox" checked={Boolean(part.quota)} disabled={part.mode === 'fill'} onChange={event => update(p => { p.quota = event.target.checked })} /> 在符合条件的条目中按配额分配</label>
       </Row>
       <Row label="需要部位可见" hint="这些部位看不见时（例如上半身构图看不见脚），整个分区跳过。">
         <RegionChips recipe={recipe} value={part.needs ?? []} onChange={value => update(p => { p.needs = value })} />
@@ -1128,34 +1128,78 @@ function JsonTab({ history, name, setName }: { history: History; name: string; s
 
 // ------------------------------------------------------------------ sampling
 
-function SamplePanel({ api, recipe, style, recipeRef, saved, onGenerate }: {
-  api: WorkspaceApi; recipe: Recipe; style: string; recipeRef: { id: string; name: string }; saved: boolean; onGenerate: (result: RecipeDraftResult) => void
+function SamplePanel({ api, open, recipe, style, recipeRef, saved, onGenerate }: {
+  api: WorkspaceApi; open: boolean; recipe: Recipe; style: string; recipeRef: { id: string; name: string }; saved: boolean; onGenerate: (result: RecipeDraftResult) => void
 }) {
   const [n, setN] = useState('100')
   const [seed, setSeed] = useState(() => String(Math.floor(Math.random() * 4294967295)))
-  const [result, setResult] = useState<SampleResult | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
+  const [sampled, setSampled] = useState<{ key: string; result: SampleResult } | null>(null)
+  const [busyKey, setBusyKey] = useState<string | null>(null)
+  const [failure, setFailure] = useState<{ key: string; message: string } | null>(null)
+  const cached = useRef<{ key: string; result: SampleResult } | null>(null)
+  const pending = useRef<{ key: string; controller: AbortController } | null>(null)
+  const adding = useRef(false)
+  const mounted = useRef(false)
   const count = Number(n)
   const seedValue = Number(seed)
   const valid = Number.isInteger(count) && count >= 1 && count <= MAX_DATASET_ITEMS && Number.isInteger(seedValue) && seedValue >= 0 && seedValue <= 4294967295
+  const key = JSON.stringify({ recipe, count, seed: seedValue, recipeRef, open })
+  const latestKey = useRef(key)
+  latestKey.current = key
+  const result = sampled?.key === key ? sampled.result : null
+  const busy = busyKey === key
+  const error = failure?.key === key ? failure.message : ''
 
-  async function run(size: number): Promise<SampleResult | null> {
-    setError('')
-    setBusy(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false }
+  }, [])
+
+  useEffect(() => () => {
+    if (pending.current?.key === key) {
+      pending.current.controller.abort()
+      pending.current = null
+      if (mounted.current) setBusyKey(current => current === key ? null : current)
+    }
+    if (cached.current?.key === key) cached.current = null
+  }, [key])
+
+  async function run(): Promise<SampleResult | null> {
+    if (!mounted.current || !open || !valid || pending.current?.key === key) return null
+    if (cached.current?.key === key) return cached.current.result
+    pending.current?.controller.abort()
+    const request = { key, controller: new AbortController() }
+    pending.current = request
+    setFailure(null)
+    setBusyKey(key)
     try {
-      const sampled = await api.sampleRecipe(recipe, size, seedValue)
-      setResult(sampled)
-      return sampled
+      // Quotas depend on the complete batch size. Preview the same batch that
+      // will be appended, then keep it so generating never silently resamples.
+      const next = await api.sampleRecipe(recipe, count, seedValue, request.controller.signal)
+      if (!mounted.current || pending.current !== request || latestKey.current !== key) return null
+      cached.current = { key, result: next }
+      setSampled(cached.current)
+      return next
     } catch (failure) {
-      setError(errorText(failure))
+      if (mounted.current && pending.current === request && latestKey.current === key && !request.controller.signal.aborted) {
+        setFailure({ key, message: errorText(failure) })
+      }
       return null
-    } finally { setBusy(false) }
+    } finally {
+      if (pending.current === request) {
+        pending.current = null
+        if (mounted.current) setBusyKey(null)
+      }
+    }
   }
 
   async function generate(replace: boolean) {
-    const sampled = await run(count)
-    if (sampled) onGenerate({ items: sampled.items, recipe: recipeRef, replace })
+    if (adding.current) return
+    adding.current = true
+    try {
+      const next = await run()
+      if (next && mounted.current && latestKey.current === key) onGenerate({ items: next.items, recipe: recipeRef, replace })
+    } finally { adding.current = false }
   }
 
   return <aside className="recipe-sample" aria-label="预览与生成">
@@ -1165,9 +1209,9 @@ function SamplePanel({ api, recipe, style, recipeRef, saved, onGenerate }: {
       <label><span>随机种子</span><span className="recipe-seed"><input type="number" min={0} max={4294967295} value={seed} onChange={event => setSeed(event.target.value)} />
         <button className="icon-button" type="button" title="换一个种子" aria-label="换一个种子" onClick={() => setSeed(String(Math.floor(Math.random() * 4294967295)))}><Dices size={14} /></button></span></label>
     </div>
-    <p className="recipe-help">同一配方、种子和条数，每次结果都一样。预览不会调用 NovelAI，不花 Anlas。</p>
+    <p className="recipe-help">同一配方、种子和条数，每次结果都一样。预览按完整条数抽取，展示前 20 条；加入列表使用这批相同的结果。预览不会调用 NovelAI，不花 Anlas。</p>
     <div className="recipe-sample-actions">
-      <button className="secondary" type="button" disabled={busy || !valid} onClick={() => void run(Math.min(count, 20))}>先预览 {Math.min(count || 20, 20)} 条</button>
+      <button className="secondary" type="button" disabled={busy || !valid} onClick={() => void run()}>先预览 {Math.min(count || 20, 20)} 条</button>
       <button className="primary" type="button" disabled={busy || !valid} onClick={() => void generate(false)}>生成 {valid ? count : ''} 条，加到列表</button>
       <button className="text-action" type="button" disabled={busy || !valid} onClick={() => { if (window.confirm('清空训练集列表，换成这次生成的条目？')) void generate(true) }}>生成并替换整个列表</button>
     </div>
@@ -1183,16 +1227,18 @@ function SampleView({ recipe, result, style }: { recipe: Recipe; result: SampleR
   const slotValue = (slotId: string, valueId: string) => recipe.slots?.find(s => s.id === slotId)?.values.find(v => v.id === valueId)?.label || valueId
   return <div className="recipe-sample-view">
     <div className="recipe-segment" role="tablist">
-      <button type="button" className={view === 'items' ? 'active' : ''} onClick={() => setView('items')}>条目（{result.items.length}）</button>
+      <button type="button" className={view === 'items' ? 'active' : ''} onClick={() => setView('items')}>条目（{stats.produced}/{stats.requested}）</button>
       <button type="button" className={view === 'stats' ? 'active' : ''} onClick={() => setView('stats')}>占比统计</button>
     </div>
     {(stats.overflow > 0 || stats.stale_dependency > 0 || stats.warnings.length > 0) && <div className="recipe-notice">
-      {stats.overflow > 0 && <p>{stats.overflow} 条超过 1000 字符，已丢弃。</p>}
+      {stats.overflow > 0 && <p>{stats.overflow} 条提示词为空或超过 1000 字符，已丢弃。</p>}
       {stats.stale_dependency > 0 && <p>{stats.stale_dependency} 条有失效的依赖，建议调整抽取顺序。</p>}
       {stats.warnings.map(text => <p key={text}>{text}</p>)}
     </div>}
-    {view === 'items' && <ol className="recipe-preview-items">{result.items.slice(0, 50).map((item, index) => {
-      const notes = item.draws.filter(draw => draw.partition === '-rule' || draw.option === '-removed' || draw.partition === '-meta')
+    {view === 'items' && <>
+      <p className="recipe-help">已生成 {stats.produced} / {stats.requested} 条，下面展示前 {Math.min(20, result.items.length)} 条；加入列表会加入全部 {result.items.length} 条。</p>
+      <ol className="recipe-preview-items">{result.items.slice(0, 20).map((item, index) => {
+      const notes = item.draws.filter(draw => draw.partition === '-rule' || draw.option === '-removed' || draw.option === '-skip' || draw.partition === '-meta')
       const edits = item.style_edits
       return <li key={item.id}>
         <span className="recipe-preview-index">{index + 1}</span>
@@ -1203,15 +1249,16 @@ function SampleView({ recipe, result, style }: { recipe: Recipe; result: SampleR
           {notes.length > 0 && <p className="recipe-preview-notes">{notes.map((draw, i) => <span key={i}>{draw.label}</span>)}</p>}
         </div>
       </li>
-    })}</ol>}
+    })}</ol></>}
     {view === 'stats' && <div className="recipe-stats-list">
-      <p className="recipe-help">「目标」是按占比算出的期望，「实际」是这次抽到的比例；差得多的会标黄，通常是条件或冲突造成的。</p>
+      <p className="recipe-help">「目标」是按占比算出的期望，「实际」按该分区实际抽取次数计算，不计入因不可见或条件不满足而跳过的条目；偏差超过 5 个百分点时标黄。</p>
       {stats.partitions.map(part => {
         const total = part.options.reduce((sum, option) => sum + option.count, 0)
         const skips = Object.entries(part.skips)
         return <details key={part.partition} className="recipe-stat">
           <summary><span>{part.label || part.partition}</span><small>{total} 次{skips.length ? ` · 跳过 ${skips.reduce((sum, [, v]) => sum + v, 0)}` : ''}</small></summary>
           {skips.length > 0 && <p className="recipe-muted">跳过原因：{skips.map(([reason, value]) => `${SKIP_REASONS[reason] ?? reason} ${value}`).join('、')}</p>}
+          {part.quota_misses > 0 && <p className="warn">有 {part.quota_misses} 条未满足分配的配额，请检查条件或后续移除规则。</p>}
           <table className="recipe-table"><thead><tr><th>选项</th><th className="recipe-col-num">目标</th><th className="recipe-col-num">实际</th><th className="recipe-col-num">次数</th></tr></thead>
             <tbody>{part.options.map(option => {
               const actual = total ? option.count / total : 0

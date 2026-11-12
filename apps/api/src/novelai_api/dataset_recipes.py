@@ -127,3 +127,13 @@ class RecipeStore:
                 "DELETE FROM dataset_recipes WHERE user_id = ? AND id = ?", (user_id, recipe_id),
             )
         return result.rowcount == 1
+
+    def clear_all(self) -> int:
+        """Operator-only reset: delete saved recipes without loading private values.
+
+        Dataset runs contain frozen items and do not reference these rows. Leave all
+        other records and image storage untouched; the caller receives only a count.
+        """
+        with self.database.connect(write=True) as connection:
+            deleted = connection.execute("DELETE FROM dataset_recipes").rowcount
+        return deleted
