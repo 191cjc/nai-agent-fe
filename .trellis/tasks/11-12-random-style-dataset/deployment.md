@@ -29,3 +29,19 @@ Operator requested "部署吧". Work commit `bc6762a`.
   ("Unprocessable Content" vs "Unprocessable Entity"): production runs Python 3.14, the
   snapshot was generated on local 3.12. The previous release had the same difference (the
   first deployment compared path sets only). Follow-up: move the local toolchain to 3.14.
+
+## Deploy: per-item random seeds, recipe rework, upstream image links (2026-11-13)
+
+Operator requested "部署". Work commit `1162207` (includes `13e5001`, `6a9578b`, `8f51c25`).
+
+- API/Web: `20261112T161409Z-1162207`; previous API `20261112T151137Z`, web `20261112T140553Z` retained
+  (both had been published from then-uncommitted work, now committed as `13e5001`).
+- API venv built with Python 3.14.4 from the uv cache (offline, locked).
+- 0 active jobs/runs before backup and again before stop. Verified pre-migration backup:
+  `/var/lib/novelai/backups/pre-20261112T161409Z-1162207.sqlite3` (novelai, 0600).
+- Schema 14 → 15 (adds empty `provider_image_links`); quick_check ok; failed-job count 472
+  unchanged. PID 71557 → 95957.
+- Public index.html and all 9 assets match staged bytes; unauthenticated recipe route → 401;
+  live OpenAPI now equals the committed snapshot exactly.
+- Pending operator acceptance: after one real generation, confirm `provider_image_links`
+  gained a row (count only) to prove the upstream link format is recognised.
