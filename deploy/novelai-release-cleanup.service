@@ -1,0 +1,21 @@
+[Unit]
+Description=Remove expired NovelAI build releases
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/bin/python3 /usr/local/lib/novelai/prune_releases.py --apply
+UMask=0077
+Nice=19
+IOSchedulingClass=idle
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+ReadWritePaths=/srv/novelai/releases /srv/www/novelai/releases /srv/www/novelai/assets /run/lock
+InaccessiblePaths=/var/lib/novelai /etc/novelai

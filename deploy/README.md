@@ -224,6 +224,79 @@ transient images. A restart leaves uncertain paid jobs for the user to review
 in history; do not automatically retry them. Inspect failures with
 `systemctl status novelai-api` and `journalctl -u novelai-api`.
 
+## Expired build releases
+
+`deploy/prune_releases.py` manages only immutable API releases under
+`/srv/novelai/releases`, web releases under `/srv/www/novelai/releases`, and
+hashed public files under `/srv/www/novelai/assets`. It never visits SQLite,
+generated images, reference images, dataset exports, backups, local build
+directories or dependency caches.
+
+The fixed default policy protects each `current` target and the newest three
+recognized releases in each release tree. The API process's actual working
+directory is protected too, including the interval between changing `current`
+and restarting the service. Other recognized release directories become
+eligible only after 30 days; their age uses the later of the UTC release name
+and directory mtime/ctime, so recently copied old versions get a new grace
+period. Unknown entries and release symlinks are retained. Missing or unsafe
+roots/current pointers, an unreadable API process state, and changing protected
+pointers cause the command to refuse deletion.
+
+Shared hashed assets are eligible only after 365 days since their latest
+mtime/ctime, and only when absent from every retained web release's `assets`
+inventory, including lazy-loaded chunks. An incomplete or ambiguous retained
+inventory skips all shared-asset deletion. Keep a complete `assets` directory
+inside every published web release. Unknown shared files and directories are
+retained. This preserves the one-year immutable cache window; a web fallback
+still requires its compatible API and does not restore the database.
+
+Install the root-owned script independently of the prunable releases, preview
+the complete plan, then enable the daily 05:00 timer (with up to 30 minutes of
+random delay):
+
+```sh
+sudo install -d -m 0755 -o root -g root /usr/local/lib/novelai
+sudo install -m 0644 -o root -g root deploy/prune_releases.py /usr/local/lib/novelai/prune_releases.py
+sudo /usr/bin/python3 /usr/local/lib/novelai/prune_releases.py
+sudo install -m 0644 -o root -g root deploy/novelai-release-cleanup.service /etc/systemd/system/novelai-release-cleanup.service
+sudo install -m 0644 -o root -g root deploy/novelai-release-cleanup.timer /etc/systemd/system/novelai-release-cleanup.timer
+sudo systemctl daemon-reload
+sudo systemctl enable --now novelai-release-cleanup.timer
+systemctl list-timers novelai-release-cleanup.timer
+```
+
+Without `--apply` the command only prints a JSON plan. For a manual application
+after reviewing it, run:
+
+```sh
+sudo /usr/bin/python3 /usr/local/lib/novelai/prune_releases.py --apply
+```
+
+It recomputes eligibility and protected pointers before each deletion. Inspect executions with
+`journalctl -u novelai-release-cleanup.service`. Disable future automatic runs
+with `sudo systemctl disable --now novelai-release-cleanup.timer`.
+
+Cleanup holds an exclusive `/run/lock/novelai-release-cleanup.lock`. Release
+publishers must hold the same lock from before creating a release directory
+until API readiness and the web switch complete. Run a deployment script with:
+
+```sh
+sudo flock --exclusive /run/lock/novelai-release-cleanup.lock /path/to/publish-script
+```
+
+Do not stage a release in another shell while that script runs. The lock must
+be root-owned, singly linked, and not group/other writable. The cleanup timer
+neither restarts nor stops the API. Its sandbox
+has write access only to the three build trees and its lock directory, and no
+access to `/var/lib/novelai` or `/etc/novelai`.
+
+The destructive behavior is covered with disposable synthetic trees only:
+
+```sh
+python3 -m unittest discover -s deploy/tests -v
+systemd-analyze verify deploy/novelai-release-cleanup.service deploy/novelai-release-cleanup.timer
+```
+
 ## Backup and restore
 
 Monitor free space and inodes for `/var/lib/novelai`, the backup target and

@@ -159,6 +159,44 @@ Captured provider requests use current schema5; see [Database](./database-guidel
   In a disposable recovery drill, disable/stop copied runs before application
   lifespan; a restored scheduler must never reach real configured providers.
 
+## Build Release Expiry
+
+- `deploy/prune_releases.py` is a stdlib-only maintenance command installed as
+  root-owned `/usr/local/lib/novelai/prune_releases.py`, outside any release.
+  CLI roots are fixed to `/srv/novelai/releases`, `/srv/www/novelai/releases`
+  and `/srv/www/novelai/assets`; no application-data, backup, local-build or
+  dependency-cache path is part of cleanup.
+- Preview is the default. Only `--apply` deletes. Protect both `current`
+  targets, the newest three recognized release directories per tree, and the
+  live API's actual `/proc/MainPID/cwd` release. Refuse relative/traversing or
+  symlinked roots, invalid current targets, unavailable runtime inspection and
+  changes to protected pointers. Unknown entries and release symlinks stay.
+- A recognized release uses `YYYYMMDDTHHMMSS[Z][-<7..40 lowercase hex>]`.
+  Eligible directories must be older than 30 days by the later of that UTC
+  timestamp and their directory mtime/ctime. Newly copied old releases receive
+  a new grace period. Descriptor-relative `rmtree` must be resistant to
+  symlink attacks; embedded links are unlinked, never followed.
+- Only recognized hashed regular shared assets become eligible after 365 days
+  by their later mtime/ctime. Every retained web release's complete `assets`
+  inventory protects initial and lazy chunks. Missing, unreadable, symlinked or
+  ambiguous inventories skip shared-asset deletion; unknown shared entries
+  remain. Never reduce this below the one-year immutable cache lifetime.
+- Cleanup holds `/run/lock/novelai-release-cleanup.lock`. Publishers must hold
+  this same exclusive lock before staging and through shared-asset publication,
+  API readiness and web activation. Cleanup rechecks protection, eligibility
+  and filesystem identity before each deletion, in addition to the lock. The
+  lock must be a regular file owned by the effective user (root in production),
+  with one hard link and no group/other write permission; reject symlinks or
+  precreated foreign lock files in the sticky `/run/lock` directory.
+- `novelai-release-cleanup.timer` runs the hardened root oneshot daily at 05:00
+  with up to 30 minutes jitter and persistent catch-up. It cannot access
+  `/var/lib/novelai` or `/etc/novelai`, never reads credentials and never
+  restarts the API. Preview and review before enabling; keep cleanup status
+  separate from application readiness.
+- Validate deletion, age/count/current/runtime protection, dry-run behavior,
+  pointer changes, unknown entries, symlink/root escapes and locking using
+  disposable synthetic trees only. Never test cleanup against private datasets.
+
 ## Dataset Purge Rollout (Schema 13)
 
 - Publish the schema-13-compatible API before the matching web bundle. Back up
