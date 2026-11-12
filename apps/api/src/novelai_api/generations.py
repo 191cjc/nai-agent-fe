@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import secrets
 import sqlite3
 import threading
@@ -18,6 +19,7 @@ from uuid import UUID, uuid4
 from pydantic import (
     AfterValidator,
     BaseModel,
+    ConfigDict,
     Field,
     PrivateAttr,
     field_validator,
@@ -164,6 +166,58 @@ class ExperimentWeight(BaseModel):
         return value
 
 
+_DRAW_ID = r"^-?[a-z0-9][a-z0-9-]*$"
+
+class DatasetDraw(BaseModel):
+    """One frozen recipe draw: ids for filtering plus a label snapshot for display."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    partition: str = Field(min_length=1, max_length=64, pattern=_DRAW_ID)
+    option: str = Field(min_length=1, max_length=64, pattern=_DRAW_ID)
+    label: str = Field(min_length=1, max_length=100)
+    values: dict[str, str] | None = Field(default=None, exclude_if=lambda value: value is None)
+    reason: str | None = Field(
+        default=None, max_length=100, exclude_if=lambda value: value is None,
+    )
+
+    @field_validator("values")
+    @classmethod
+    def valid_values(cls, value: dict[str, str] | None) -> dict[str, str] | None:
+        if value is not None and (len(value) > 20 or any(
+            not re.fullmatch(r"[a-z0-9][a-z0-9-]*", key)
+            or not re.fullmatch(r"[a-z0-9][a-z0-9-]*", item)
+            or len(key) > 64 or len(item) > 64
+            for key, item in value.items()
+        )):
+            raise ValueError("Draw slot values must be ids")
+        return value
+
+StyleTag = Annotated[str, Field(min_length=1, max_length=100)]
+
+class StyleEdits(BaseModel):
+    """Plain tags removed from / appended to this item's style before it is sent."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    add: list[StyleTag] = Field(default_factory=list, max_length=32)
+    remove: list[StyleTag] = Field(default_factory=list, max_length=32)
+
+    @field_validator("add", "remove")
+    @classmethod
+    def plain_tags(cls, value: list[str]) -> list[str]:
+        for tag in value:
+            if not tag.strip() or re.search(r"[,\n{}\[\]]|::|//", tag):
+                raise ValueError("Style edits must be plain single tags")
+        return value
+
+class RecipeRef(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # A string (not UUID) because run definitions are serialized with python-mode dumps.
+    id: str = Field(pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+    name: str = Field(min_length=1, max_length=100)
+
 class DatasetItem(BaseModel):
     id: str = Field(min_length=1, max_length=64, pattern=r"^[a-z0-9][a-z0-9-]*$")
     prompt: str = Field(min_length=1, max_length=1000)
@@ -182,10 +236,21 @@ class DatasetItem(BaseModel):
         default=None, ge=64, le=2048, multiple_of=64, exclude_if=lambda value: value is None,
     )
 
+    # Random-recipe items only (all optional, excluded when empty so stored legacy items
+    # stay byte-identical): what the recipe drew (review filtering), per-item style tag
+    # edits applied on top of the run's style (never captioned) and the source recipe.
+    draws: list[DatasetDraw] = Field(
+        default_factory=list, max_length=128, exclude_if=lambda value: not value,
+    )
+    style_edits: StyleEdits | None = Field(default=None, exclude_if=lambda value: value is None)
+    recipe: RecipeRef | None = Field(default=None, exclude_if=lambda value: value is None)
+
     @model_validator(mode="after")
     def paired_size(self) -> Self:
         if (self.width is None) != (self.height is None):
             raise ValueError("Dataset item width and height go together")
+        if self.style_edits is not None and self.characters:
+            raise ValueError("Style edits are only for single-person recipe items")
         return self
 
     @field_validator("prompt")

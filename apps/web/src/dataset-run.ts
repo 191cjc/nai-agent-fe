@@ -1,4 +1,5 @@
 import type { CharacterPrompt, CharacterRunRequest, DatasetItem, PreciseType } from './api'
+import { previewStyle, type DatasetDraw, type StyleEdits } from './recipe'
 import type { CharacterMode } from './character-prompts'
 import { compilePromptComments } from './prompt-weights'
 
@@ -10,6 +11,23 @@ export const MAX_TRAITS_LENGTH = 1000
 export const CUSTOM_CATEGORY = 'custom'
 export const MAX_ITEM_CHARACTERS = 6
 
+export interface DatasetCategory {
+  id: string
+  label: string
+  description: string
+}
+
+export interface DatasetPrompt {
+  id: string
+  category: string
+  prompt: string
+  /** Multi-person items only: one native character prompt per person, left to right. */
+  characters?: readonly string[]
+}
+
+/** Style entries generated from a random recipe. */
+export const RECIPE_CATEGORY = 'recipe'
+
 export interface DatasetEntry {
   id: string
   category: string
@@ -18,6 +36,20 @@ export interface DatasetEntry {
   /** One native character prompt per person, left to right. */
   characters?: readonly string[]
   selected: boolean
+  /** Random-recipe entries: frozen draws, per-item style edits and source recipe. */
+  draws?: readonly DatasetDraw[]
+  styleEdits?: StyleEdits
+  recipe?: { id: string; name: string }
+  /** Recipe canvas hint; wins over the tag heuristic when automatic shapes are on. */
+  shape?: ItemShape | null
+}
+
+/** Marks a recipe entry whose prompt was hand-edited (its draws may no longer match). */
+export const EDITED_DRAW: DatasetDraw = { partition: '-meta', option: 'edited', label: '提示词已手动修改' }
+
+export function markEdited(entry: DatasetEntry, prompt: string): DatasetEntry {
+  if (!entry.draws?.length || entry.draws.some(draw => draw.partition === '-meta' && draw.option === 'edited')) return { ...entry, prompt }
+  return { ...entry, prompt, draws: [...entry.draws, EDITED_DRAW] }
 }
 
 /** People spread evenly left to right at mid height (NovelAI's 0.1–0.9 grid). */
@@ -95,9 +127,19 @@ export function datasetItems(entries: readonly DatasetEntry[], styles: readonly 
     if (longest + 2 + prefix + entry.prompt.trim().length > 3000) throw new Error(`${label}与画风${prefix ? '、角色特征' : ''}合计超过 3000 字符。`)
     const characters = entry.characters ?? []
     // Optional per-item canvas; absent keeps the run size (and the stored item unchanged).
-    const size = sizes ? sizes[itemShape(entry.prompt, characters)] : null
+    const size = sizes ? sizes[entry.shape ?? itemShape(entry.prompt, characters)] : null
     const canvas = size ? { width: size.width, height: size.height } : {}
-    if (!characters.length) return { id: entry.id, prompt: entry.prompt, ...canvas }
+    const recipe = {
+      ...(entry.draws?.length ? { draws: [...entry.draws] } : {}),
+      ...(entry.styleEdits && (entry.styleEdits.add.length || entry.styleEdits.remove.length) ? { style_edits: entry.styleEdits } : {}),
+      ...(entry.recipe ? { recipe: entry.recipe } : {}),
+    }
+    if (recipe.style_edits) {
+      for (const style of styles) {
+        if (!compilePromptComments(previewStyle(style, recipe.style_edits)).trim()) throw new Error(`${label}的画风增删会让画风变空。`)
+      }
+    }
+    if (!characters.length) return { id: entry.id, prompt: entry.prompt, ...canvas, ...recipe }
     if (traits.trim()) throw new Error(`${label}是多人条目，角色训练集不支持，请取消选择。`)
     if (!nativeCharacters) throw new Error(`${label}是多人条目，需要支持多角色提示词的 V4 / V4.5 / V5 模型；请切换模型或取消「多人互动」。`)
     if (characters.length > MAX_ITEM_CHARACTERS) throw new Error(`${label}最多 ${MAX_ITEM_CHARACTERS} 个人物。`)

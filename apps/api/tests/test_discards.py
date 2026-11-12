@@ -122,6 +122,7 @@ def test_migration_to_schema7_preserves_rows(tmp_path) -> None:
             "CREATE UNIQUE INDEX style_experiment_one_active_owner ON "
             "style_experiment_runs(user_id) WHERE status IN ('running', 'stopping')",
         )
+        connection.execute("DROP TABLE dataset_recipes")
         connection.execute("DROP TABLE purged_images")
         connection.execute("DROP TABLE caption_overrides")
         connection.execute("DROP TABLE discarded_images")
@@ -133,7 +134,7 @@ def test_migration_to_schema7_preserves_rows(tmp_path) -> None:
         )
     upgraded.migrate()
     with sqlite3.connect(upgraded.path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 13
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 14
         assert connection.execute("SELECT COUNT(*) FROM generation_jobs").fetchone()[0] == 1
         assert connection.execute("SELECT COUNT(*) FROM discarded_images").fetchone()[0] == 0
     assert upgraded.check_ready()

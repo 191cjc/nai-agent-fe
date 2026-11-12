@@ -1,0 +1,8 @@
+{"file": ".trellis/spec/backend/dataset-run-contract.md", "reason": "relevant contract"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "relevant contract"}
+{"file": ".trellis/spec/backend/api-contract.md", "reason": "relevant contract"}
+{"file": ".trellis/spec/backend/durable-experiment-contract.md", "reason": "relevant contract"}
+{"file": ".trellis/spec/backend/dataset-review-contract.md", "reason": "relevant contract"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "relevant contract"}
+{"file": ".trellis/spec/frontend/workspace-contract.md", "reason": "web contract"}
+{"file": ".trellis/spec/frontend/style-experiment-contract.md", "reason": "web contract"}

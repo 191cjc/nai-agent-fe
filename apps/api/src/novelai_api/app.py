@@ -30,6 +30,14 @@ from .auth import current_user, issue_session, revoke_session
 from .codex_advice import CodexAdviceRunner
 from .config import Settings
 from .dataset_plan import DatasetRunCreate
+from .dataset_recipes import (
+    RecipeConflict,
+    RecipeSave,
+    RecipeStore,
+    RecipeSummary,
+    SampleRequest,
+    StoredRecipe,
+)
 from .db import Database
 from .generations import (
     DiscardedImagesDeleted,
@@ -58,6 +66,8 @@ from .prompt_snapshots import (
     PromptSnapshotPage,
     PromptSnapshotStore,
 )
+from .recipe_engine import DatasetRecipe, SampleResult, sample
+from .recipe_templates import basic_template
 from .reference_images import (
     MAX_REFERENCE_BYTES,
     ReferenceFailure,
@@ -183,6 +193,7 @@ def create_app(
     experiments = StyleExperimentService(database, manager)
     thumbnails = ThumbnailCache()
     snapshots = PromptSnapshotStore(database)
+    recipes = RecipeStore(database)
     references = ReferenceImageStore(database)
     tag_search = tag_search or TagSearch(
         settings.tag_search_url, settings.public_origin, settings.tag_search_key
@@ -223,8 +234,16 @@ def create_app(
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(
-        _request: Request, _exception: RequestValidationError
+        request: Request, exception: RequestValidationError
     ) -> JSONResponse:
+        if request.url.path.startswith("/api/dataset-recipes") and exception.errors():
+            # Recipe editors need the JSON path of the first problem. Recipes are the
+            # caller's own data, so echoing paths and messages discloses nothing new.
+            first = exception.errors()[0]
+            where = ".".join(str(part) for part in first.get("loc", ())[1:])
+            message = str(first.get("msg", "Invalid recipe")).removeprefix("Value error, ")
+            return error(422, "recipe_invalid", f"{where}: {message}"[:500] if where
+                         else message[:500])
         return error(422, "validation_error", "Invalid request")
 
     @app.exception_handler(sqlite3.Error)
@@ -440,6 +459,69 @@ def create_app(
                 status_code=404,
                 detail=ApiError(code="not_found", message="Prompt snapshot not found").model_dump(),
             )
+
+    def recipe_errors(*codes: int) -> dict:
+        return {code: {"model": ApiError} for code in codes}
+
+    @app.get("/api/dataset-recipes", response_model=list[RecipeSummary],
+             responses=recipe_errors(401, 422, 503))
+    def list_dataset_recipes(
+        user: Annotated[UserInfo, Depends(require_user)],
+    ) -> list[RecipeSummary]:
+        return recipes.list(user.id)
+
+    @app.get("/api/dataset-recipes/templates/basic", response_model=DatasetRecipe,
+             responses=recipe_errors(401, 422, 503))
+    def basic_recipe_template(
+        user: Annotated[UserInfo, Depends(require_user)],
+    ) -> DatasetRecipe:
+        del user
+        return basic_template()
+
+    @app.post("/api/dataset-recipes/sample", response_model=SampleResult,
+              responses=recipe_errors(401, 403, 422, 503))
+    def sample_dataset_recipe(
+        payload: SampleRequest, user: Annotated[UserInfo, Depends(require_user)],
+    ) -> SampleResult:
+        # Pure and offline: previews never reach a provider and are not stored.
+        del user
+        return sample(payload.recipe, payload.n, payload.seed)
+
+    @app.get("/api/dataset-recipes/{recipe_id}", response_model=StoredRecipe,
+             responses=recipe_errors(401, 404, 422, 503))
+    def get_dataset_recipe(
+        recipe_id: UUID, user: Annotated[UserInfo, Depends(require_user)],
+    ) -> StoredRecipe:
+        saved = recipes.get(user.id, str(recipe_id))
+        if saved is None:
+            raise HTTPException(status_code=404, detail=ApiError(
+                code="not_found", message="Recipe not found").model_dump())
+        return saved
+
+    @app.put("/api/dataset-recipes/{recipe_id}", response_model=StoredRecipe,
+             responses=recipe_errors(401, 403, 409, 422, 503))
+    def save_dataset_recipe(
+        recipe_id: UUID, payload: RecipeSave,
+        user: Annotated[UserInfo, Depends(require_user)],
+    ) -> StoredRecipe | JSONResponse:
+        try:
+            return recipes.save(user.id, str(recipe_id), payload)
+        except RecipeConflict as exception:
+            messages = {
+                "recipe_conflict": "Recipe changed elsewhere; reload before saving",
+                "recipe_limit": "Recipe limit reached",
+                "recipe_too_large": "Recipe is too large",
+            }
+            return error(409, exception.code, messages[exception.code])
+
+    @app.delete("/api/dataset-recipes/{recipe_id}", status_code=204,
+                responses=recipe_errors(401, 403, 404, 422, 503))
+    def delete_dataset_recipe(
+        recipe_id: UUID, user: Annotated[UserInfo, Depends(require_user)],
+    ) -> None:
+        if not recipes.delete(user.id, str(recipe_id)):
+            raise HTTPException(status_code=404, detail=ApiError(
+                code="not_found", message="Recipe not found").model_dump())
 
     @app.post(
         "/api/generations",

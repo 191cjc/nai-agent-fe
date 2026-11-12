@@ -28,7 +28,7 @@ generated image bytes to it.
   directories or change the process-wide umask.
 - Admin migrations run before API readiness. DB schema lives in the ordered SQL
   files under `migrations/`, from `0001_auth.sql` through
-  `0013_purged_images.sql`, with `PRAGMA user_version` and transactional scripts.
+  `0014_dataset_recipes.sql`, with `PRAGMA user_version` and transactional scripts.
   Store job parameters, effective
   seed, timestamps and outcome, including optional experiment metadata in
   settings_json. Durable compact run/cursor/seed/Stop state uses the schema3 run table; see
@@ -53,6 +53,9 @@ generated image bytes to it.
   completion metadata. Persist intent before physical deletion, preserve pending
   failures for retry, and keep image bytes outside SQLite. See
   [Dataset Review and Cleanup](./dataset-review-contract.md).
+- Schema14 adds owner/id-keyed `dataset_recipes` (recipe JSON only). Run items freeze
+  their draws inside existing run definitions; see
+  [Random Dataset Recipes](./dataset-recipe-contract.md).
 - Deploy the API on a trusted, private data volume. Existing parent directory
   modes and Windows ACLs require operator review; these POSIX modes do not
   protect against an attacker who can replace paths inside the directory.

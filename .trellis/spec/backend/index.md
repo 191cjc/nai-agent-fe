@@ -27,6 +27,7 @@ templates and do not establish project conventions.
 | [Durable Experiments](./durable-experiment-contract.md) | Server runs, failure continuation, Stop and restart recovery | In use |
 | [Character Dataset Runs](./character-dataset-contract.md) | Reference images, vibe/img2img runs, style pools, trait-free captions and trait advice | In use |
 | [Dataset Runs and Export](./dataset-run-contract.md) | Fixed-style LoRA training runs, per-item seeds, content-only captions and zip export | In use |
+| [Random Dataset Recipes](./dataset-recipe-contract.md) | Stored recipes, deterministic sampler, per-item style edits and draw filters | In use |
 | [Dataset Review and Cleanup](./dataset-review-contract.md) | Thumbnail defaults, current-set permanent purge, stable image indexes and retryable physical cleanup | In use |
 | [Private LoRA Training Operations](./lora-training-contract.md) | Private exports, immutable queues, concurrent uploads, dependent stages, shared GPU locks and verified final backups | In use |
 | [Private Image Retention](./image-retention-contract.md) | Private disk images until explicit deletion, capacity admission and saved experiments | In use |

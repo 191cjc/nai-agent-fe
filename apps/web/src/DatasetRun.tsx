@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { observer } from 'mobx-react-lite'
-import { Download, FileUp, Layers, Plus, RotateCcw, Trash2, Upload, UserRound, X } from 'lucide-react'
+import { Download, FileUp, Layers, Plus, RotateCcw, Shuffle, Trash2, Upload, UserRound, X } from 'lucide-react'
 import { ApiFailure, errorText, MAX_EXPERIMENT_NAME, type GenerationView, type WorkspaceApi } from './api'
-import { DATASET_CATEGORIES, type DatasetCategory } from './dataset-prompts'
 import { characterCategories, type CharacterMode } from './character-prompts'
-import { CUSTOM_CATEGORY, MAX_DATASET_ITEMS, MAX_DATASET_PROMPT_LENGTH, SHAPE_LABELS, datasetItemText, datasetItems, itemShape, nextCustomId, type DatasetEntry, type ItemShape } from './dataset-run'
+import { CUSTOM_CATEGORY, MAX_DATASET_ITEMS, MAX_DATASET_PROMPT_LENGTH, RECIPE_CATEGORY, SHAPE_LABELS, datasetItemText, datasetItems, itemShape, markEdited, nextCustomId, type DatasetCategory, type DatasetEntry, type ItemShape } from './dataset-run'
+import { previewStyle } from './recipe'
+import { RecipeEditor, type RecipeDraftResult } from './RecipeEditor'
 import { translatePrompt } from './prompt-zh'
 import { supportsNativeCharacters } from './store'
 import { defaultCharacterEntries, defaultDatasetEntries } from './dataset-defaults'
@@ -14,20 +15,29 @@ import { downloadText, formatPrompts, parsePrompts } from './prompt-io'
 import type { GenerationStore } from './store'
 
 const CUSTOM: DatasetCategory = { id: CUSTOM_CATEGORY, label: '自定义', description: '手动添加的提示词' }
+const RECIPE: DatasetCategory = { id: RECIPE_CATEGORY, label: '随机配方', description: '由随机配方生成；下方灰字为抽到的分区与规则，可按它们在缩略图中筛选' }
 
 // Body-shape and suggestive tags must never be applied to child subjects.
 const CHILD_UNSAFE_STYLE = /\b(soft body|supple skin|soft curves|curvy|curvaceous|cleavage|breasts?|skin folds|skin compression|thick thighs|wide hips|sexy|seductive|sensual|erotic|nsfw|lewd|plump|voluptuous|navel|midriff|bare shoulders|thighs)\b/i
 
 const CHILD_CATEGORIES: Record<string, string> = { boy: '男孩（年幼）', girl: '女孩（年幼）' }
 
+const isChild = (entry: DatasetEntry) => entry.draws?.some(draw => draw.partition === '-meta' && draw.option === 'child') ?? false
+
 function childSafetyError(entries: readonly DatasetEntry[], style: string): string {
   const chosen = Object.keys(CHILD_CATEGORIES).filter(category => entries.some(entry => entry.selected && entry.category === category))
-  if (!chosen.length) return ''
-  const match = style.match(CHILD_UNSAFE_STYLE)
-  const names = chosen.map(category => `「${CHILD_CATEGORIES[category]}」`).join('、')
-  return match
-    ? `已选${names}条目，但画风中含有身体描写类标签「${match[0]}」。这类标签绝不能用于年幼角色：请取消这些条目，或改用去掉身体描写的画风单独批跑。`
-    : ''
+  const match = chosen.length ? style.match(CHILD_UNSAFE_STYLE) : null
+  if (match) {
+    const names = chosen.map(category => `「${CHILD_CATEGORIES[category]}」`).join('、')
+    return `已选${names}条目，但画风中含有身体描写类标签「${match[0]}」。这类标签绝不能用于年幼角色：请取消这些条目，或改用去掉身体描写的画风单独批跑。`
+  }
+  // Recipe items: check each child item's own resolved style (pool style plus its edits).
+  for (const entry of entries) {
+    if (!entry.selected || !isChild(entry)) continue
+    const unsafe = previewStyle(style, entry.styleEdits).match(CHILD_UNSAFE_STYLE)
+    if (unsafe) return `条目 ${entry.id} 是儿童条目，但它的画风中含有身体描写类标签「${unsafe[0]}」。这类标签绝不能用于年幼角色：请删除这些条目或修改画风。`
+  }
+  return ''
 }
 
 function validationError(entries: readonly DatasetEntry[], styles: readonly string[], traits?: string, nativeCharacters?: boolean): string {
@@ -109,7 +119,7 @@ export function PromptLibrary({ entries, setEntries, categories, defaults, place
   return <>
     <fieldset className="dataset-categories">
       <legend>按分类选择</legend>
-      {[...categories, CUSTOM].map(category => {
+      {[...categories, RECIPE, CUSTOM].map(category => {
         const members = entries.filter(entry => entry.category === category.id)
         if (!members.length) return null
         const count = members.filter(entry => entry.selected).length
@@ -127,8 +137,9 @@ export function PromptLibrary({ entries, setEntries, categories, defaults, place
             <div className="dataset-item-fields">
               <input type="text" value={entry.prompt} maxLength={MAX_DATASET_PROMPT_LENGTH} spellCheck={false} aria-label={`编辑提示词 ${entry.id}`}
                 title={entry.characters?.length ? '共享场景：人数、构图、动作与背景' : undefined}
-                onChange={event => update(entry.id, { prompt: event.target.value })} />
-              <span className="dataset-item-zh">{showShape && <b>{SHAPE_LABELS[itemShape(entry.prompt, entry.characters)]}</b>}{translatePrompt(entry.prompt)}</span>
+                onChange={event => setEntries(current => current.map(item => item.id === entry.id ? markEdited(item, event.target.value) : item))} />
+              <span className="dataset-item-zh">{showShape && <b>{SHAPE_LABELS[entry.shape ?? itemShape(entry.prompt, entry.characters)]}</b>}{translatePrompt(entry.prompt)}</span>
+              {entry.draws && <DrawSummary entry={entry} />}
               {entry.characters?.map((character, person) => <label key={person} className="dataset-item-person"><span>人物 {person + 1}</span>
                 <input type="text" value={character} maxLength={MAX_DATASET_PROMPT_LENGTH} spellCheck={false} aria-label={`编辑提示词 ${entry.id} 的人物 ${person + 1}`}
                   onChange={event => update(entry.id, { characters: entry.characters?.map((value, index) => index === person ? event.target.value : value) })} />
@@ -182,6 +193,8 @@ export const DatasetRunConfig = observer(({ generation, api, hidden }: { generat
     gpt: defaultCharacterEntries('gpt'), precise: defaultCharacterEntries('precise'),
   }))
   const [autoShape, setAutoShape] = useState(true)
+  const [recipeOpen, setRecipeOpen] = useState(false)
+  const [recipeMessage, setRecipeMessage] = useState('')
   const character = useCharacterSettings()
   const characterMode = character.settings.mode
   const characterEntries = characterEntriesByMode[characterMode]
@@ -196,7 +209,7 @@ export const DatasetRunConfig = observer(({ generation, api, hidden }: { generat
   const gptMode = mode === 'character' && character.settings.mode === 'gpt'
   const shapes = autoShape
   const shapeCounts = shapes ? selected.reduce<Record<ItemShape, number>>((counts, entry) => {
-    counts[itemShape(entry.prompt, entry.characters)] += 1
+    counts[entry.shape ?? itemShape(entry.prompt, entry.characters)] += 1
     return counts
   }, { portrait: 0, square: 0, landscape: 0 }) : null
   const sampleText = gptMode ? character.settings.gptSamples : generation.draft.sample_count
@@ -220,6 +233,24 @@ export const DatasetRunConfig = observer(({ generation, api, hidden }: { generat
 
   const frozenCharacter = snapshot?.character && 'references' in snapshot.character ? snapshot.character : null
 
+  function acceptRecipe(result: RecipeDraftResult) {
+    setEntries(current => {
+      const base = result.replace ? [] : current
+      const taken = new Set(base.map(entry => entry.id))
+      const added: DatasetEntry[] = result.items.map(item => {
+        let id = item.id
+        for (let suffix = 2; taken.has(id); suffix += 1) id = `${item.id}-${suffix}`
+        taken.add(id)
+        return {
+          id, category: RECIPE_CATEGORY, prompt: item.prompt, selected: true, draws: item.draws,
+          styleEdits: item.style_edits, recipe: result.recipe, shape: item.shape ?? null,
+        }
+      })
+      return [...base, ...added]
+    })
+    setRecipeMessage(`已从配方「${result.recipe.name}」${result.replace ? '替换为' : '追加'} ${result.items.length} 条。`)
+  }
+
   return <section id="dataset-run-config" className="style-experiment-config dataset-run-config" aria-labelledby="dataset-run-config-title" hidden={hidden}
     onKeyDown={event => { if (event.key === 'Enter' && event.target instanceof HTMLInputElement) event.preventDefault() }}>
     <h3 id="dataset-run-config-title"><Layers size={15} aria-hidden="true" /> 训练集批跑</h3>
@@ -228,7 +259,7 @@ export const DatasetRunConfig = observer(({ generation, api, hidden }: { generat
       <button type="button" className={mode === 'character' ? 'active' : ''} aria-pressed={mode === 'character'} onClick={() => setMode('character')}><UserRound size={14} aria-hidden="true" /> 角色训练集</button>
     </div>}
     {mode === 'style'
-      ? <p className="prompt-hint">用当前「画风」固定风格，逐条运行下面的内容提示词，生成用于训练画风 LoRA 的图片。提示词只描述内容，不含画风与质量词；导出时作为 caption。默认全选 322 条，覆盖特写、半身、全身、视角、场景、光照、多人、异世界奇幻、「华丽立绘」（金饰华服、极长飘发、飘带披帛、头冠光环与发光的神祇立绘）、年幼男孩女孩和无人物；约四成人物条目写明刘海类型（中分最多，另有齐刘海、斜刘海、露额头等）；人物条目都写明发色、瞳色、带颜色的上下装，看得见脸的条目写明表情，穿外套的写成敞开的外套并写明内搭，约三分之一写明带颜色的饰品；只写构图里看得见的部分（半身不写鞋，全身和远景才写鞋袜），装饰与发光也写进 caption，让成图与 caption 对应；「多人互动」条目把每个人写成独立的人物提示词，需要 V4 / V4.5 / V5 模型。「男孩（年幼）」「女孩（年幼）」条目只含健全内容，不能与身体描写类画风同时使用。每条下方的中文只用于阅读，不会发送。</p>
+      ? <p className="prompt-hint">用当前「画风」固定风格，逐条运行下面的内容提示词，生成用于训练画风 LoRA 的图片。提示词只描述内容，不含画风与质量词；导出时作为 caption。用「随机配方」按分区和占比生成条目：看不见的部位不写（半身不写鞋）、冲突自动排除、规则可按条目增删画风 tag（只发给模型，不进 caption）。也可以手动添加或批量导入。每条下方的中文只用于阅读，不会发送。</p>
       : <p className="prompt-hint">用参考图和固定的角色特征，逐条运行景别、表情、姿势、场景等内容提示词，生成用于训练角色 LoRA 的图片。导出的 caption 包含每张图使用的画风和内容提示词，不含角色特征（让画法不会被学成角色的一部分）。</p>}
     <p className="prompt-hint">公共分区和人物卡片不参与批跑。{gptMode
       ? 'GPT 的尺寸、质量和每条张数使用下方独立设置，自动比例开启时按条目调整尺寸；NovelAI 参数不参与。'
@@ -240,7 +271,13 @@ export const DatasetRunConfig = observer(({ generation, api, hidden }: { generat
     </div> : mode === 'style' ? <>
       <div className="dataset-style-preview"><span>将应用的画风</span>
         <p>{style.trim() ? style : '（未填写画风）'}</p></div>
-      <PromptLibrary entries={entries} setEntries={setEntries} categories={DATASET_CATEGORIES} defaults={defaultDatasetEntries}
+      <div className="dataset-recipe-bar">
+        <button className="primary" type="button" onClick={() => setRecipeOpen(true)}><Shuffle size={14} aria-hidden="true" /> 随机配方…</button>
+        <span className="prompt-hint">按分区随机组合内容（景别、外貌、服装、动作、场景……），带占比、冲突规则和每条画风增删，生成结果追加到下方列表。</span>
+      </div>
+      {recipeMessage && <p className="subtle" role="status">{recipeMessage}</p>}
+      <RecipeEditor api={api} open={recipeOpen} onClose={() => setRecipeOpen(false)} style={style} onGenerate={acceptRecipe} />
+      <PromptLibrary entries={entries} setEntries={setEntries} categories={[]} defaults={defaultDatasetEntries}
         placeholder="添加自定义内容提示词，例如 1girl, solo, sitting, library" name="画风训练集" allowCharacters showShape={shapes} />
     </> : <>
       <CharacterRunSettings api={api} state={character} model={generation.draft.model} draftStyle={style} />
@@ -282,6 +319,19 @@ export const DatasetRunConfig = observer(({ generation, api, hidden }: { generat
     </div>
   </section>
 })
+
+/** Compact draw summary under a recipe entry. */
+function DrawSummary({ entry }: { entry: DatasetEntry }) {
+  const edits = entry.styleEdits
+  const flags = entry.draws?.filter(draw => draw.partition.startsWith('-') || draw.option.startsWith('-')) ?? []
+  const edited = entry.draws?.some(draw => draw.partition === '-meta' && draw.option === 'edited')
+  return <span className="dataset-item-draws">
+    {flags.map((draw, index) => <i key={index}>{draw.label}</i>)}
+    {edits && edits.add.map(tag => <b key={`a${tag}`} className="add">画风+{tag}</b>)}
+    {edits && edits.remove.map(tag => <b key={`r${tag}`} className="remove">画风−{tag}</b>)}
+    {edited && edits && (edits.add.length > 0 || edits.remove.length > 0) && <em>提示词已修改，画风增删可能已不适用</em>}
+  </span>
+}
 
 export type DatasetExportSource =
   | { kind: 'experiment'; id: string }

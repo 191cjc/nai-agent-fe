@@ -281,7 +281,7 @@ def test_schema4_upgrade_preserves_private_rows_and_marks_legacy_snapshot_unavai
     )
     with database.connect() as connection:
         after = dict(connection.execute("SELECT * FROM generation_jobs").fetchone())
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 13
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 14
     assert after.pop("provider_request_json") is None
     assert after == before
     # Existing test providers and old rows have no captured request; never infer one.

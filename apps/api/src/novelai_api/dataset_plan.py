@@ -15,6 +15,7 @@ from .generations import (
     ReferenceUse,
 )
 from .prompt_comments import compile_prompt_comments, prompt_lines
+from .recipe_engine import resolve_style
 
 MAX_SEED = 4294967295
 # Validation-only stand-in so model/mode rules run before owner references are resolved.
@@ -138,6 +139,9 @@ def dataset_parameters(
         update["auto_character_position"] = False
     if styles:
         update["style_prompt"] = styles[(ordinal - 1) % len(styles)]
+    if item.style_edits is not None:
+        base = update.get("style_prompt", parameters.style_prompt)
+        update["style_prompt"] = resolve_style(base, item.style_edits.model_dump())
     if character is not None:
         update["positive_prompt"] = f"{character.traits.strip()}, {item.prompt.strip()}"
         update["reference"] = character.use(ordinal)
@@ -209,7 +213,21 @@ class DatasetRunCreate(BaseModel):
                  else styles[index]).strip(),
             ),
         )
-        for item in self.items:
+        if character is not None and any(item.style_edits for item in self.items):
+            raise ValueError("Style edits are only for style dataset runs")
+        for index, item in enumerate(self.items):
+            if item.style_edits is not None:
+                # Every ordinal can rotate to any pool style: none may resolve to blank.
+                for style in styles:
+                    edited = resolve_style(style, item.style_edits.model_dump())
+                    effective = (compile_prompt_comments(edited) if parameters.prompt_comments
+                                 else edited)
+                    if not effective.strip():
+                        raise ValueError(f"Item {index + 1}: style edits leave a blank style")
+                    dataset_parameters(
+                        parameters, item, seed=parameters.seed,
+                        styles=[style], character=character,
+                    )
             # A comment line would silently drop content the caption still claims.
             if parameters.prompt_comments and any(
                 has_comment_line(text)

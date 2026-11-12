@@ -171,6 +171,13 @@ review only (operator restriction); no paid probes.
   replaces the list; any invalid line rejects the whole import with its line
   number. Files ≤2 MiB, read locally; nothing is uploaded.
 
+## Random recipes (2026-11-12)
+
+The fixed style library below is historical: `dataset-prompts.ts` was removed and
+style drafts start empty. Items come from random recipes; see
+[Random Dataset Recipes](./dataset-recipe-contract.md). Older runs keep their
+category labels in the review grid.
+
 ## Library composition v3 (2026-11-03)
 
 - 156 items, all default-selected: 111 adult female (incl. `angle` 16 and

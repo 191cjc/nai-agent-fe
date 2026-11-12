@@ -610,6 +610,65 @@
         "title": "CharacterSnapshotEntry",
         "type": "object"
       },
+      "DatasetDraw": {
+        "additionalProperties": false,
+        "description": "One frozen recipe draw: ids for filtering plus a label snapshot for display.",
+        "properties": {
+          "label": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "option": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^-?[a-z0-9][a-z0-9-]*$",
+            "title": "Option",
+            "type": "string"
+          },
+          "partition": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^-?[a-z0-9][a-z0-9-]*$",
+            "title": "Partition",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "values": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Values"
+          }
+        },
+        "required": [
+          "partition",
+          "option",
+          "label"
+        ],
+        "title": "DatasetDraw",
+        "type": "object"
+      },
       "DatasetItem": {
         "properties": {
           "characters": {
@@ -618,6 +677,14 @@
             },
             "maxItems": 6,
             "title": "Characters",
+            "type": "array"
+          },
+          "draws": {
+            "items": {
+              "$ref": "#/components/schemas/DatasetDraw"
+            },
+            "maxItems": 128,
+            "title": "Draws",
             "type": "array"
           },
           "height": {
@@ -647,6 +714,26 @@
             "title": "Prompt",
             "type": "string"
           },
+          "recipe": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecipeRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "style_edits": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StyleEdits"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "width": {
             "anyOf": [
               {
@@ -667,6 +754,125 @@
           "prompt"
         ],
         "title": "DatasetItem",
+        "type": "object"
+      },
+      "DatasetRecipe": {
+        "additionalProperties": false,
+        "properties": {
+          "draw_order": {
+            "items": {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[a-z0-9][a-z0-9-]*$",
+              "type": "string"
+            },
+            "title": "Draw Order",
+            "type": "array"
+          },
+          "glossary": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Glossary",
+            "type": "object"
+          },
+          "partitions": {
+            "items": {
+              "$ref": "#/components/schemas/Partition"
+            },
+            "maxItems": 40,
+            "minItems": 1,
+            "title": "Partitions",
+            "type": "array"
+          },
+          "prompt_order": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxLength": 64,
+                  "minLength": 1,
+                  "pattern": "^[a-z0-9][a-z0-9-]*$",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Order"
+          },
+          "regions": {
+            "items": {
+              "$ref": "#/components/schemas/Region"
+            },
+            "maxItems": 32,
+            "title": "Regions",
+            "type": "array"
+          },
+          "resources": {
+            "patternProperties": {
+              "^[a-z0-9][a-z0-9-]*$": {
+                "type": "integer"
+              }
+            },
+            "propertyNames": {
+              "maxLength": 64,
+              "minLength": 1
+            },
+            "title": "Resources",
+            "type": "object"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/Rule"
+            },
+            "maxItems": 100,
+            "title": "Rules",
+            "type": "array"
+          },
+          "slots": {
+            "items": {
+              "$ref": "#/components/schemas/Slot"
+            },
+            "maxItems": 20,
+            "title": "Slots",
+            "type": "array"
+          },
+          "states": {
+            "patternProperties": {
+              "^[a-z0-9][a-z0-9-]*$": {
+                "maxLength": 100,
+                "type": "string"
+              }
+            },
+            "propertyNames": {
+              "maxLength": 64,
+              "minLength": 1
+            },
+            "title": "States",
+            "type": "object"
+          },
+          "style_tags": {
+            "items": {
+              "$ref": "#/components/schemas/StyleTag"
+            },
+            "maxItems": 64,
+            "title": "Style Tags",
+            "type": "array"
+          },
+          "version": {
+            "const": 1,
+            "default": 1,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "draw_order",
+          "partitions"
+        ],
+        "title": "DatasetRecipe",
         "type": "object"
       },
       "DatasetRunCreate": {
@@ -767,6 +973,144 @@
           }
         },
         "title": "DiscardedImagesDeleted",
+        "type": "object"
+      },
+      "Effects": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_options": {
+            "patternProperties": {
+              "^[a-z0-9][a-z0-9-]*$": {
+                "items": {
+                  "maxLength": 64,
+                  "minLength": 1,
+                  "pattern": "^[a-z0-9][a-z0-9-]*$",
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "propertyNames": {
+              "maxLength": 64,
+              "minLength": 1
+            },
+            "title": "Allow Options",
+            "type": "object"
+          },
+          "allow_values": {
+            "additionalProperties": {
+              "items": {
+                "maxLength": 64,
+                "minLength": 1,
+                "pattern": "^[a-z0-9][a-z0-9-]*$",
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Allow Values",
+            "type": "object"
+          },
+          "consume": {
+            "patternProperties": {
+              "^[a-z0-9][a-z0-9-]*$": {
+                "type": "integer"
+              }
+            },
+            "propertyNames": {
+              "maxLength": 64,
+              "minLength": 1
+            },
+            "title": "Consume",
+            "type": "object"
+          },
+          "content_add": {
+            "items": {
+              "maxLength": 300,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 64,
+            "title": "Content Add",
+            "type": "array"
+          },
+          "hide": {
+            "items": {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[a-z0-9][a-z0-9-]*$",
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Hide",
+            "type": "array"
+          },
+          "remove_options": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 400,
+            "title": "Remove Options",
+            "type": "array"
+          },
+          "remove_partitions": {
+            "items": {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[a-z0-9][a-z0-9-]*$",
+              "type": "string"
+            },
+            "maxItems": 64,
+            "title": "Remove Partitions",
+            "type": "array"
+          },
+          "remove_tags": {
+            "items": {
+              "maxLength": 300,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 64,
+            "title": "Remove Tags",
+            "type": "array"
+          },
+          "set": {
+            "patternProperties": {
+              "^[a-z0-9][a-z0-9-]*$": {
+                "maxLength": 64,
+                "minLength": 1,
+                "pattern": "^[a-z0-9][a-z0-9-]*$",
+                "type": "string"
+              }
+            },
+            "propertyNames": {
+              "maxLength": 64,
+              "minLength": 1
+            },
+            "title": "Set",
+            "type": "object"
+          },
+          "style_add": {
+            "items": {
+              "maxLength": 300,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Style Add",
+            "type": "array"
+          },
+          "style_remove": {
+            "items": {
+              "maxLength": 300,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Style Remove",
+            "type": "array"
+          }
+        },
+        "title": "Effects",
         "type": "object"
       },
       "ExperimentContext": {
@@ -1481,6 +1825,275 @@
         "title": "HistoryPage",
         "type": "object"
       },
+      "Option": {
+        "additionalProperties": false,
+        "properties": {
+          "child": {
+            "default": false,
+            "title": "Child",
+            "type": "boolean"
+          },
+          "disabled": {
+            "default": false,
+            "title": "Disabled",
+            "type": "boolean"
+          },
+          "effects": {
+            "$ref": "#/components/schemas/Effects"
+          },
+          "id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Label",
+            "type": "string"
+          },
+          "needs": {
+            "items": {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[a-z0-9][a-z0-9-]*$",
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Needs",
+            "type": "array"
+          },
+          "none": {
+            "default": false,
+            "title": "None",
+            "type": "boolean"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "enum": [
+                  "portrait",
+                  "square",
+                  "landscape"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "slots": {
+            "patternProperties": {
+              "^[a-z0-9][a-z0-9-]*$": {
+                "$ref": "#/components/schemas/SlotUse"
+              }
+            },
+            "propertyNames": {
+              "maxLength": 64,
+              "minLength": 1
+            },
+            "title": "Slots",
+            "type": "object"
+          },
+          "tags": {
+            "default": "",
+            "maxLength": 300,
+            "title": "Tags",
+            "type": "string"
+          },
+          "weight": {
+            "default": 1,
+            "exclusiveMinimum": 0.0,
+            "maximum": 1000000.0,
+            "title": "Weight",
+            "type": "number"
+          },
+          "weight_mods": {
+            "items": {
+              "$ref": "#/components/schemas/WeightMod"
+            },
+            "maxItems": 16,
+            "title": "Weight Mods",
+            "type": "array"
+          },
+          "when": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "When"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "Option",
+        "type": "object"
+      },
+      "OptionStat": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "option": {
+            "title": "Option",
+            "type": "string"
+          },
+          "target": {
+            "title": "Target",
+            "type": "number"
+          }
+        },
+        "required": [
+          "option",
+          "label",
+          "target",
+          "count"
+        ],
+        "title": "OptionStat",
+        "type": "object"
+      },
+      "Partition": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Label",
+            "type": "string"
+          },
+          "max_draws": {
+            "default": 1,
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Max Draws",
+            "type": "integer"
+          },
+          "mode": {
+            "default": "one",
+            "enum": [
+              "one",
+              "fill"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "needs": {
+            "items": {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[a-z0-9][a-z0-9-]*$",
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Needs",
+            "type": "array"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/Option"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Options",
+            "type": "array"
+          },
+          "quota": {
+            "default": false,
+            "title": "Quota",
+            "type": "boolean"
+          },
+          "when": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "When"
+          }
+        },
+        "required": [
+          "id",
+          "options"
+        ],
+        "title": "Partition",
+        "type": "object"
+      },
+      "PartitionStat": {
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/OptionStat"
+            },
+            "title": "Options",
+            "type": "array"
+          },
+          "partition": {
+            "title": "Partition",
+            "type": "string"
+          },
+          "quota_misses": {
+            "default": 0,
+            "title": "Quota Misses",
+            "type": "integer"
+          },
+          "skips": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Skips",
+            "type": "object"
+          },
+          "values": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "partition",
+          "label",
+          "options",
+          "skips",
+          "values"
+        ],
+        "title": "PartitionStat",
+        "type": "object"
+      },
       "PromptSection": {
         "additionalProperties": false,
         "properties": {
@@ -1683,6 +2296,83 @@
           "entry_count"
         ],
         "title": "PromptSnapshotSummary",
+        "type": "object"
+      },
+      "RecipeRef": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "RecipeRef",
+        "type": "object"
+      },
+      "RecipeSave": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_updated_at": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Updated At"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "recipe": {
+            "$ref": "#/components/schemas/DatasetRecipe"
+          }
+        },
+        "required": [
+          "name",
+          "recipe"
+        ],
+        "title": "RecipeSave",
+        "type": "object"
+      },
+      "RecipeSummary": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "updated_at"
+        ],
+        "title": "RecipeSummary",
         "type": "object"
       },
       "ReferenceFromResult": {
@@ -1939,6 +2629,43 @@
         "title": "ReferenceUse",
         "type": "object"
       },
+      "Region": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Label",
+            "type": "string"
+          },
+          "parent": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "pattern": "^[a-z0-9][a-z0-9-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "Region",
+        "type": "object"
+      },
       "RerunBatchCreate": {
         "properties": {
           "experiment_id": {
@@ -2115,6 +2842,44 @@
           }
         },
         "title": "RerunRequest",
+        "type": "object"
+      },
+      "Rule": {
+        "additionalProperties": false,
+        "properties": {
+          "disabled": {
+            "default": false,
+            "title": "Disabled",
+            "type": "boolean"
+          },
+          "effects": {
+            "$ref": "#/components/schemas/Effects"
+          },
+          "id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Label",
+            "type": "string"
+          },
+          "when": {
+            "additionalProperties": true,
+            "title": "When",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "when",
+          "effects"
+        ],
+        "title": "Rule",
         "type": "object"
       },
       "RunContinuation": {
@@ -2415,6 +3180,175 @@
         "title": "RunState",
         "type": "object"
       },
+      "SampleItem": {
+        "properties": {
+          "draws": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Draws",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "prompt": {
+            "title": "Prompt",
+            "type": "string"
+          },
+          "shape": {
+            "anyOf": [
+              {
+                "enum": [
+                  "portrait",
+                  "square",
+                  "landscape"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shape"
+          },
+          "style_edits": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Style Edits",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "prompt",
+          "draws",
+          "style_edits"
+        ],
+        "title": "SampleItem",
+        "type": "object"
+      },
+      "SampleRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "n": {
+            "maximum": 400.0,
+            "minimum": 1.0,
+            "title": "N",
+            "type": "integer"
+          },
+          "recipe": {
+            "$ref": "#/components/schemas/DatasetRecipe"
+          },
+          "seed": {
+            "maximum": 4294967295.0,
+            "minimum": 0.0,
+            "title": "Seed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "recipe",
+          "n",
+          "seed"
+        ],
+        "title": "SampleRequest",
+        "type": "object"
+      },
+      "SampleResult": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SampleItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "stats": {
+            "$ref": "#/components/schemas/SampleStats"
+          }
+        },
+        "required": [
+          "items",
+          "stats"
+        ],
+        "title": "SampleResult",
+        "type": "object"
+      },
+      "SampleStats": {
+        "properties": {
+          "overflow": {
+            "title": "Overflow",
+            "type": "integer"
+          },
+          "partitions": {
+            "items": {
+              "$ref": "#/components/schemas/PartitionStat"
+            },
+            "title": "Partitions",
+            "type": "array"
+          },
+          "produced": {
+            "title": "Produced",
+            "type": "integer"
+          },
+          "requested": {
+            "title": "Requested",
+            "type": "integer"
+          },
+          "rules": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Rules",
+            "type": "object"
+          },
+          "stale_dependency": {
+            "title": "Stale Dependency",
+            "type": "integer"
+          },
+          "style_added": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Style Added",
+            "type": "object"
+          },
+          "style_removed": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Style Removed",
+            "type": "object"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "requested",
+          "produced",
+          "overflow",
+          "stale_dependency",
+          "partitions",
+          "rules",
+          "style_removed",
+          "style_added",
+          "warnings"
+        ],
+        "title": "SampleStats",
+        "type": "object"
+      },
       "SearchRequest": {
         "properties": {
           "limit": {
@@ -2550,6 +3484,238 @@
           "text"
         ],
         "title": "SharedSnapshotEntry",
+        "type": "object"
+      },
+      "Slot": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Label",
+            "type": "string"
+          },
+          "values": {
+            "items": {
+              "$ref": "#/components/schemas/SlotValue"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "values"
+        ],
+        "title": "Slot",
+        "type": "object"
+      },
+      "SlotUse": {
+        "additionalProperties": false,
+        "properties": {
+          "exclude": {
+            "items": {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[a-z0-9][a-z0-9-]*$",
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Exclude",
+            "type": "array"
+          },
+          "exclude_state": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "pattern": "^[a-z0-9][a-z0-9-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exclude State"
+          },
+          "only": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxLength": 64,
+                  "minLength": 1,
+                  "pattern": "^[a-z0-9][a-z0-9-]*$",
+                  "type": "string"
+                },
+                "maxItems": 100,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Only"
+          },
+          "set_state": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "pattern": "^[a-z0-9][a-z0-9-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set State"
+          },
+          "weight_mods": {
+            "patternProperties": {
+              "^[a-z0-9][a-z0-9-]*$": {
+                "type": "number"
+              }
+            },
+            "propertyNames": {
+              "maxLength": 64,
+              "minLength": 1
+            },
+            "title": "Weight Mods",
+            "type": "object"
+          }
+        },
+        "title": "SlotUse",
+        "type": "object"
+      },
+      "SlotValue": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Label",
+            "type": "string"
+          },
+          "tag": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Tag",
+            "type": "string"
+          },
+          "weight": {
+            "default": 1,
+            "exclusiveMinimum": 0.0,
+            "maximum": 1000000.0,
+            "title": "Weight",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "tag"
+        ],
+        "title": "SlotValue",
+        "type": "object"
+      },
+      "StoredRecipe": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "recipe": {
+            "$ref": "#/components/schemas/DatasetRecipe"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "updated_at",
+          "recipe",
+          "created_at"
+        ],
+        "title": "StoredRecipe",
+        "type": "object"
+      },
+      "StyleEdits": {
+        "additionalProperties": false,
+        "description": "Plain tags removed from / appended to this item's style before it is sent.",
+        "properties": {
+          "add": {
+            "items": {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Add",
+            "type": "array"
+          },
+          "remove": {
+            "items": {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Remove",
+            "type": "array"
+          }
+        },
+        "title": "StyleEdits",
+        "type": "object"
+      },
+      "StyleTag": {
+        "additionalProperties": false,
+        "properties": {
+          "needs": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "title": "Needs",
+            "type": "string"
+          },
+          "tag": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Tag",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tag",
+          "needs"
+        ],
+        "title": "StyleTag",
         "type": "object"
       },
       "TagCandidate": {
@@ -2721,6 +3887,28 @@
           "label"
         ],
         "title": "UserInfo",
+        "type": "object"
+      },
+      "WeightMod": {
+        "additionalProperties": false,
+        "properties": {
+          "factor": {
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "title": "Factor",
+            "type": "number"
+          },
+          "when": {
+            "additionalProperties": true,
+            "title": "When",
+            "type": "object"
+          }
+        },
+        "required": [
+          "when",
+          "factor"
+        ],
+        "title": "WeightMod",
         "type": "object"
       }
     }
@@ -3216,6 +4404,505 @@
           }
         },
         "summary": "Capabilities"
+      }
+    },
+    "/api/dataset-recipes": {
+      "get": {
+        "operationId": "list_dataset_recipes_api_dataset_recipes_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "__Host-nai_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "  Host-Nai Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RecipeSummary"
+                  },
+                  "title": "Response List Dataset Recipes Api Dataset Recipes Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List Dataset Recipes"
+      }
+    },
+    "/api/dataset-recipes/sample": {
+      "post": {
+        "operationId": "sample_dataset_recipe_api_dataset_recipes_sample_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "__Host-nai_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "  Host-Nai Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SampleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SampleResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Sample Dataset Recipe"
+      }
+    },
+    "/api/dataset-recipes/templates/basic": {
+      "get": {
+        "operationId": "basic_recipe_template_api_dataset_recipes_templates_basic_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "__Host-nai_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "  Host-Nai Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetRecipe"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Basic Recipe Template"
+      }
+    },
+    "/api/dataset-recipes/{recipe_id}": {
+      "delete": {
+        "operationId": "delete_dataset_recipe_api_dataset_recipes__recipe_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recipe_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Recipe Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "__Host-nai_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "  Host-Nai Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Delete Dataset Recipe"
+      },
+      "get": {
+        "operationId": "get_dataset_recipe_api_dataset_recipes__recipe_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recipe_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Recipe Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "__Host-nai_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "  Host-Nai Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoredRecipe"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Dataset Recipe"
+      },
+      "put": {
+        "operationId": "save_dataset_recipe_api_dataset_recipes__recipe_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recipe_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Recipe Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "__Host-nai_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "  Host-Nai Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecipeSave"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoredRecipe"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Save Dataset Recipe"
       }
     },
     "/api/dataset-runs": {

@@ -3,7 +3,7 @@
  * Every item owns its framing and pose; categories are not combined at runtime.
  * Identity, clothing and accessories come from traits, and style comes from the pool.
  */
-import type { DatasetCategory, DatasetPrompt } from './dataset-prompts'
+import type { DatasetCategory, DatasetPrompt } from './dataset-run'
 
 export type CharacterMode = 'gpt' | 'precise'
 

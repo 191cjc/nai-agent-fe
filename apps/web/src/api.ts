@@ -1,4 +1,5 @@
 import { isSnapshot, isSnapshotPage, validRequestSections, type PromptSections, type PromptSnapshot, type PromptSnapshotCreate, type PromptSnapshotPage } from './prompt-sections'
+import type { DatasetDraw, Recipe, RecipeSummary, SampleResult, StoredRecipe, StyleEdits } from './recipe'
 export type { PromptSections, PromptSnapshot, PromptSnapshotCreate, PromptSnapshotEntry, PromptSnapshotSummary, PromptSnapshotPage } from './prompt-sections'
 
 export interface UserInfo {
@@ -33,6 +34,10 @@ export interface DatasetItem {
   /** Optional per-item canvas (both or neither); absent uses the run size. */
   width?: number
   height?: number
+  /** Random-recipe items: frozen draws (review filters), per-item style edits, source recipe. */
+  draws?: DatasetDraw[]
+  style_edits?: StyleEdits
+  recipe?: { id: string; name: string }
 }
 
 export interface RerunEdits {
@@ -677,6 +682,33 @@ export class WorkspaceApi {
 
   deleteGeneration(id: string): Promise<void> {
     return this.request(`/api/generations/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  }
+
+  listRecipes(signal?: AbortSignal): Promise<RecipeSummary[]> {
+    return this.request('/api/dataset-recipes', { signal })
+  }
+
+  getRecipe(id: string, signal?: AbortSignal): Promise<StoredRecipe> {
+    return this.request(`/api/dataset-recipes/${encodeURIComponent(id)}`, { signal })
+  }
+
+  saveRecipe(id: string, name: string, recipe: Recipe, expectedUpdatedAt?: number): Promise<StoredRecipe> {
+    return this.request(`/api/dataset-recipes/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ name, recipe, ...(expectedUpdatedAt === undefined ? {} : { expected_updated_at: expectedUpdatedAt }) }),
+    })
+  }
+
+  deleteRecipe(id: string): Promise<void> {
+    return this.request(`/api/dataset-recipes/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  }
+
+  basicRecipeTemplate(signal?: AbortSignal): Promise<Recipe> {
+    return this.request('/api/dataset-recipes/templates/basic', { signal })
+  }
+
+  sampleRecipe(recipe: Recipe, n: number, seed: number, signal?: AbortSignal): Promise<SampleResult> {
+    return this.request('/api/dataset-recipes/sample', { method: 'POST', body: JSON.stringify({ recipe, n, seed }), signal })
   }
 
   search(query: string, signal?: AbortSignal): Promise<SearchResults> {

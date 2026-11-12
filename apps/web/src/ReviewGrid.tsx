@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Ban, CheckSquare, Dices, Maximize2, PencilLine, RefreshCw, Replace, Search, Square, Trash2, Undo2, X } from 'lucide-react'
 import { ApiFailure, errorText, type ExperimentRunState, type GenerationView, type ImagePurgeResult, type RerunBatchItem, type WorkspaceApi } from './api'
-import { DATASET_CATEGORIES } from './dataset-prompts'
 import { CHARACTER_CATEGORIES } from './character-prompts'
 import { translatePrompt } from './prompt-zh'
 import { contentCaption } from './dataset-export'
@@ -16,9 +15,17 @@ const MAX_GROUPS = 3000
 const PREVIEW_CONCURRENCY = 4
 const BUSY_RETRIES = 3
 
+// Categories of the retired fixed style library, kept so older training sets stay readable.
+const LEGACY_STYLE_CATEGORIES: Record<string, string> = {
+  portrait: '特写与表情', face: '脸部特写', upper: '半身日常', full: '全身与动作', angle: '视角与透视',
+  scene: '人物与场景', light: '光照与时段', multi: '多人互动', fantasy: '异世界奇幻', ornate: '华丽立绘',
+  boy: '男孩（年幼）', girl: '女孩（年幼）', nohuman: '无人物',
+}
+
 const CATEGORY_LABELS: Record<string, string> = Object.fromEntries([
-  ...DATASET_CATEGORIES.map(category => [category.id, category.label]),
+  ...Object.entries(LEGACY_STYLE_CATEGORIES),
   ...CHARACTER_CATEGORIES.map(category => [category.id, category.label]),
+  ['recipe', '随机配方'],
   ['custom', '自定义'],
 ])
 
@@ -31,8 +38,37 @@ interface Tile {
 }
 
 function categoryOf(job: GenerationView): string {
-  const id = job.parameters.experiment?.item?.id ?? ''
-  return id.replace(/-\d+$/, '') || 'custom'
+  const item = job.parameters.experiment?.item
+  if (item?.draws?.length) return 'recipe'
+  return (item?.id ?? '').replace(/-\d+$/, '') || 'custom'
+}
+
+/** Filter key of a draw: one chip per option, per slot value, and per skip/removal reason. */
+interface DrawChip { group: string; groupLabel: string; key: string; label: string }
+
+const DRAW_GROUP_LABELS: Record<string, string> = { '-rule': '规则', '-style': '画风增删', '-meta': '标记' }
+
+function drawChips(job: GenerationView): DrawChip[] {
+  const draws = job.parameters.experiment?.item?.draws ?? []
+  const chips: DrawChip[] = []
+  for (const draw of draws) {
+    const groupLabel = DRAW_GROUP_LABELS[draw.partition] ?? draw.label.split('：')[0]
+    const optionText = draw.label.includes('：') ? draw.label.slice(draw.label.indexOf('：') + 1) : draw.label
+    const key = draw.option === '-skip' || draw.option === '-removed' ? `${draw.option}:${draw.reason ?? ''}` : draw.option
+    chips.push({ group: draw.partition, groupLabel, key, label: draw.option === '-removed' ? '被移除' : optionText })
+    for (const [slot, value] of Object.entries(draw.values ?? {})) {
+      chips.push({ group: `${draw.partition}#${slot}`, groupLabel: `${groupLabel} · ${slot}`, key: value, label: value })
+    }
+  }
+  return chips
+}
+
+/** AND across groups, OR within a group; groups with nothing selected do not filter. */
+function matchesDraws(chips: readonly DrawChip[], filter: ReadonlyMap<string, ReadonlySet<string>>): boolean {
+  for (const [group, keys] of filter) {
+    if (keys.size && !chips.some(chip => chip.group === group && keys.has(chip.key))) return false
+  }
+  return true
 }
 
 function ordinalLabel(job: GenerationView): string {
@@ -165,6 +201,8 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
   const [reload, setReload] = useState(0)
   const [category, setCategory] = useState('all')
   const [query, setQuery] = useState('')
+  const [drawFilter, setDrawFilter] = useState<ReadonlyMap<string, ReadonlySet<string>>>(new Map())
+  const [drawPanel, setDrawPanel] = useState(false)
   const [hideDiscarded, setHideDiscarded] = useState(true)
   const [metadataLimited, setMetadataLimited] = useState(false)
   const [purging, setPurging] = useState(false)
@@ -281,10 +319,39 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
   // Per group, computed once per load or caption edit (not per keystroke).
   const searchIndex = useMemo(() => new Map((groups ?? []).map(job => [job.id, searchText(job)])), [groups])
   const search = useMemo(() => parseSearch(query), [query])
-  const searching = search.include.length > 0 || search.exclude.length > 0
+  const chipIndex = useMemo(() => new Map((groups ?? []).map(job => [job.id, drawChips(job)])), [groups])
+  const drawFiltering = [...drawFilter.values()].some(keys => keys.size > 0)
+  const searching = search.include.length > 0 || search.exclude.length > 0 || drawFiltering
   const visible = useMemo(() => tiles.filter(tile => (category === 'all' || tile.category === category)
     && !(hideDiscarded && tile.index !== null && tile.job.discarded_images?.includes(tile.index))
-    && (!searching || matchesSearch(searchIndex.get(tile.job.id) ?? '', search))), [tiles, category, hideDiscarded, searching, searchIndex, search])
+    && ((!search.include.length && !search.exclude.length) || matchesSearch(searchIndex.get(tile.job.id) ?? '', search))
+    && (!drawFiltering || matchesDraws(chipIndex.get(tile.job.id) ?? [], drawFilter))), [tiles, category, hideDiscarded, searchIndex, search, drawFiltering, chipIndex, drawFilter])
+  // Draw groups present in this set with per-chip image counts (before draw filtering).
+  const drawGroups = useMemo(() => {
+    const result = new Map<string, { label: string; chips: Map<string, { label: string; count: number }> }>()
+    for (const tile of tiles) {
+      if (hideDiscarded && tile.index !== null && tile.job.discarded_images?.includes(tile.index)) continue
+      for (const chip of chipIndex.get(tile.job.id) ?? []) {
+        const group = result.get(chip.group) ?? { label: chip.groupLabel, chips: new Map() }
+        const entry = group.chips.get(chip.key) ?? { label: chip.label, count: 0 }
+        entry.count += 1
+        group.chips.set(chip.key, entry)
+        result.set(chip.group, group)
+      }
+    }
+    return result
+  }, [tiles, chipIndex, hideDiscarded])
+  function toggleDraw(group: string, key: string) {
+    setDrawFilter(current => {
+      const next = new Map(current)
+      const keys = new Set(next.get(group) ?? [])
+      if (keys.has(key)) keys.delete(key)
+      else keys.add(key)
+      next.set(group, keys)
+      return next
+    })
+    setPage(0)
+  }
   const pages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE))
   const current = Math.min(page, pages - 1)
   useEffect(() => { scrollRef.current?.scrollTo({ top: 0 }) }, [current])
@@ -559,6 +626,8 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
           <input type="search" value={query} maxLength={500} spellCheck={false} placeholder="如 red hair, -hat"
             title="在训练词（含中文释义）里搜索，不区分大小写；逗号分隔多个词时须全部包含，词前加 - 表示排除"
             onChange={event => { setQuery(event.target.value); setPage(0) }} /></span></label>
+      {drawGroups.size > 0 && <button className="text-action" type="button" aria-expanded={drawPanel} onClick={() => setDrawPanel(value => !value)}>
+        按随机词筛选{drawFiltering ? `（${[...drawFilter.values()].reduce((sum, keys) => sum + keys.size, 0)}）` : ''}</button>}
       <label className="history-select"><input type="checkbox" checked={hideDiscarded} onChange={event => { setHideDiscarded(event.target.checked); setPage(0) }} /> 隐藏已弃置</label>
       <span className="subtle" role="status">{searching ? `搜索到 ${visible.length} 张 · ` : ''}已弃置 {discardedCount} 张 · 失败 {failedCount} 条</span>
       {cleanupPendingCount > 0 && <span className="subtle" role="status">待重试清理 {cleanupPendingCount} 张</span>}
@@ -573,6 +642,17 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
         onClick={() => void cleanupDiscarded()}><Trash2 size={14} aria-hidden="true" /> {purging ? '正在清理…' : '清理已弃置图片'}{cleanupCount ? `（${metadataLimited ? '至少 ' : ''}${cleanupCount}）` : ''}</button>
       <button className="icon-button" type="button" disabled={purging} title="返回单张查看" aria-label="返回单张查看" onClick={onClose}><X size={18} /></button>
     </div>
+    {drawPanel && drawGroups.size > 0 && <div className="review-draw-filter" role="group" aria-label="按随机词筛选">
+      <p className="prompt-hint">不同分区之间须同时满足，同一分区内任选其一；数字为图片张数。只对随机配方生成的条目有效。</p>
+      {[...drawGroups.entries()].map(([group, entry]) => <div key={group} className="review-draw-group">
+        <strong>{entry.label}</strong>
+        {[...entry.chips.entries()].sort((a, b) => b[1].count - a[1].count).map(([key, chip]) => {
+          const active = drawFilter.get(group)?.has(key) ?? false
+          return <button key={key} type="button" className={`recipe-chip ${active ? 'only' : ''}`} aria-pressed={active} onClick={() => toggleDraw(group, key)}>{chip.label} {chip.count}</button>
+        })}
+      </div>)}
+      <button className="text-action" type="button" disabled={!drawFiltering} onClick={() => { setDrawFilter(new Map()); setPage(0) }}>清除随机词筛选</button>
+    </div>}
     {groups && <div className="review-grid-selection" role="group" aria-label="多选">
       <span role="status">已选 <strong>{selectedTiles.length}</strong> 张{hiddenSelected > 0 ? `（${hiddenSelected} 张不在当前筛选中）` : ''}</span>
       <button className="text-action" type="button" disabled={!pendingFailedTiles.length || batch !== null} title="生成失败、还没补跑过也不在重跑队列中的条目"
