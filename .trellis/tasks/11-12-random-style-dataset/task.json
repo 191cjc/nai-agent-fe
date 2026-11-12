@@ -22,5 +22,7 @@
   "parent": null,
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "notes": "Deployed 20261112T084616Z-8c3b25b (commit 8c3b25b); schema 14 migrated with verified pre-migration backup."
+  }
 }
