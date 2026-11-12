@@ -3,9 +3,9 @@
 ## Scope / Trigger
 
 Use this contract when changing `apps/api/src/novelai_api/codex_advice.py`,
-advice wiring in `app.py`, or Codex dependencies and configuration. The
-operator accepted AiQQ-equivalent restricted execution on 2026-09-24, not a
-proof that every tool is unavailable before execution.
+advice wiring in `app.py`, or Codex dependencies and configuration. The runtime
+uses a read-only sandbox and rejects observed tool events. These restrictions
+do not prove that every tool is unavailable before execution.
 
 ## Signatures
 
@@ -61,7 +61,7 @@ proof that every tool is unavailable before execution.
   weight/comment syntax; mark ambiguity rather than inventing canonical tags
   or claiming live verification. Do not add unrequested prompt tags. Use the
   same suggestion JSON field and keep all runtime/tool restrictions unchanged.
-- Match AiQQ's read-only sandbox, network/search disabled, approvals `never`,
+- Use a read-only sandbox, network/search disabled, approvals `never`,
   named capability switches off, and immediate rejection of observed tool
   events. The pinned CLI still reports `unified_exec=true` despite a `false`
   setting; `shell_tool` reports disabled. This is an **accepted limitation**,

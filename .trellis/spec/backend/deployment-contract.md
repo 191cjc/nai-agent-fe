@@ -59,7 +59,7 @@ Captured provider requests use current schema5; see [Database](./database-guidel
   old hashes through the browser-cache and rollback window. The more specific
   `/novelai/api/` location rewrites that prefix to backend `/api/`; returned
   authenticated image links remain backend `/api/*` paths that the web client
-  prefixes. Keep `/aiqq` and existing TLS untouched.
+  prefixes. Preserve unrelated existing routes and TLS configuration.
 - Nginx preserves `Host` and browser `Origin`, replaces client-supplied
   forwarding IP headers with `$remote_addr`, sets HTTPS forwarding headers,
   and disables API buffering, caching and storage. A hostile host-local
@@ -130,13 +130,11 @@ Captured provider requests use current schema5; see [Database](./database-guidel
   reporting advice/translation enabled, verify the running API has its selected
   `NAI_CODEX_API_KEY` and optional endpoint/model, and validate runner wiring
   without starting a turn. Treat real upstream success as separate acceptance.
-  With explicit authorization, copy only the selected key/base/model from an
-  existing service into root0600 `/etc/novelai/api.env`; back up the original
-  config privately, preserve unrelated settings, and leave the source service
-  untouched. This is a one-time copy, not automatic cross-service syncing.
-  Never print secrets or pass them in command arguments. Future rotations use
-  `sudoedit /etc/novelai/api.env` and an idle API restart. Recover original
-  configuration automatically only before modern startup is attempted.
+  Keep `/etc/novelai/api.env` root-owned, mode `0600`, and its backups private;
+  preserve unrelated settings. Never print secrets or pass them in command
+  arguments. Rotate settings with `sudoedit /etc/novelai/api.env` and an idle
+  API restart. Recover original configuration automatically only before modern
+  startup is attempted.
 
 - Retained images live under /var/lib/novelai/generation-images/, service-owned
   with 0700 directories/0600 files, outside the immutable release/web trees.

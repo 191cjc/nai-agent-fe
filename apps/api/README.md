@@ -154,9 +154,9 @@ cancellation or shutdown.
 The existing advice service admits at most two concurrent turns and imposes a
 45-second deadline. Advice input and output are not saved in SQLite.
 
-These are AiQQ-equivalent restrictions accepted by the operator, **not** proof
-that every tool is unavailable before execution. Event rejection happens after
-an event is observed and cannot rule out a side effect before that event.
+These sandbox settings and event checks do not prove that every tool is
+unavailable before execution. Event rejection happens after an event is
+observed and cannot rule out a side effect before that event.
 Keep the API host and process credentials private, and do not treat this runner
 as a pre-execution no-tools security boundary.
 

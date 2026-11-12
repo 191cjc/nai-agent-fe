@@ -33,7 +33,7 @@ templates and do not establish project conventions.
 | [Native Character Prompt Contract](./native-character-contract.md) | Structured style/shared/character prompts, native mapping and legacy history | In use |
 | [Individual Hidden Tags](../backend/prompt-comments-contract.md) | Whole-line comments, blur formatting, effective provider projection and frozen syntax compatibility | In use |
 | [Prompt Sections and Snapshots](./prompt-sections-contract.md) | Fixed editor sections, hidden-text projection, private schema4 snapshots and atomic import | In use |
-| [Codex Advice Runtime Contract](./codex-advice-contract.md) | AiQQ-equivalent restricted turns, error mapping and cleanup | In use |
+| [Codex Advice Runtime Contract](./codex-advice-contract.md) | Isolated restricted turns, error mapping and cleanup | In use |
 | [Host Deployment Contract](./deployment-contract.md) | Nginx/systemd routes, private storage, secrets and recovery | In use |
 | [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | To fill |
 

@@ -1,6 +1,7 @@
 # Add these locations inside the existing www.firesoul.cn HTTPS server block.
-# Keep /aiqq and existing TLS configuration unchanged. Only public dist files
-# belong under /srv/www/novelai; never put API code, env files or SQLite here.
+# Keep unrelated existing routes and TLS configuration unchanged.
+# Only public dist files belong under /srv/www/novelai; never put API code,
+# env files or SQLite here.
 location = /novelai {
     return 308 /novelai/;
 }

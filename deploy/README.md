@@ -4,7 +4,7 @@ No Docker is used locally or in production. Local development keeps Vite's
 HTTPS server and its `/api` proxy; see `apps/web/README.md` and
 `apps/api/README.md`. Production uses the existing `www.firesoul.cn` HTTPS
 Nginx server, one loopback-only Uvicorn process under systemd, and a private
-SQLite file. Keep the existing `/aiqq` route and TLS configuration. Generated
+SQLite file. Preserve unrelated existing routes and TLS configuration. Generated
 images are privately retained until explicitly deleted under
 `/var/lib/novelai/generation-images/` and survive process restarts. Tokens,
 sessions, generation parameters and experiment metadata persist in SQLite;
@@ -65,11 +65,8 @@ active: `sudo systemctl restart novelai-api.service`. Readiness can be checked
 with `curl --fail http://127.0.0.1:18080/api/health/ready`; this does not call an
 AI provider or prove that credentials are valid. No frontend rebuild is needed.
 
-An authorized reuse of AiQQ AI configuration is a one-time copy of its text-AI
-key, API base and model into these three NovelAI settings. The files remain
-independent: later edits to `/etc/novelai/api.env` do not update AiQQ, and AiQQ
-edits do not update NovelAI. Keep the original private file and any backup
-root-owned, mode `0600`; never print, paste or pass keys as command arguments.
+Keep any configuration backup root-owned, mode `0600`; never print, paste or
+pass keys as command arguments.
 
 ## Stage a release
 
@@ -197,8 +194,8 @@ curl --fail https://www.firesoul.cn/novelai/api/health/ready
 curl --fail https://www.firesoul.cn/novelai/
 ```
 
-Also check `/aiqq`. These health checks make no paid provider calls. Readiness
-verifies the schema and writable SQLite. To issue a token, run `sudo -u novelai
+These health checks make no paid provider calls. Readiness verifies the schema
+and writable SQLite. To issue a token, run `sudo -u novelai
 env NAI_SQLITE_PATH=/var/lib/novelai/novelai.sqlite3
 /srv/novelai/current/apps/api/.venv/bin/novelai-admin create --label alice`.
 The token is shown once; distribute it privately. `novelai-admin list` and
@@ -207,8 +204,8 @@ The token is shown once; distribute it privately. `novelai-admin list` and
 For a web-only change with an unchanged API contract, build a fresh web
 release from the explicit, env-free inputs above. Publish its hashed assets
 first, then atomically switch only `/srv/www/novelai/current` to the new web
-release. Verify the public page and its referenced assets, API readiness and
-`/aiqq`; retain the previous web release for rollback. Do not restart the API
+release. Verify the public page, its referenced assets and API readiness;
+retain the previous web release for rollback. Do not restart the API
 or migrate SQLite for this case.
 
 For an upgrade, stage both new releases and take a verified pre-upgrade
