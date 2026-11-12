@@ -36,9 +36,14 @@ see [Character Dataset Runs](./character-dataset-contract.md).
   non-blank prompt ≤1000 chars, no `//` comment line when `prompt_comments`,
   and every item must validate as a full `GenerationRequest` (combined
   style + item ≤3000).
-- Ordinal N renders `positive_prompt = items[N-1].prompt` and seed
-  `(base - 1 + N - 1) % 4294967295 + 1`, where base is the persisted run
-  seed (request seed or random once). Seeds intentionally vary per item.
+- Ordinal N renders `positive_prompt = items[N-1].prompt`. **Style training sets**
+  (no `character`, 2026-11-12): the server draws one independent random seed per
+  item at creation and stores it as `definition_json.seeds`; the request/draft seed
+  is ignored and seeds are never accepted from or returned to the browser. An
+  idempotent retry compares definitions without `seeds` and keeps the stored ones.
+  **Character sets and runs stored before `seeds` existed** keep
+  `(base - 1 + N - 1) % 4294967295 + 1`, base being the persisted run seed
+  (request seed or random once).
 - Dataset and style runs share the one-active-run index; a dataset id that
   collides with a style run id conflicts (`experiment_run_conflict`).
 - Ordinary `POST /api/generations` cannot carry dataset metadata
@@ -252,7 +257,8 @@ category labels in the review grid.
   `experiment_run_active` while running/stopping, 422 `continuation_unsupported`
   for style runs, 422 `nothing_to_continue` when every item was claimed).
 - The new run holds items `next_ordinal..total` and renders each exactly as the
-  original would have: base seed `item_seed(seed, next_ordinal)`, the style pool
+  original would have: the remaining stored per-item `seeds` (or, for runs
+  without them, base seed `item_seed(seed, next_ordinal)`), the style pool
   rotated by the offset, and img2img/precise reference order rotated by the
   offset (vibe/GPT keep all references). References must still exist with the
   pinned digest (else 422 `reference_not_found`). GPT continuations record the

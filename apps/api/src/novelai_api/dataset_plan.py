@@ -1,6 +1,7 @@
 """Dataset runs: one frozen prompt, derived seed and optional style/reference per ordinal."""
 
 import json
+import secrets
 from typing import Literal, Self
 from uuid import UUID
 
@@ -21,6 +22,10 @@ MAX_SEED = 4294967295
 # Validation-only stand-in so model/mode rules run before owner references are resolved.
 _PLACEHOLDER_IMAGE = ReferenceImageUse(id="00000000-0000-0000-0000-000000000000", sha256="0" * 64)
 
+
+def random_item_seeds(count: int) -> list[int]:
+    """One independent random provider seed per item (1..MAX_SEED)."""
+    return [secrets.randbelow(MAX_SEED) + 1 for _ in range(count)]
 
 def item_seed(base: int, ordinal: int) -> int:
     """Vary seeds per item for training diversity while staying reproducible."""
@@ -160,6 +165,10 @@ class DatasetRunCreate(BaseModel):
     # GPT image runs only: groups in flight at once (absent = server maximum). Mutable
     # while the run is unfinished, so it is stored beside, not inside, the definition.
     gpt_concurrency: int | None = Field(default=None, ge=1, le=16)
+    # Server-only: independent random seed per item, chosen once at creation. Continuations
+    # pass the stopped run's remaining seeds so each item renders exactly as before. Absent on
+    # browser requests (seeds are never client-chosen) and on runs created before this field.
+    item_seeds: list[int] | None = Field(default=None, exclude=True)
 
     @model_validator(mode="after")
     def valid_plan(self) -> Self:
@@ -248,6 +257,8 @@ class DatasetRunCreate(BaseModel):
             "parameters": self.parameters.model_dump(mode="json"),
             "items": [item.model_dump() for item in self.items],
         }
+        if self.item_seeds is not None:
+            definition["seeds"] = self.item_seeds
         if self.styles is not None:
             definition["styles"] = self.styles
         if self.character is not None:

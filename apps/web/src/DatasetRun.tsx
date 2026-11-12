@@ -303,7 +303,9 @@ export const DatasetRunConfig = observer(({ generation, api, hidden }: { generat
     </div>}
     {!snapshot && <p className="prompt-hint">{gptMode
       ? 'GPT 生图接口不接收种子，调整 NovelAI 的种子不会改变 GPT 请求，也无法靠种子保证复现。'
-      : '每条使用不同种子：生成设置中的种子作为基础种子（留空则服务器随机一次），第 N 条使用基础种子 + N − 1。'}</p>}
+      : mode === 'style'
+        ? '每条由服务器各自随机一个种子，生成设置里的种子不参与；种子随条目保存，续跑时保持不变。'
+        : '每条使用不同种子：生成设置中的种子作为基础种子（留空则服务器随机一次），第 N 条使用基础种子 + N − 1。'}</p>}
     <p className="prompt-hint">批跑在服务器依次执行，单条失败后继续下一条，不会自动重试。刷新、关闭页面或退出登录不会停止；只有“停止”会阻止后续条目。已有任务在运行时会加入队列：NovelAI 与 GPT 各自按加入顺序逐个执行，互不等待；最多 10 个未完成任务。</p>
     <p className="prompt-hint">可从历史记录的「实验与训练集」中查看和导出已保存的图片。</p>
     {!snapshot && generation.error && !generation.submitUncertain && <p className="alert" role="alert">{generation.error}</p>}

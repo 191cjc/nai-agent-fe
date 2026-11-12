@@ -82,7 +82,11 @@ def test_items_run_with_frozen_style_distinct_seeds_and_continue_after_failure(
             item["prompt"] for item in ITEMS
         ]
         assert {call.style_prompt for call in provider.calls} == {"artist:fixture, watercolor"}
-        assert [call.seed for call in provider.calls] == [4294967294, 4294967295, 1]
+        # Style training sets give each item its own random seed (the draft seed is ignored).
+        seeds = [call.seed for call in provider.calls]
+        assert all(1 <= seed <= 4294967295 for seed in seeds)
+        assert len(set(seeds)) == 3 and seeds != [4294967294, 4294967295, 1]
+        assert seeds == service.store.get(user, run.id).item_seeds
         assert [call.experiment.item.id for call in provider.calls] == [
             item["id"] for item in ITEMS
         ]
@@ -304,3 +308,59 @@ def test_item_sizes_follow_run_rules_for_gpt_and_img2img() -> None:
         character_run([uuid4()], mode="gpt", items=sized, **gpt)
     character_run([uuid4()], mode="gpt", **gpt,
                   items=[{"id": "a", "prompt": "full body", "width": 1024, "height": 1536}])
+
+
+def test_style_runs_store_random_item_seeds_and_continuations_keep_them(
+    database: Database,  # noqa: F811
+) -> None:
+    from novelai_api.style_experiments import continuation_request
+
+    user = owner(database)
+    manager = GenerationManager(database, ScriptedProvider(), cache=ResultCache())
+    service = StyleExperimentService(database, manager)
+    items = [{"id": f"i-{n}", "prompt": f"1girl, item {n}"} for n in range(6)]
+    first = service.store.create(user, dataset(items=items, seed=7))
+    second = service.store.create(user, dataset(items=items, seed=7))
+    assert first.item_seeds and second.item_seeds and first.item_seeds != second.item_seeds
+    assert first.item_seeds != [7, 8, 9, 10, 11, 12]
+    # Browser JSON never carries the stored seeds.
+    assert "item_seeds" not in first.model_dump(mode="json")
+    # An idempotent retry of the same request returns the stored run unchanged.
+    retry = dataset(run_id=first.id, items=items, seed=7)
+    assert service.store.create(user, retry).item_seeds == first.item_seeds
+    # A continuation after item 2 keeps the original seeds of items 3..6.
+    with database.connect(write=True) as connection:
+        connection.execute(
+            "UPDATE style_experiment_runs SET status = 'stopped', next_ordinal = '3' "
+            "WHERE user_id = ? AND id = ?", (user, first.id),
+        )
+    stopped = service.store.get(user, first.id)
+    request, _ = continuation_request(stopped, uuid4(), name=None)
+    assert request.item_seeds == first.item_seeds[2:]
+    assert service.store.create(user, request).item_seeds == first.item_seeds[2:]
+
+
+def test_legacy_runs_without_item_seeds_keep_base_plus_n(
+    database: Database,  # noqa: F811
+) -> None:
+    import json
+
+    from novelai_api.style_experiments import group_parameters
+
+    user = owner(database)
+    manager = GenerationManager(database, ScriptedProvider(), cache=ResultCache())
+    service = StyleExperimentService(database, manager)
+    run = service.store.create(user, dataset(seed=100))
+    with database.connect(write=True) as connection:
+        row = connection.execute(
+            "SELECT definition_json FROM style_experiment_runs WHERE id = ?", (run.id,),
+        ).fetchone()
+        definition = json.loads(row["definition_json"])
+        definition.pop("seeds")
+        connection.execute(
+            "UPDATE style_experiment_runs SET definition_json = ?, next_ordinal = '2' "
+            "WHERE id = ?", (json.dumps(definition), run.id),
+        )
+    legacy = service.store.get(user, run.id)
+    assert legacy.item_seeds is None
+    assert group_parameters(legacy).seed == 101

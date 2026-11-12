@@ -16,6 +16,7 @@ from .dataset_plan import (
     DatasetRunCreate,
     dataset_parameters,
     item_seed,
+    random_item_seeds,
 )
 from .db import Database
 from .generations import (
@@ -107,6 +108,9 @@ class RunState(BaseModel):
     parameters: GenerationRequest
     ranges: list[ExperimentRange]
     items: list[DatasetItem] = Field(default_factory=list)
+    # Dataset runs: one random seed per item (absent on older runs, which derive seeds from
+    # the base seed). Never exposed to the browser.
+    item_seeds: list[int] | None = Field(default=None, exclude=True)
     styles: list[str] | None = None
     character: CharacterPlan | None = None
     # Re-run batches: the training set they belong to and one source per ordinal.
@@ -164,7 +168,7 @@ def continuation_request(
         shift = offset % len(run.styles)
         styles = run.styles[shift:] + run.styles[:shift]
     parameters = run.parameters.model_copy(update={
-        "seed": item_seed(run.seed, offset + 1),
+        "seed": run_item_seed(run, offset + 1),
         **({"style_prompt": styles[0]} if styles else {}),
         # GPT groups render with the server's current model; record that, not the old one.
         **({"model": gpt_model} if gpt_model and run.lane == "gpt" else {}),
@@ -194,6 +198,9 @@ def continuation_request(
         **({"name": label} if label else {}),
         **({"gpt_concurrency": run.parallelism} if run.parallelism else {}),
     })
+    if run.item_seeds is not None:
+        # Remaining items keep the seeds they were given when the run was created.
+        request = request.model_copy(update={"item_seeds": run.item_seeds[offset:]})
     return request, pinned
 
 
@@ -236,6 +243,7 @@ class RunStore:
         rerun = kind == "rerun"
         state = RunState(
             kind=kind, items=[] if rerun else definition.get("items", []),
+            item_seeds=definition.get("seeds"),
             styles=definition.get("styles"), character=definition.get("character"),
             rerun_experiment_id=definition.get("experiment_id") if rerun else None,
             rerun_items=definition.get("sources") if rerun else None,
@@ -261,6 +269,15 @@ class RunStore:
             definition, total = rerun_definition(request, rerun_base[0])
             lane, request_seed = rerun_base[1], None
         else:
+            if (
+                isinstance(request, DatasetRunCreate) and request.item_seeds is None
+                and request.character is None
+            ):
+                # Style training sets: every item gets its own random seed. Character sets
+                # keep the base+N rule (their seeds stay owner-reproducible).
+                request = request.model_copy(update={
+                    "item_seeds": random_item_seeds(len(request.items)),
+                })
             definition, total = (
                 request.definition(references) if isinstance(request, DatasetRunCreate)
                 else request.definition()
@@ -279,6 +296,9 @@ class RunStore:
                     raise RunConflict("experiment_run_conflict")
                 saved.pop("plan_version", None)
                 requested.pop("plan_version", None)
+                # Server-chosen per-item seeds differ on every retry; compare the request only.
+                saved.pop("seeds", None)
+                requested.pop("seeds", None)
                 # Older snapshots omitted the mode and always used manual coordinates.
                 # Normalize only the comparison copy; never rewrite their definition.
                 saved["parameters"].setdefault("auto_character_position", False)
@@ -681,12 +701,19 @@ def rerun_continuation(run: RunState, new_id: UUID, *, name: str | None) -> Reru
     )
 
 
+def run_item_seed(run: RunState, ordinal: int) -> int:
+    """Stored per-item random seed, or base+N for runs created before per-item seeds."""
+    if run.item_seeds is not None:
+        return run.item_seeds[ordinal - 1]
+    return item_seed(run.seed, ordinal)
+
+
 def group_parameters(run: RunState) -> GenerationRequest:
     if run.kind == "dataset":
         ordinal = int(run.next_ordinal)
         item = run.items[ordinal - 1]
         return dataset_parameters(
-            run.parameters, item, seed=item_seed(run.seed, ordinal),
+            run.parameters, item, seed=run_item_seed(run, ordinal),
             context=ExperimentContext(
                 id=run.id, ordinal=run.next_ordinal, total=run.total, kind="dataset", item=item,
             ),
