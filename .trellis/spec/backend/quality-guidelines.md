@@ -9,7 +9,13 @@ in `apps/api/contracts/openapi.json`.
 
 ## Commands
 
-Run from `apps/api` with Python 3.12+ and `uv`:
+Run from `apps/api` with `uv` on **Python 3.14**, the production interpreter
+(`/usr/bin/python3.14`). `pyproject.toml` still allows 3.12+, but the OpenAPI
+snapshot embeds interpreter-specific HTTP reason phrases (3.14: "Unprocessable
+Content", "Content Too Large"), so regenerate and verify it on 3.14. If the
+project `.venv` was created with another interpreter, recreate it with
+`uv sync --frozen --python /usr/bin/python3.14 --extra test --extra lint`, or
+point `UV_PROJECT_ENVIRONMENT` at a separate 3.14 environment:
 
 ```sh
 uv sync --frozen --extra test --extra lint
