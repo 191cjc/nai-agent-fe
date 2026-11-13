@@ -887,7 +887,11 @@ h1, h2, h3 { letter-spacing: 0; }
 
 /* Sample panel */
 .recipe-sample h3 { display: flex; align-items: center; gap: 7px; font-size: 14px; color: #ece7f2; }
-.recipe-sample-form { display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; }
+.recipe-sample-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.recipe-advanced { color: var(--muted); font-size: 12px; }
+.recipe-advanced > summary { cursor: pointer; width: fit-content; }
+.recipe-advanced[open] { display: grid; gap: 6px; }
+.recipe-advanced label { display: grid; gap: 4px; }
 .recipe-sample-form label { display: grid; gap: 4px; color: var(--muted); font-size: 12px; }
 .recipe-sample-form input { width: 100% !important; }
 .recipe-seed { display: flex; gap: 4px; }

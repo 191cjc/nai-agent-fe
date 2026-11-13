@@ -128,3 +128,26 @@ legacy item byte-identity, rollback tolerance). Web: lint + build + source revie
   runs keep frozen items; a fresh editor without saved recipes opens the new template.
 - Verification uses invented recipes and disposable databases only. Never inspect
   real prompts, captions, dataset images or database payloads to validate a reset.
+
+## Partition import/export (web only, 2026-11-13)
+
+- File `{format: "nai-recipe-partitions", version: 1, partitions[], slots[], regions[],
+  resources{}, states{}, glossary{}}` (`apps/web/src/recipe-partitions.ts`). Export
+  keeps draw order and bundles only what the partitions use (regions with ancestors).
+  Import also accepts a whole recipe file `{name, recipe}` or a bare recipe and lets
+  the user pick partitions. No server endpoint: the result is an editor change
+  (undoable) validated by the server on save.
+- Import touches only the chosen partitions. A partition id that already exists needs
+  an explicit choice per partition: `replace` (keeps its position; references
+  elsewhere to options the new version drops are removed like `deleteOption`) or `copy`
+  (`<id>-2`…, ≤64 chars; references among the imported partitions follow the rename).
+  New partitions go to the end of `draw_order`/`prompt_order`.
+- Recipe-level definitions are only added, never overwritten. A slot with the same id
+  but different values (id/tag/weight) is added as `<id>-2` and the imported
+  placeholders, slot settings and `allow_values` keys follow. States are recipe-wide
+  and keep their keys.
+- References the merged recipe cannot satisfy (partition/option/state/region) are
+  removed from the imported partitions and listed before import; a weight modifier
+  with a missing reference is dropped whole.
+- `findReferences` removing the last condition of a rule deletes the rule (a rule
+  needs `when`; an unconditional rule would fire on every item).

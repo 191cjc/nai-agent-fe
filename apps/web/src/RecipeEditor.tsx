@@ -10,6 +10,10 @@ import {
   type Rule, type SampleItem, type SampleResult,
 } from './recipe'
 import { MAX_DATASET_ITEMS } from './dataset-run'
+import {
+  bundleFileName, conflictingPartitions, exportPartitions, parsePartitionSource, planPartitionImport,
+  type PartitionAction, type PartitionBundle,
+} from './recipe-partitions'
 
 const MAX_UNDO = 50
 
@@ -355,6 +359,7 @@ function PartitionSettings({ history, part, onRemove }: { history: History; part
     <div className="recipe-section-head">
       <input className="recipe-title-input" value={part.label ?? ''} maxLength={100} aria-label="分区名称" onChange={event => update(p => { p.label = event.target.value })} />
       <button className="text-action" type="button" aria-expanded={open} onClick={() => setOpen(value => !value)}><Settings2 size={13} aria-hidden="true" /> 分区设置 {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}</button>
+      <button className="text-action" type="button" title="导出这个分区及其用到的取值槽、部位等，可导入到其他配方" onClick={() => exportPartitionFile(recipe, [part.id], '')}><Download size={13} aria-hidden="true" /> 导出分区</button>
       <button className="text-action danger-text" type="button" onClick={onRemove}><Trash2 size={13} aria-hidden="true" /> 删除分区</button>
     </div>
     <p className="recipe-summary">{summary.join(' · ')}{references.length ? ` · 被 ${references.length} 处引用` : ''}</p>
@@ -1102,16 +1107,13 @@ function JsonTab({ history, name, setName }: { history: History; name: string; s
   const file = useRef<HTMLInputElement>(null)
 
   function exportJson() {
-    const blob = new Blob([JSON.stringify({ name, recipe: history.recipe }, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const link = Object.assign(document.createElement('a'), { href: url, download: `${name || 'recipe'}.recipe.json` })
-    link.click()
-    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    downloadJson({ name, recipe: history.recipe }, `${name || 'recipe'}.recipe.json`)
   }
 
   function importJson(raw: string) {
     try {
       const parsed = JSON.parse(raw) as { name?: string; recipe?: Recipe } | Recipe
+      if ('format' in parsed && parsed.format === 'nai-recipe-partitions') throw new Error('这是分区文件，请用下面的「导入分区」。')
       const recipe = 'recipe' in parsed && parsed.recipe ? parsed.recipe : parsed as Recipe
       if (!Array.isArray(recipe.partitions) || !Array.isArray(recipe.draw_order)) throw new Error('不是配方 JSON：缺少 partitions 或 draw_order。')
       history.change(draft => { Object.keys(draft).forEach(key => delete (draft as unknown as Record<string, unknown>)[key]); Object.assign(draft, recipe) })
@@ -1132,7 +1134,108 @@ function JsonTab({ history, name, setName }: { history: History; name: string; s
     <textarea rows={12} value={text} spellCheck={false} placeholder="或粘贴配方 JSON" onChange={event => setText(event.target.value)} />
     <button className="text-action" type="button" disabled={!text.trim()} onClick={() => importJson(text)}>导入粘贴的 JSON（替换当前配方）</button>
     {error && <p className="alert" role="alert">{error}</p>}
+    <PartitionTransfer history={history} name={name} />
   </div>
+}
+
+function downloadJson(data: unknown, fileName: string) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const link = Object.assign(document.createElement('a'), { href: url, download: fileName })
+  link.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+function exportPartitionFile(recipe: Recipe, ids: readonly string[], name: string) {
+  const bundle = exportPartitions(recipe, ids)
+  downloadJson(bundle, bundleFileName(name, bundle))
+}
+
+const ACTION_LABELS: Record<PartitionAction, string> = { add: '添加', replace: '替换现有分区', copy: '作为副本添加', skip: '跳过' }
+
+/** Partition-level export and import: only the chosen partitions are added or replaced. */
+function PartitionTransfer({ history, name }: { history: History; name: string }) {
+  const { recipe } = history
+  const [selected, setSelected] = useState<string[]>([])
+  const [source, setSource] = useState<PartitionBundle | null>(null)
+  const [actions, setActions] = useState<Record<string, PartitionAction | ''>>({})
+  const [text, setText] = useState('')
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+  const file = useRef<HTMLInputElement>(null)
+  const ordered = [...new Set([...recipe.draw_order, ...recipe.partitions.map(part => part.id)])]
+    .map(id => recipe.partitions.find(part => part.id === id)).filter((part): part is Partition => Boolean(part))
+  const live = selected.filter(id => recipe.partitions.some(part => part.id === id))
+  const conflicts = source ? conflictingPartitions(recipe, source) : new Set<string>()
+  const undecided = source ? source.partitions.filter(part => actions[part.id] === '' || actions[part.id] === undefined) : []
+  const plan = useMemo(() => source && !undecided.length ? planPartitionImport(recipe, source, actions as Record<string, PartitionAction>) : null,
+    [recipe, source, actions, undecided.length])
+  const count = source ? source.partitions.filter(part => actions[part.id] && actions[part.id] !== 'skip').length : 0
+
+  function load(raw: string) {
+    try {
+      const bundle = parsePartitionSource(raw)
+      const clash = conflictingPartitions(recipe, bundle)
+      setActions(Object.fromEntries(bundle.partitions.map(part => [part.id, clash.has(part.id) ? '' : 'add'])))
+      setSource(bundle)
+      setError('')
+      setMessage('')
+    } catch (failure) { setError(failure instanceof Error ? failure.message : '无法解析 JSON。') }
+  }
+
+  function apply() {
+    if (!source || !plan || !count) return
+    const chosen = actions as Record<string, PartitionAction>
+    history.change(draft => {
+      const next = planPartitionImport(draft, source, chosen).recipe
+      Object.keys(draft).forEach(key => delete (draft as unknown as Record<string, unknown>)[key])
+      Object.assign(draft, next)
+    })
+    setMessage(`已导入 ${count} 个分区${plan.notes.length ? `，并处理了 ${plan.notes.length} 处引用` : ''}（可撤销）。保存时服务器会完整检查。`)
+    setSource(null)
+    setText('')
+  }
+
+  return <section className="recipe-partition-transfer">
+    <div className="recipe-section-head"><h3>分区导入导出</h3></div>
+    <p className="recipe-help">只导出或导入选中的分区，不影响配方中的其他分区。导出文件会带上这些分区用到的取值槽、部位、资源、状态名和中文释义；导入时只补充当前配方缺少的这些定义，不会覆盖已有的。</p>
+    <ul className="recipe-ref-list">{ordered.map(part => <li key={part.id}><label className="recipe-check">
+      <input type="checkbox" checked={live.includes(part.id)} onChange={event => setSelected(current => event.target.checked ? [...current, part.id] : current.filter(id => id !== part.id))} />
+      {part.label || part.id} <span className="recipe-help">（{part.id}，{part.options.length} 个选项）</span></label></li>)}</ul>
+    <div className="recipe-toolbar">
+      <button className="text-action" type="button" onClick={() => setSelected(live.length === ordered.length ? [] : ordered.map(part => part.id))}>{live.length === ordered.length ? '全不选' : '全选'}</button>
+      <button className="secondary" type="button" disabled={!live.length} onClick={() => exportPartitionFile(recipe, live, name)}><Download size={13} aria-hidden="true" /> 导出所选 {live.length} 个分区</button>
+      <input ref={file} type="file" accept=".json,application/json" hidden onChange={async event => { const f = event.target.files?.[0]; if (f) load(await f.text()); event.target.value = '' }} />
+      <button className="secondary" type="button" onClick={() => file.current?.click()}><FileUp size={13} aria-hidden="true" /> 从文件导入分区</button>
+    </div>
+    <textarea rows={6} value={text} spellCheck={false} placeholder="或粘贴分区 JSON；也可以粘贴整个配方 JSON，再挑选其中的分区" onChange={event => setText(event.target.value)} />
+    <button className="text-action" type="button" disabled={!text.trim()} onClick={() => load(text)}>读取粘贴的 JSON</button>
+    {error && <p className="alert" role="alert">{error}</p>}
+    {message && <p className="recipe-help" role="status">{message}</p>}
+    {source && <div className="recipe-form">
+      <p className="recipe-help">文件中有 {source.partitions.length} 个分区。新分区加到抽取顺序末尾；替换的分区保留原来的位置。{conflicts.size ? `其中 ${conflicts.size} 个与当前配方的分区 id 相同，请逐个选择处理方式。` : ''}</p>
+      <ul className="recipe-ref-list">{source.partitions.map(part => {
+        const clash = conflicts.has(part.id)
+        const current = recipe.partitions.find(item => item.id === part.id)
+        return <li key={part.id}>
+          <strong>{part.label || part.id}</strong> <span className="recipe-help">（{part.id}，{part.options.length} 个选项{clash ? `；当前配方已有「${current?.label || part.id}」，${current?.options.length ?? 0} 个选项` : ''}）</span>
+          <select value={actions[part.id] ?? ''} aria-label={`导入分区 ${part.id} 的方式`} onChange={event => setActions(value => ({ ...value, [part.id]: event.target.value as PartitionAction | '' }))}>
+            {clash && <option value="" disabled>请选择</option>}
+            {(clash ? ['replace', 'copy', 'skip'] as const : ['add', 'skip'] as const).map(action => <option key={action} value={action}>{ACTION_LABELS[action]}</option>)}
+          </select>
+        </li>
+      })}</ul>
+      {undecided.length > 0 && <p className="recipe-help">还有 {undecided.length} 个同 id 分区未选择处理方式。</p>}
+      {plan && plan.notes.length > 0 && <>
+        <p className="recipe-help">导入时将自动处理以下 {plan.notes.length} 处：</p>
+        <ul className="recipe-ref-list">{plan.notes.map((note, index) => <li key={index}>{note}</li>)}</ul>
+      </>}
+      <div className="recipe-toolbar">
+        <button className="secondary" type="button" disabled={!plan || !count} onClick={apply}>导入 {count} 个分区</button>
+        <button className="text-action" type="button" onClick={() => { setSource(null); setActions({}) }}>取消</button>
+      </div>
+    </div>}
+  </section>
 }
 
 // ------------------------------------------------------------------ sampling
@@ -1151,7 +1254,8 @@ function SamplePanel({ api, open, recipe, style, recipeRef, saved, onGenerate }:
   const mounted = useRef(false)
   const count = Number(n)
   const seedValue = Number(seed)
-  const valid = Number.isInteger(count) && count >= 1 && count <= MAX_DATASET_ITEMS && Number.isInteger(seedValue) && seedValue >= 0 && seedValue <= 4294967295
+  const seedValid = seed.trim() !== '' && Number.isInteger(seedValue) && seedValue >= 0 && seedValue <= 4294967295
+  const valid = Number.isInteger(count) && count >= 1 && count <= MAX_DATASET_ITEMS && seedValid
   const key = JSON.stringify({ recipe, count, seed: seedValue, recipeRef, open })
   const latestKey = useRef(key)
   latestKey.current = key
@@ -1215,10 +1319,15 @@ function SamplePanel({ api, open, recipe, style, recipeRef, saved, onGenerate }:
     <h3><Dices size={15} aria-hidden="true" /> 预览与生成</h3>
     <div className="recipe-sample-form">
       <label><span>生成条数</span><input type="number" min={1} max={MAX_DATASET_ITEMS} value={n} onChange={event => setN(event.target.value)} /></label>
-      <label><span>随机种子</span><span className="recipe-seed"><input type="number" min={0} max={4294967295} value={seed} onChange={event => setSeed(event.target.value)} />
-        <button className="icon-button" type="button" title="换一个种子" aria-label="换一个种子" onClick={() => setSeed(String(Math.floor(Math.random() * 4294967295)))}><Dices size={14} /></button></span></label>
     </div>
-    <p className="recipe-help">同一配方、种子和条数，每次结果都一样。预览按完整条数抽取，展示前 20 条；加入列表使用这批相同的结果。预览不会调用 NovelAI，不花 Anlas。</p>
+    <details className="recipe-advanced">
+      <summary>高级参数</summary>
+      <label><span>抽取种子（只决定抽到哪些训练词，不影响图片；每张图的种子由服务器另行随机）</span><span className="recipe-seed"><input type="number" min={0} max={4294967295} value={seed} onChange={event => setSeed(event.target.value)} />
+        <button className="icon-button" type="button" title="换一个种子" aria-label="换一个抽取种子" onClick={() => setSeed(String(Math.floor(Math.random() * 4294967295)))}><Dices size={14} /></button></span></label>
+      <p className="recipe-help">同一配方、种子和条数，每次抽到的训练词都一样；填回原来的种子可以复现同一批。</p>
+    </details>
+    {!seedValid && <p className="alert" role="alert">高级参数中的抽取种子需要是 0–4294967295 的整数。</p>}
+    <p className="recipe-help">预览按完整条数抽取，展示前 20 条；加入列表使用这批相同的结果。预览不会调用 NovelAI，不花 Anlas。</p>
     <div className="recipe-sample-actions">
       <button className="secondary" type="button" disabled={busy || !valid} onClick={() => void run()}>先预览 {Math.min(count || 20, 20)} 条</button>
       <button className="primary" type="button" disabled={busy || !valid} onClick={() => void generate(false)}>生成 {valid ? count : ''} 条，加到列表</button>

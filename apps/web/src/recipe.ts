@@ -378,7 +378,7 @@ export function pruneCondition(condition: Condition | null | undefined, target: 
   return condition
 }
 
-type Owner = { where: string; get: (recipe: Recipe) => { when?: Condition | null; effects?: Effects; weight_mods?: WeightMod[] } | undefined }
+type Owner = { where: string; rule?: string; get: (recipe: Recipe) => { when?: Condition | null; effects?: Effects; weight_mods?: WeightMod[] } | undefined }
 
 function owners(recipe: Recipe): Owner[] {
   const list: Owner[] = []
@@ -388,7 +388,7 @@ function owners(recipe: Recipe): Owner[] {
       list.push({ where: `选项「${part.label || part.id}.${option.label || option.id}」`, get: r => r.partitions.find(p => p.id === part.id)?.options.find(o => o.id === option.id) })
     }
   }
-  for (const rule of recipe.rules ?? []) list.push({ where: `规则「${rule.label || rule.id}」`, get: r => r.rules?.find(item => item.id === rule.id) })
+  for (const rule of recipe.rules ?? []) list.push({ where: `规则「${rule.label || rule.id}」`, rule: rule.id, get: r => r.rules?.find(item => item.id === rule.id) })
   return list
 }
 
@@ -403,7 +403,13 @@ export function findReferences(recipe: Recipe, partitionId: string, optionId?: s
     const target = owner.get(recipe)
     if (!target) continue
     if (conditionRefs(target.when, hitsCondition)) {
-      result.push({ where: owner.where, text: '条件', remove: r => { const t = owner.get(r); if (t) t.when = pruneCondition(t.when, hitsCondition) } })
+      // A rule needs a condition: one left with none would fire on every item, so it goes too.
+      result.push({ where: owner.where, text: owner.rule ? '条件（条件删空时删除整条规则）' : '条件', remove: r => {
+        const t = owner.get(r)
+        if (!t) return
+        t.when = pruneCondition(t.when, hitsCondition)
+        if (owner.rule && !t.when) r.rules = (r.rules ?? []).filter(rule => rule.id !== owner.rule)
+      } })
     }
     if (target.weight_mods?.some(mod => conditionRefs(mod.when, hitsCondition))) {
       result.push({ where: owner.where, text: '条件权重', remove: r => { const t = owner.get(r); if (t?.weight_mods) t.weight_mods = t.weight_mods.filter(mod => !conditionRefs(mod.when, hitsCondition)) } })
