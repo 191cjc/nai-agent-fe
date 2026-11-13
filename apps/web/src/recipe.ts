@@ -193,6 +193,107 @@ export function splitTags(text: string): string[] {
   return text.split(/[,，\r\n]/).map(tag => tag.trim()).filter(Boolean)
 }
 
+const STYLE_NUMBER = /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)::/
+const MAX_STYLE_TAG_LENGTH = 300
+
+/** Match recipe_style.py, including names inside zero/negative emphasis groups. */
+function plainStyleTag(tag: string): string {
+  return tag.replace(/(^|[\s,，([{]|(?<=::))[+-]?(?:\d+(?:\.\d+)?|\.\d+)::/g, '$1')
+    .replace(/::/g, '').replace(/[{}[\]]/g, '').trim()
+}
+
+function styleTagKey(tag: string): string {
+  return plainStyleTag(tag).replace(/_/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase()
+}
+
+/** Strict for edits; tolerant when closing legacy baseline scopes before appending. */
+function scanStyleTags(text: string, strict = true, rawPieces = false): { tags: string[]; suffix: string } {
+  if (strict && text.includes('//')) throw new Error('画风增删不能包含 // 注释标记。')
+  const scopes: Array<[string, string]> = []
+  let inherited: Array<[string, string]> = []
+  let piece = ''
+  let parentheses = 0
+  const result: string[] = []
+  const emit = () => {
+    if (rawPieces) {
+      result.push(piece)
+      return
+    }
+    const raw = piece.trim()
+    if (!raw) return
+    const tag = inherited.map(([opener]) => opener).join('') + raw + [...scopes].reverse().map(([, closer]) => closer).join('')
+    if (styleTagKey(tag)) result.push(tag)
+  }
+  for (let index = 0; index < text.length;) {
+    const character = text[index]
+    if (character === '\\' && index + 1 < text.length) {
+      piece += text.slice(index, index + 2)
+      index += 2
+      continue
+    }
+    const number = index === 0 || /[\s,，([{]/.test(text[index - 1]) || text.slice(index - 2, index) === '::' ? STYLE_NUMBER.exec(text.slice(index)) : null
+    if (number) {
+      piece += number[0]
+      scopes.push([number[0], '::'])
+      index += number[0].length
+      continue
+    }
+    if (text.startsWith('::', index)) {
+      if (scopes.at(-1)?.[1] !== '::') {
+        if (strict) throw new Error('画风权重的 :: 分隔符不匹配。')
+      } else scopes.pop()
+      piece += '::'
+      index += 2
+      continue
+    }
+    if (character === '{' || character === '[') scopes.push([character, character === '{' ? '}' : ']'])
+    else if (character === '}' || character === ']') {
+      if (scopes.at(-1)?.[1] !== character) {
+        if (strict) throw new Error('画风权重的括号不匹配。')
+      } else scopes.pop()
+    } else if (character === '(') parentheses += 1
+    else if (character === ')') parentheses = Math.max(0, parentheses - 1)
+    if (/[,，\n\r]/.test(character) && !parentheses) {
+      emit()
+      piece = ''
+      inherited = [...scopes]
+    } else piece += character
+    index += 1
+  }
+  emit()
+  return { tags: result, suffix: [...scopes].reverse().map(([, closer]) => closer).join('') }
+}
+
+/** Split shared emphasis into independently balanced tags, as on the server. */
+export function splitStyleTags(text: string): string[] {
+  return scanStyleTags(text).tags
+}
+
+/** Join legacy comma-split inputs before balancing their emphasis scopes. */
+export function normalizeStyleTags(values: readonly string[], remove = false): string[] {
+  const tags = splitStyleTags(values.join(', '))
+  return remove ? tags.map(plainStyleTag) : tags
+}
+
+/** Validate frozen recipe edits before serializing a queued dataset item. */
+export function validateStyleEdits(edits: StyleEdits, label: string): StyleEdits {
+  const normalized: StyleEdits = { add: [], remove: [] }
+  for (const field of ['add', 'remove'] as const) {
+    const values = edits[field]
+    const limit = field === 'add' ? 32 : 128
+    const action = field === 'add' ? '新增' : '删除'
+    if (!Array.isArray(values) || values.some(tag => typeof tag !== 'string' || !tag.trim())) throw new Error(`${label}的画风${action}项必须是非空 tag。`)
+    try {
+      normalized[field] = normalizeStyleTags(values, field === 'remove')
+    } catch (error) {
+      throw new Error(`${label}：${error instanceof Error ? error.message : '画风增删格式无效。'}`)
+    }
+    if (normalized[field].length > limit) throw new Error(`${label}的画风${action}拆分后最多 ${limit} 项。`)
+    if (normalized[field].some(tag => [...tag].length > MAX_STYLE_TAG_LENGTH)) throw new Error(`${label}的单个画风${action} tag 不能超过 ${MAX_STYLE_TAG_LENGTH} 字符。`)
+  }
+  return normalized
+}
+
 /** Use the prompt editor's numeric-weight parser before comparing/displaying a tag. */
 function plainTag(tag: string): string {
   const parsed = parsePromptTags(tag)
@@ -512,19 +613,19 @@ export function describeEffects(recipe: Recipe, effects: Effects | undefined): s
 /** Apply style edits locally for display only (the server resolves the real style). */
 export function previewStyle(style: string, edits: StyleEdits | undefined): string {
   if (!edits || (!edits.add.length && !edits.remove.length)) return style
-  const remove = new Set(edits.remove.map(tagKey))
+  const remove = new Set(normalizeStyleTags(edits.remove, true).map(styleTagKey))
   const present = new Set<string>()
   // Keep the scope markers surrounding a removed member so other members of a
   // shared weight/emphasis group retain their original weights, as on the server.
   const lines = style.split('\n').map(line => {
     if (line.trimStart().startsWith('//')) return line
     const kept: string[] = []
-    for (const piece of line.split(',')) {
+    for (const piece of scanStyleTags(line, false, true).tags) {
       const opener = /^(?:\s*(?:[{[]|[+-]?(?:\d+(?:\.\d+)?|\.\d+)::))*/.exec(piece)![0]
       const rest = piece.slice(opener.length)
       const closer = /(?:(?:[}\]]|::)\s*)*$/.exec(rest)![0]
       const body = closer ? rest.slice(0, -closer.length) : rest
-      const key = tagKey(body)
+      const key = styleTagKey(body)
       if (key && remove.has(key)) {
         if (opener.trim() || closer.trim()) kept.push(`${kept.length ? ' ' : ''}${opener.trim()}${closer.trim()}`)
       } else {
@@ -536,8 +637,8 @@ export function previewStyle(style: string, edits: StyleEdits | undefined): stri
   })
   let result = lines.join('\n').replace(/(,\s*)+,/g, ',').replace(/^\s*,\s*/gm, '').replace(/\s*,\s*$/gm, '')
   const additions: string[] = []
-  for (const tag of edits.add) {
-    const key = tagKey(tag)
+  for (const tag of normalizeStyleTags(edits.add)) {
+    const key = styleTagKey(tag)
     if (key && !present.has(key)) {
       present.add(key)
       additions.push(tag.trim())
@@ -545,10 +646,9 @@ export function previewStyle(style: string, edits: StyleEdits | undefined): stri
   }
   if (additions.length) {
     const visible = compilePromptComments(result)
-    const opens = [...visible.matchAll(/(?:^|[\s,([{])[+-]?(?:\d+(?:\.\d+)?|\.\d+)::/g)].length
-    const closes = [...visible.matchAll(/::/g)].length - opens
+    const suffix = scanStyleTags(visible, false).suffix
     let base = result.trimEnd()
-    if (opens > closes) base += ' ::'
+    if (suffix) base += `${base.split('\n').at(-1)!.trimStart().startsWith('//') ? '\n' : ' '}${suffix}`
     let joiner = visible.trim() ? ', ' : ''
     if (base.split('\n').at(-1)!.trimStart().startsWith('//')) joiner = '\n'
     result = `${base}${joiner}${additions.join(', ')}`

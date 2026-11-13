@@ -1,6 +1,7 @@
 """Stored recipes, the sampling API and recipe items in dataset runs (fakes only)."""
 
 import json
+import time
 from uuid import uuid4
 
 import pytest
@@ -109,11 +110,27 @@ def test_sample_and_template_routes_are_offline_and_deterministic(
         assert first.json() == client.post("/api/dataset-recipes/sample", json=body,
                                            headers=ORIGIN).json()
         assert len(first.json()["items"]) == 30
-        assert client.post("/api/dataset-recipes/sample", json={**body, "n": 401},
+        assert client.post("/api/dataset-recipes/sample", json={**body, "n": 4001},
                            headers=ORIGIN).status_code == 422
         with database.connect() as connection:
             assert connection.execute("SELECT COUNT(*) FROM dataset_recipes").fetchone()[0] == 0
             assert connection.execute("SELECT COUNT(*) FROM generation_jobs").fetchone()[0] == 0
+
+
+def test_a_full_4000_item_sample_is_accepted_by_the_queue(
+    database: Database,  # noqa: F811
+) -> None:
+    with client_for(database) as client:
+        login(client, database, "synthetic")
+        recipe = client.get("/api/dataset-recipes/templates/basic").json()
+        sampled = client.post("/api/dataset-recipes/sample", headers=ORIGIN,
+                              json={"recipe": recipe, "n": 4000, "seed": 4000})
+        assert sampled.status_code == 200
+    items = sampled.json()["items"]
+    assert len(items) == 4000
+    assert len(dataset(items=items).items) == 4000
+    with pytest.raises(ValidationError):
+        dataset(items=[*items, {**items[0], "id": "synthetic-extra"}])
 
 
 RECIPE_ITEM = {
@@ -157,6 +174,72 @@ def test_recipe_items_send_resolved_style_and_keep_captions_content_only(
         manager.stop()
 
 
+@pytest.mark.parametrize(("prefix", "expected"), [
+    ("artist:synthetic", ["artist:synthetic"]),
+    ("3::artist:synthetic::", ["3::artist:synthetic::"]),
+    ("{artist:synthetic}", ["{artist:synthetic}"]),
+    ("artist:synthetic-" + "x" * 100, ["artist:synthetic-" + "x" * 100]),
+    ("3::artist:synthetic, gouache::", ["3::artist:synthetic::", "3::gouache::"]),
+    ("3:: 2::artist:synthetic, gouache::::",
+     ["3:: 2::artist:synthetic::::", "3::2::gouache::::"]),
+])
+def test_sampled_clothing_style_prefix_can_enter_the_queue(
+    database: Database, prefix: str, expected: list[str],  # noqa: F811
+) -> None:
+    provider = ScriptedProvider()
+    app = create_app(
+        Settings(database.path, "https://testserver"), database,
+        image_provider=provider, result_cache=ResultCache(),
+    )
+    app.state.experiments._interval = 0.01
+    with TestClient(app, base_url="https://testserver") as client:
+        _token, user, _session = login(client, database, "synthetic")
+        recipe = client.get("/api/dataset-recipes/templates/basic").json()
+        family = next(part for part in recipe["partitions"] if part["id"] == "outfit-family")
+        for option in family["options"]:
+            option.setdefault("effects", {})["style_add"] = [prefix]
+        sampled = client.post("/api/dataset-recipes/sample", headers=ORIGIN,
+                              json={"recipe": recipe, "n": 5, "seed": 123})
+        assert sampled.status_code == 200
+        item = next(item for item in sampled.json()["items"] if item["style_edits"]["add"])
+        payload = dataset(items=[{"id": "synthetic", "prompt": "1girl"}]).model_dump(mode="json")
+        payload["items"] = [item]
+        created = client.post("/api/dataset-runs", json=payload, headers=ORIGIN)
+        assert created.status_code == 202
+        run_id = created.json()["id"]
+        deadline = time.monotonic() + 3
+        while app.state.experiments.store.get(user, run_id).status != "completed":
+            assert time.monotonic() < deadline
+            time.sleep(0.01)
+        assert all(tag in provider.calls[0].style_prompt for tag in expected)
+        assert "artist:synthetic" not in provider.calls[0].positive_prompt
+        assert provider.calls[0].experiment.item.prompt == item["prompt"]
+
+
+@pytest.mark.parametrize(("field", "count"), [("style_add", 17), ("style_remove", 65)])
+def test_aggregate_style_overflow_fails_sampling_before_queue(
+    database: Database, field: str, count: int,  # noqa: F811
+) -> None:
+    recipe = {
+        "draw_order": ["a", "b"], "partitions": [
+            {"id": part_id, "options": [{
+                "id": "synthetic", "tags": "1girl", "effects": {
+                    field: [f"synthetic-{part_id}-{i}" for i in range(count)],
+                },
+            }]} for part_id in ["a", "b"]
+        ],
+    }
+    with client_for(database) as client:
+        login(client, database, "synthetic")
+        response = client.post("/api/dataset-recipes/sample", headers=ORIGIN,
+                               json={"recipe": recipe, "n": 1, "seed": 123})
+        assert response.status_code == 422
+        assert response.json()["code"] == "recipe_invalid"
+        assert f"items.0.style_edits.{field.removeprefix('style_')}" in (
+            response.json()["message"]
+        )
+
+
 def test_style_edits_rotate_with_the_style_pool() -> None:
     from novelai_api.dataset_plan import dataset_parameters
 
@@ -171,9 +254,20 @@ def test_style_edits_rotate_with_the_style_pool() -> None:
     assert resolved == ["a, gentle smile", "b, gentle smile"]
 
 
+@pytest.mark.parametrize(("edits", "expected"), [
+    ({"add": ["a, b"]}, {"add": ["a", "b"], "remove": []}),
+    ({"add": ["{x}"]}, {"add": ["{x}"], "remove": []}),
+    ({"add": ["3::x, y::"]}, {"add": ["3::x::", "3::y::"], "remove": []}),
+    ({"remove": ["1.2::x::"]}, {"add": [], "remove": ["x"]}),
+])
+def test_weighted_style_edits_are_accepted_and_normalized(edits, expected) -> None:
+    item = dataset(items=[{**RECIPE_ITEM, "style_edits": edits}]).items[0]
+    assert item.style_edits.model_dump() == expected
+
+
 @pytest.mark.parametrize("edits", [
-    {"add": ["a, b"]}, {"add": ["{x}"]}, {"remove": ["1.2::x"]}, {"add": [" "]},
-    {"add": ["x"] * 33}, {"remove": ["x"] * 129}, {"other": []},
+    {"add": [" "]}, {"add": ["x::"]}, {"add": ["{x]"]}, {"add": ["x // y"]},
+    {"add": ["x" * 301]}, {"add": ["x"] * 33}, {"remove": ["x"] * 129}, {"other": []},
 ])
 def test_invalid_style_edits_are_rejected(edits) -> None:
     with pytest.raises(ValidationError):

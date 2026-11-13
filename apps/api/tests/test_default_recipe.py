@@ -61,6 +61,7 @@ def test_default_exact_action_hair_skin_and_fantasy_quotas(batch):
 
 
 def test_default_emphasis_is_independent_from_sampling_probability(batch):
+    focused = 0
     for item in batch.items:
         selected = choices(item)
         hair = selected["hair-color"]
@@ -74,8 +75,14 @@ def test_default_emphasis_is_independent_from_sampling_probability(batch):
         if "bangs" in selected:
             bang = next(tag for id, _label, tag in BANGS if id == selected["bangs"])
             assert f"6::{bang}::" in item.prompt
+        for tag in item.prompt.split(","):
+            key = tag_key(tag)
+            if "focus" in key.split():
+                assert tag.strip() == f"3::{key}::"
+                focused += 1
         assert "1boy" not in plain_tags(item.prompt)
         assert "no humans" not in plain_tags(item.prompt)
+    assert focused
 
 
 def test_default_barefoot_is_seventy_percent_of_visible_feet(batch):

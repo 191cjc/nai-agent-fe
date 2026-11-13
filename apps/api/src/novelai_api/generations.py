@@ -30,6 +30,7 @@ from .db import Database
 from .lane_health import LaneHealth
 from .prompt_comments import compile_prompt_comments
 from .prompt_sections import PromptSections
+from .recipe_style import StyleEdits as StyleEdits
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 PNG_TRAILER = b"\x00\x00\x00\x00IEND\xaeB`\x82"
@@ -191,24 +192,6 @@ class DatasetDraw(BaseModel):
             for key, item in value.items()
         )):
             raise ValueError("Draw slot values must be ids")
-        return value
-
-StyleTag = Annotated[str, Field(min_length=1, max_length=100)]
-
-class StyleEdits(BaseModel):
-    """Plain tags removed from / appended to this item's style before it is sent."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    add: list[StyleTag] = Field(default_factory=list, max_length=32)
-    remove: list[StyleTag] = Field(default_factory=list, max_length=128)
-
-    @field_validator("add", "remove")
-    @classmethod
-    def plain_tags(cls, value: list[str]) -> list[str]:
-        for tag in value:
-            if not tag.strip() or re.search(r"[,\n{}\[\]]|::|//", tag):
-                raise ValueError("Style edits must be plain single tags")
         return value
 
 class RecipeRef(BaseModel):

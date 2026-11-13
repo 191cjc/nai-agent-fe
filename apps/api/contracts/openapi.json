@@ -909,7 +909,7 @@
             "items": {
               "$ref": "#/components/schemas/DatasetItem"
             },
-            "maxItems": 400,
+            "maxItems": 4000,
             "minItems": 1,
             "title": "Items",
             "type": "array"
@@ -3238,7 +3238,7 @@
         "additionalProperties": false,
         "properties": {
           "n": {
-            "maximum": 400.0,
+            "maximum": 4000.0,
             "minimum": 1.0,
             "title": "N",
             "type": "integer"
@@ -3668,11 +3668,11 @@
       },
       "StyleEdits": {
         "additionalProperties": false,
-        "description": "Plain tags removed from / appended to this item's style before it is sent.",
+        "description": "Per-item style additions keep emphasis; removals are plain tag selectors.",
         "properties": {
           "add": {
             "items": {
-              "maxLength": 100,
+              "maxLength": 300,
               "minLength": 1,
               "type": "string"
             },
@@ -3682,7 +3682,7 @@
           },
           "remove": {
             "items": {
-              "maxLength": 100,
+              "maxLength": 300,
               "minLength": 1,
               "type": "string"
             },

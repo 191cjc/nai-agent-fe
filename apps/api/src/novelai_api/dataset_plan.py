@@ -16,7 +16,7 @@ from .generations import (
     ReferenceUse,
 )
 from .prompt_comments import compile_prompt_comments, prompt_lines
-from .recipe_engine import resolve_style
+from .recipe_engine import MAX_ITEMS, resolve_style
 
 MAX_SEED = 4294967295
 # Validation-only stand-in so model/mode rules run before owner references are resolved.
@@ -156,7 +156,7 @@ def dataset_parameters(
 class DatasetRunCreate(BaseModel):
     id: UUID
     parameters: GenerationRequest
-    items: list[DatasetItem] = Field(min_length=1, max_length=400)
+    items: list[DatasetItem] = Field(min_length=1, max_length=MAX_ITEMS)
     # Optional rotation pool; absent keeps the single frozen style (stored runs unchanged).
     styles: list[str] | None = Field(default=None, min_length=1, max_length=12)
     character: CharacterRequest | None = None

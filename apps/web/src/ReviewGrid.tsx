@@ -11,7 +11,10 @@ import type { DatasetReviewChange } from './saved-results'
 /** Tiles per page: bounds preview requests and Blob memory (~60 × 30 KB). */
 const PAGE_SIZE = 60
 const METADATA_PAGE = 100
-const MAX_GROUPS = 3000
+// A 4000-item set plus its re-runs; the grid renders PAGE_SIZE at a time.
+const MAX_GROUPS = 12000
+// Server cap per POST /api/rerun-batches (MAX_RERUN_BATCH).
+const MAX_RERUN_BATCH = 3000
 const PREVIEW_CONCURRENCY = 4
 const BUSY_RETRIES = 3
 
@@ -518,6 +521,7 @@ export function ReviewGrid({ api, experimentId, setName, onQueued, onOpen, onClo
     if (!batch || submitting || purging) return
     const { id, sources, prompts, characters, style, discardReplaced } = batch
     if (prompts.some(prompt => !prompt.trim()) || characters.some(people => people.some(prompt => !prompt.trim()))) { setActionError('训练词不能为空（包括每个人物）。'); return }
+    if (sources.length > MAX_RERUN_BATCH) { setActionError(`一次最多重跑 ${MAX_RERUN_BATCH} 张，请分批选择。`); return }
     const repeated = sources.filter(tile => replaced.get(tile.job.id)).length
     if (!window.confirm(`为所选 ${sources.length} 张各重跑 1 张（新随机种子${style.trim() ? '，使用新画风' : '，保持原画风'}）？这是 ${sources.length} 次付费生成。\n会作为一个任务加入服务器队列，在后台按顺序生成，提交后可以关闭页面。${repeated ? `\n其中 ${repeated} 张所在条目以前已经重跑过或正在排队重跑。` : ''}`)) return
     const items: RerunBatchItem[] = sources.map((tile, index) => {

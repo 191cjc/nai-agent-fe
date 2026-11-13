@@ -50,6 +50,8 @@ function validationError(entries: readonly DatasetEntry[], styles: readonly stri
 }
 
 /** Category/item picker shared by the style and character libraries. */
+const CATEGORY_PAGE = 200
+
 export function PromptLibrary({ entries, setEntries, categories, defaults, placeholder, name, allowCharacters, showShape = false }: {
   entries: DatasetEntry[]
   setEntries: Dispatch<SetStateAction<DatasetEntry[]>>
@@ -64,6 +66,8 @@ export function PromptLibrary({ entries, setEntries, categories, defaults, place
   showShape?: boolean
 }) {
   const [custom, setCustom] = useState('')
+  // Rows per open category; closed categories render no rows (sets reach 4000 items).
+  const [shown, setShown] = useState<Record<string, number>>({})
   const [importing, setImporting] = useState(false)
   const [importText, setImportText] = useState('')
   const [importMessage, setImportMessage] = useState('')
@@ -123,7 +127,9 @@ export function PromptLibrary({ entries, setEntries, categories, defaults, place
         const members = entries.filter(entry => entry.category === category.id)
         if (!members.length) return null
         const count = members.filter(entry => entry.selected).length
-        return <details className="dataset-category" key={category.id}>
+        const limit = shown[category.id] ?? 0
+        return <details className="dataset-category" key={category.id} open={limit > 0}
+          onToggle={event => { const open = event.currentTarget.open; setShown(current => ({ ...current, [category.id]: open ? Math.max(current[category.id] ?? 0, CATEGORY_PAGE) : 0 })) }}>
           <summary>
             <input type="checkbox" checked={count === members.length} aria-label={`选择全部「${category.label}」`}
               ref={input => { if (input) input.indeterminate = count > 0 && count < members.length }}
@@ -131,7 +137,7 @@ export function PromptLibrary({ entries, setEntries, categories, defaults, place
             <strong>{category.label}</strong><span>{count} / {members.length}</span>
             <span className="prompt-hint">{category.description}</span>
           </summary>
-          <ul className="dataset-items">{members.map(entry => <li key={entry.id} className={entry.selected ? '' : 'muted'}>
+          {limit > 0 && <ul className="dataset-items">{members.slice(0, limit).map(entry => <li key={entry.id} className={entry.selected ? '' : 'muted'}>
             <input type="checkbox" checked={entry.selected} aria-label={`选择提示词 ${entry.id}`}
               onChange={event => update(entry.id, { selected: event.target.checked })} />
             <div className="dataset-item-fields">
@@ -147,7 +153,10 @@ export function PromptLibrary({ entries, setEntries, categories, defaults, place
             </div>
             <button className="icon-button" type="button" title="移除这条提示词" aria-label={`移除提示词 ${entry.id}`}
               onClick={() => setEntries(current => current.filter(item => item.id !== entry.id))}><Trash2 size={14} /></button>
-          </li>)}</ul>
+          </li>)}</ul>}
+          {limit > 0 && members.length > limit && <button type="button" className="secondary"
+            onClick={() => setShown(current => ({ ...current, [category.id]: limit + CATEGORY_PAGE }))}>
+            再显示 {Math.min(CATEGORY_PAGE, members.length - limit)} 条（已显示 {limit} / {members.length}）</button>}
         </details>
       })}
     </fieldset>

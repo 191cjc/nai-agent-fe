@@ -213,7 +213,7 @@ PARTITIONS = [
            effects={"set": {"pose-group": "ground"}}),
     ], quota=True),
     _p("framing", "景别", [
-        _o("close-up", "脸部特写", "close-up, face focus", when=ORDINARY,
+        _o("close-up", "脸部特写", "close-up, 3::face focus::", when=ORDINARY,
            effects={"hide": ["upper", "lower", "hands"]}),
         _o("portrait", "肖像", "portrait", when=ORDINARY,
            effects={"hide": ["lower", "hands"]}),

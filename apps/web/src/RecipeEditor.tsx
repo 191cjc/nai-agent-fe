@@ -5,7 +5,7 @@ import { ApiFailure, errorText, type SearchResults, type WorkspaceApi } from './
 import {
   DEFAULT_REGIONS, EFFECT_LABELS, LIST_EFFECTS, SKIP_REASONS, bulkAllowOptions, bulkCondition, bulkListEffect, bulkWeight,
   clone, deleteOption, deletePartition, describeCondition, describeEffects, emptyRecipe, findReferences, glossOption, glossTag,
-  missingGlosses, moveOrCopy, newId, optionLabel, optionRef, previewStyle, splitTags, targetOptions,
+  missingGlosses, moveOrCopy, newId, normalizeStyleTags, optionLabel, optionRef, previewStyle, splitStyleTags, splitTags, targetOptions,
   type BulkTarget, type Condition, type Effects, type ListEffect, type Partition, type Recipe, type RecipeOption, type RecipeSummary,
   type Rule, type SampleItem, type SampleResult,
 } from './recipe'
@@ -672,10 +672,10 @@ function EffectsEditor({ recipe, effects, ownPartition, allowStructural, onChang
       <TagListField value={effects.content_add ?? []} onChange={value => set(e => { e.content_add = value })} /></Row>
     <Row label="删内容 tag" hint="从这一条的提示词里删掉某个 tag。">
       <TagListField value={effects.remove_tags ?? []} onChange={value => set(e => { e.remove_tags = value })} /></Row>
-    <Row label="加画风 tag" hint="只加在这一条的画风里，不进 caption，LoRA 会把它学成默认画法（例如 smile → gentle smile）。">
-      <TagListField value={effects.style_add ?? []} onChange={value => set(e => { e.style_add = value })} /></Row>
+    <Row label="加画风 tag" hint="只加在这一条的画风里，不进 caption，支持 3::tag:: 和 {tag} 权重。">
+      <TagListField value={effects.style_add ?? []} split={splitStyleTags} onChange={value => set(e => { e.style_add = value })} /></Row>
     <Row label="删画风 tag" hint="只从这一条的画风里删，例如夜晚删 sunlight。">
-      <TagListField value={effects.style_remove ?? []} onChange={value => set(e => { e.style_remove = value })} /></Row>
+      <TagListField value={effects.style_remove ?? []} split={text => normalizeStyleTags([text], true)} onChange={value => set(e => { e.style_remove = value })} /></Row>
     <h6>影响其他分区</h6>
     {allowStructural && <Row label="隐藏部位" hint="被隐藏的部位上的分区和选项都会跳过，例如上半身隐藏下身和脚。">
       <RegionChips recipe={recipe} value={effects.hide ?? []} tone="exclude" onChange={value => set(e => { e.hide = value })} /></Row>}
@@ -733,17 +733,26 @@ function KeyValueField({ value, keyPlaceholder, valuePlaceholder, onChange, keys
   </div>
 }
 
-function TagListField({ value, placeholder = '输入 tag，回车添加', onChange }: { value: string[]; placeholder?: string; onChange: (value: string[]) => void }) {
+function TagListField({ value, placeholder = '输入 tag，回车添加', split = splitTags, onChange }: {
+  value: string[]; placeholder?: string; split?: (text: string) => string[]; onChange: (value: string[]) => void
+}) {
   const [text, setText] = useState('')
+  const [error, setError] = useState('')
   const add = () => {
-    const tags = splitTags(text).filter(tag => !value.includes(tag))
-    if (tags.length) onChange([...value, ...tags])
-    setText('')
+    try {
+      const tags = split(text).filter(tag => !value.includes(tag))
+      if (tags.length) onChange([...value, ...tags])
+      setText('')
+      setError('')
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'tag 格式无效。')
+    }
   }
   return <div className="recipe-taglist">
     {value.map(tag => <button key={tag} type="button" className="recipe-chip only" title="点击删除" onClick={() => onChange(value.filter(item => item !== tag))}>{tag} ×</button>)}
-    <input value={text} placeholder={placeholder} spellCheck={false} onChange={event => setText(event.target.value)}
+    <input value={text} placeholder={placeholder} spellCheck={false} aria-invalid={!!error} onChange={event => { setText(event.target.value); setError('') }}
       onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); add() } }} onBlur={add} />
+    {error && <span className="alert" role="alert">{error}</span>}
   </div>
 }
 

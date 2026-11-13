@@ -66,7 +66,7 @@ from .prompt_snapshots import (
     PromptSnapshotPage,
     PromptSnapshotStore,
 )
-from .recipe_engine import DatasetRecipe, SampleResult, sample
+from .recipe_engine import DatasetRecipe, SampleResult, SampleStyleError, sample
 from .recipe_templates import basic_template
 from .reference_images import (
     MAX_REFERENCE_BYTES,
@@ -482,10 +482,13 @@ def create_app(
               responses=recipe_errors(401, 403, 422, 503))
     def sample_dataset_recipe(
         payload: SampleRequest, user: Annotated[UserInfo, Depends(require_user)],
-    ) -> SampleResult:
+    ) -> SampleResult | JSONResponse:
         # Pure and offline: previews never reach a provider and are not stored.
         del user
-        return sample(payload.recipe, payload.n, payload.seed)
+        try:
+            return sample(payload.recipe, payload.n, payload.seed)
+        except SampleStyleError as exception:
+            return error(422, "recipe_invalid", str(exception)[:500])
 
     @app.get("/api/dataset-recipes/{recipe_id}", response_model=StoredRecipe,
              responses=recipe_errors(401, 404, 422, 503))

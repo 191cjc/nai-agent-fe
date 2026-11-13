@@ -1,9 +1,9 @@
 import type { CharacterPrompt, CharacterRunRequest, DatasetItem, PreciseType } from './api'
-import { previewStyle, type DatasetDraw, type StyleEdits } from './recipe'
+import { previewStyle, validateStyleEdits, type DatasetDraw, type StyleEdits } from './recipe'
 import type { CharacterMode } from './character-prompts'
 import { compilePromptComments } from './prompt-weights'
 
-export const MAX_DATASET_ITEMS = 400
+export const MAX_DATASET_ITEMS = 4000
 export const MAX_DATASET_PROMPT_LENGTH = 1000
 export const MAX_STYLE_POOL = 12
 export const MAX_REFERENCES = 4
@@ -81,8 +81,7 @@ export function hasCommentLine(prompt: string): boolean {
 
 /**
  * Mirrors the server definition rules so invalid runs never reach the paid POST.
- * With a style pool, the longest effective style bounds every rotated combination;
- * character traits prefix every item.
+ * Every pool style is checked after per-item edits; character traits prefix every item.
  */
 export type ItemShape = 'portrait' | 'square' | 'landscape'
 export interface ItemSize { width: number; height: number }
@@ -119,7 +118,6 @@ export function datasetItems(entries: readonly DatasetEntry[], styles: readonly 
   const effectiveStyles = styles.map(style => compilePromptComments(style).trim())
   if (effectiveStyles.some(style => !style)) throw new Error('训练集批跑需要填写画风；画风池中的每一项都不能为空。')
   if (styles.some(style => style.length > 3000)) throw new Error('单个画风不能超过 3000 字符。')
-  const longest = Math.max(...effectiveStyles.map(style => style.length))
   const prefix = traits.trim() ? traits.trim().length + 2 : 0
   const ids = new Set<string>()
   return selected.map((entry, index) => {
@@ -129,23 +127,29 @@ export function datasetItems(entries: readonly DatasetEntry[], styles: readonly 
     if (!entry.prompt.trim()) throw new Error(`${label}为空。`)
     if (entry.prompt.length > MAX_DATASET_PROMPT_LENGTH) throw new Error(`${label}超过 ${MAX_DATASET_PROMPT_LENGTH} 字符。`)
     if (hasCommentLine(entry.prompt)) throw new Error(`${label}不能包含以 // 开头的注释行。`)
-    if (longest + 2 + prefix + entry.prompt.trim().length > 3000) throw new Error(`${label}与画风${prefix ? '、角色特征' : ''}合计超过 3000 字符。`)
     const characters = entry.characters ?? []
+    const styleEdits = entry.styleEdits ? validateStyleEdits(entry.styleEdits, label) : undefined
+    if (styleEdits && (styleEdits.add.length || styleEdits.remove.length)) {
+      if (traits.trim()) throw new Error(`${label}带有画风增删，只能用于画风训练集。`)
+      if (characters.length) throw new Error(`${label}带有画风增删，只能用于单人条目。`)
+    }
     // Optional per-item canvas; absent keeps the run size (and the stored item unchanged).
     const size = sizes ? sizes[entry.shape ?? itemShape(entry.prompt, characters)] : null
     const canvas = size ? { width: size.width, height: size.height } : {}
     const recipe = {
       ...(entry.draws?.length ? { draws: [...entry.draws] } : {}),
-      ...(entry.styleEdits && (entry.styleEdits.add.length || entry.styleEdits.remove.length) ? { style_edits: entry.styleEdits } : {}),
+      ...(styleEdits && (styleEdits.add.length || styleEdits.remove.length) ? { style_edits: styleEdits } : {}),
       ...(entry.recipe ? { recipe: entry.recipe } : {}),
-    }
-    if (recipe.style_edits) {
-      for (const style of styles) {
-        if (!compilePromptComments(previewStyle(style, recipe.style_edits)).trim()) throw new Error(`${label}的画风增删会让画风变空。`)
-      }
     }
     // Recipe items: tidy separators left by hand edits ("a,, b ," -> "a, b") before sending.
     const prompt = recipe.draws ? tidyPrompt(entry.prompt) : entry.prompt
+    for (const style of styles) {
+      const resolved = recipe.style_edits ? previewStyle(style, recipe.style_edits) : style
+      const effective = compilePromptComments(resolved).trim()
+      if (!effective) throw new Error(`${label}的画风增删会让画风变空。`)
+      if (resolved.length > 3000) throw new Error(`${label}增删后的画风超过 3000 字符。`)
+      if (effective.length + 2 + prefix + prompt.trim().length > 3000) throw new Error(`${label}与增删后的画风${prefix ? '、角色特征' : ''}合计超过 3000 字符。`)
+    }
     if (!characters.length) return { id: entry.id, prompt, ...canvas, ...recipe }
     if (traits.trim()) throw new Error(`${label}是多人条目，角色训练集不支持，请取消选择。`)
     if (!nativeCharacters) throw new Error(`${label}是多人条目，需要支持多角色提示词的 V4 / V4.5 / V5 模型；请切换模型或取消「多人互动」。`)

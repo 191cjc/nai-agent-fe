@@ -16,15 +16,25 @@ from __future__ import annotations
 import random
 import re
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import Annotated, Any, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 
 from .prompt_weights import strip_prompt_weights
+from .recipe_style import StyleEdits, split_style_pieces, style_tag_key, unclosed_style_suffix
 
 RECIPE_VERSION = 1
 MAX_PROMPT = 1000
-MAX_ITEMS = 400
+MAX_ITEMS = 4000
 ID_PATTERN = r"^[a-z0-9][a-z0-9-]*$"
 _ID = re.compile(ID_PATTERN)
 _PLACEHOLDER = re.compile(r"\{([a-z0-9][a-z0-9-]*)\}")
@@ -45,6 +55,7 @@ Tag = Annotated[str, Field(min_length=1, max_length=300)]
 Label = Annotated[str, Field(max_length=100)]
 Condition = dict[str, Any]
 
+@lru_cache(maxsize=65536)
 def tag_key(tag: str) -> str:
     """Compare visible tags independently of emphasis, case and underscore spelling."""
     return _SPACES.sub(" ", strip_prompt_weights(tag).replace("_", " ")).strip().lower()
@@ -118,10 +129,16 @@ class Effects(_Model):
     style_add: list[Tag] = Field(default_factory=list, max_length=32)
     style_remove: list[Tag] = Field(default_factory=list, max_length=128)
 
-    @field_validator("content_add", "remove_tags", "style_add", "style_remove", mode="after")
+    @field_validator("content_add", "remove_tags", mode="after")
     @classmethod
     def clean_tags(cls, value: list[str]) -> list[str]:
         return _tag_list(value)
+
+    @field_validator("style_add", "style_remove", mode="before")
+    @classmethod
+    def clean_style_tags(cls, value: Any, info: ValidationInfo) -> list[str]:
+        field = "add" if info.field_name == "style_add" else "remove"
+        return getattr(StyleEdits.model_validate({field: value}), field)
 
     @field_validator("consume")
     @classmethod
@@ -769,29 +786,35 @@ class Sampler:
                 choices.append((value.id, weight))
         return choices
 
-    def _eligible(self, item: _Item, part: Partition, option: Option, first: bool) -> float:
-        if option.disabled:
-            return 0
-        if any(draw.option.id == option.id for draw in item.chosen(part.id)):
-            return 0
-        if f"{part.id}.{option.id}" in item.removed_options():
-            return 0
+    def _choices(self, item: _Item, part: Partition) -> list[tuple[Option, float]]:
+        """Eligible options with weights; the item is not mutated while filtering,
+        so its derived state is computed once per call instead of once per option."""
+        chosen = {draw.option.id for draw in item.chosen(part.id)}
+        removed = item.removed_options()
         allowed = item.allowed(part.id)
-        if allowed is not None and option.id not in allowed:
-            return 0
         hidden = item.hidden()
-        if any(region in hidden for region in option.needs):
-            return 0
-        if not item.evaluate(option.when):
-            return 0
         capacity = item.capacity()
-        if any(capacity[res] < amount for res, amount in option.effects.consume.items()):
-            return 0
-        for name in _placeholders(option.tags):
-            if not self._value_choices(item, part.id, option, name):
-                return 0
-        del first
-        return option.weight * self._mods(item, option)
+        choices: list[tuple[Option, float]] = []
+        for option in part.options:
+            if option.disabled or option.id in chosen:
+                continue
+            if f"{part.id}.{option.id}" in removed:
+                continue
+            if allowed is not None and option.id not in allowed:
+                continue
+            if any(region in hidden for region in option.needs):
+                continue
+            if not item.evaluate(option.when):
+                continue
+            if any(capacity[res] < amount for res, amount in option.effects.consume.items()):
+                continue
+            if any(not self._value_choices(item, part.id, option, name)
+                   for name in _placeholders(option.tags)):
+                continue
+            weight = option.weight * self._mods(item, option)
+            if weight > 0:
+                choices.append((option, weight))
+        return choices
 
     @staticmethod
     def _mods(item: _Item, option: Option) -> float:
@@ -836,10 +859,7 @@ class Sampler:
             return
         count = 0
         while count < part.max_draws:
-            choices = [
-                (option, weight) for option in part.options
-                if (weight := self._eligible(item, part, option, count == 0)) > 0
-            ]
+            choices = self._choices(item, part)
             # Only "none" left means every real option conflicts: that is a skip, not
             # a deliberate none, so the none option's effects must not apply.
             if not choices or all(option.none for option, _ in choices):
@@ -911,16 +931,16 @@ class Sampler:
         # Invisible-region requirements are final, including after explicit additions.
         edits: dict[str, tuple[str, str]] = {}
         for op, tag in item.style_ops:
-            edits[tag_key(tag)] = (op, tag)
+            edits[style_tag_key(tag)] = (op, tag)
         region_removed: list[str] = []
         for style_tag in self.recipe.style_tags:
             if style_tag.needs in hidden:
-                edits[tag_key(style_tag.tag)] = ("remove", style_tag.tag)
+                edits[style_tag_key(style_tag.tag)] = ("remove", style_tag.tag)
                 region_removed.append(style_tag.tag)
-        style = {
+        style = StyleEdits.model_validate({
             "add": [tag for op, tag in edits.values() if op == "add"],
             "remove": [tag for op, tag in edits.values() if op == "remove"],
-        }
+        }).model_dump()
         return normalize_prompt(", ".join(ordered)), style, region_removed
 
 def _record(item: _Item, recipe: DatasetRecipe, region_removed: list[str]) -> list[dict]:
@@ -988,6 +1008,9 @@ class SampleResult(BaseModel):
     items: list[SampleItem]
     stats: SampleStats
 
+class SampleStyleError(ValueError):
+    """The aggregate style edits cannot become a queued dataset item."""
+
 def sample(recipe: DatasetRecipe, n: int, seed: int) -> SampleResult:
     """Draw ``n`` items. The same recipe, n and seed always give the same result."""
     if not 1 <= n <= MAX_ITEMS:
@@ -1007,8 +1030,7 @@ def sample(recipe: DatasetRecipe, n: int, seed: int) -> SampleResult:
             for index, item in enumerate(sampled):
                 if sampler._skip_reason(item, part):
                     continue
-                choices = [(option, weight) for option in part.options
-                           if (weight := sampler._eligible(item, part, option, True)) > 0]
+                choices = sampler._choices(item, part)
                 if not choices or all(option.none for option, _ in choices):
                     continue
                 signature = tuple((option.id, weight) for option, weight in choices)
@@ -1037,7 +1059,14 @@ def sample(recipe: DatasetRecipe, n: int, seed: int) -> SampleResult:
     items: list[SampleItem] = []
     overflow = stale = 0
     for index, item in enumerate(sampled):
-        prompt, style, region_removed = sampler.assemble(item)
+        try:
+            prompt, style, region_removed = sampler.assemble(item)
+        except ValidationError as exception:
+            first = exception.errors()[0]
+            where = ".".join(str(part) for part in first["loc"])
+            raise SampleStyleError(
+                f"items.{index}.style_edits.{where}: {first['msg']}",
+            ) from exception
         for draw in item.active:
             counts[draw.partition][draw.option.id] = counts[draw.partition].get(
                 draw.option.id, 0) + 1
@@ -1095,19 +1124,13 @@ def sample(recipe: DatasetRecipe, n: int, seed: int) -> SampleResult:
 
 _OPEN = re.compile(r"^((?:\s*(?:[{\[]|[+-]?(?:\d+(?:\.\d+)?|\.\d+)::))*)")
 _CLOSE = re.compile(r"((?:(?:[}\]]|::)\s*)*)$")
-_WEIGHT_OPEN = re.compile(r"(?:^|[\s,(\[{])[+-]?(?:\d+(?:\.\d+)?|\.\d+)::")
 
 def _piece_key(piece: str) -> tuple[str, str, str]:
     opener = _OPEN.match(piece).group(1)
     rest = piece[len(opener):]
     closer = _CLOSE.search(rest).group(1)
     body = rest[: len(rest) - len(closer)] if closer else rest
-    return opener, tag_key(body), closer
-
-def _unclosed_group(text: str) -> bool:
-    opens = len(_WEIGHT_OPEN.findall(text))
-    closes = text.count("::") - opens
-    return opens > closes
+    return opener, style_tag_key(body), closer
 
 def resolve_style(style: str, edits: dict[str, list[str]] | None) -> str:
     """Apply per-item style edits: remove tags (weight syntax aware), then append tags.
@@ -1117,13 +1140,14 @@ def resolve_style(style: str, edits: dict[str, list[str]] | None) -> str:
     """
     if not edits or not (edits.get("add") or edits.get("remove")):
         return style
-    remove = {tag_key(tag) for tag in edits.get("remove", [])}
+    normalized = StyleEdits.model_validate(edits)
+    remove = {style_tag_key(tag) for tag in normalized.remove}
     present: set[str] = set()
     lines = style.split("\n")
     for line_index, line in enumerate(lines):
         if line.lstrip().startswith("//"):
             continue
-        pieces = line.split(",")
+        pieces = split_style_pieces(line)
         kept: list[str] = []
         for piece in pieces:
             opener, key, closer = _piece_key(piece)
@@ -1142,17 +1166,19 @@ def resolve_style(style: str, edits: dict[str, list[str]] | None) -> str:
     result = re.sub(r"^\s*,\s*", "", result, flags=re.MULTILINE)
     result = re.sub(r"\s*,\s*$", "", result, flags=re.MULTILINE)
     additions = []
-    for tag in edits.get("add", []):
-        key = tag_key(tag)
-        if key and key not in present and key not in {tag_key(a) for a in additions}:
+    for tag in normalized.add:
+        key = style_tag_key(tag)
+        if key and key not in present and key not in {style_tag_key(a) for a in additions}:
             additions.append(tag.strip())
     if additions:
         visible = "\n".join(
             line for line in result.split("\n") if not line.lstrip().startswith("//")
         )
         base = result.rstrip()
-        if _unclosed_group(visible):
-            base += " ::"
+        suffix = unclosed_style_suffix(visible)
+        if suffix:
+            joiner = "\n" if base.split("\n")[-1].lstrip().startswith("//") else " "
+            base += f"{joiner}{suffix}"
         joiner = ", " if visible.strip() else ""
         if base.split("\n")[-1].lstrip().startswith("//"):
             joiner = "\n"

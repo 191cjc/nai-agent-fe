@@ -387,3 +387,17 @@ category labels in the review grid.
   are kept. It replaces `experiment.item.characters[*].prompt` (so the caption
   follows) and `character_prompts`. A list equal to the frozen prompts is no edit
   (keeps the unvalidated `model_copy` path). Single-person groups refuse it (count 0).
+
+## 4000-item cap (2026-11-13)
+
+- One cap, `recipe_engine.MAX_ITEMS = 4000`, bounds both `POST
+  /api/dataset-recipes/sample` `n` and `DatasetRunCreate.items`; web
+  `MAX_DATASET_ITEMS` mirrors it. Change all three together.
+- Sampling cost is linear in `n` (~4 ms/item for the basic template; 4000 ≈ 15 s,
+  under the 90 s nginx `proxy_read_timeout`). The sampler computes an item's derived
+  state once per option scan (`Sampler._choices`), and `tag_key`, style tag keys and
+  strict style splitting are memoised pure functions. Keep new per-option checks
+  inside `_choices` without mutating the item.
+- Web: the prompt library renders rows only for opened categories, 200 at a time;
+  the review grid loads up to 12000 groups; a re-run selection over the server's
+  3000-per-batch cap is refused client-side.

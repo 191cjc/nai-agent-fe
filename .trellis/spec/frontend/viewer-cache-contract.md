@@ -167,7 +167,7 @@ acceptance; do not issue paid requests for cache verification.
 ## Dataset grid review (2026-11-03)
 
 - 「网格检查」 in the saved viewer of a dataset experiment (`ReviewGrid.tsx`,
-  lazy chunk). Reads group metadata in 100-group pages (≤3000 groups), then
+  lazy chunk). Reads group metadata in 100-group pages (≤12000 groups, enough for a 4000-item set plus re-runs), then
   shows 60 tiles per page; only the shown page fetches WebP previews
   (`WorkspaceApi.thumbnail`, 4 at a time, `thumbnail_busy` retried ≤3 times)
   and every preview Blob URL is revoked on page change/close. Previews never

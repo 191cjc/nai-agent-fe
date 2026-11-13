@@ -533,6 +533,26 @@ def test_weighted_content_removal_matches_plain_tag():
     assert sample(recipe, 1, 1).items[0].prompt == "smile"
 
 
+def test_region_cleanup_removes_weighted_style_members_without_dropping_other_members():
+    recipe = DatasetRecipe.model_validate({
+        "draw_order": ["face"],
+        "style_tags": [{"tag": "blue eyes", "needs": "eyes"},
+                       {"tag": "detailed eyes", "needs": "eyes"}],
+        "partitions": [part("face", [opt(
+            "closed", "closed eyes", effects={"hide": ["eyes"]},
+        )])],
+        "rules": [{"id": "late", "when": {"tag": "closed eyes"}, "effects": {
+            "style_add": ["3::blue eyes, detailed eyes::", "{detailed eyes, soft lighting}"],
+        }}],
+    })
+    item = sample(recipe, 1, 3).items[0]
+    assert item.style_edits["add"] == ["{soft lighting}"]
+    assert set(item.style_edits["remove"]) == {"blue eyes", "detailed eyes"}
+    resolved = resolve_style("artist:synthetic, 3::blue eyes, detailed eyes::", item.style_edits)
+    assert "blue eyes" not in resolved and "detailed eyes" not in resolved
+    assert "{soft lighting}" in resolved
+
+
 def test_slot_colors_balance_within_legal_candidates():
     recipe = DatasetRecipe.model_validate({
         "draw_order": ["outfit"],
